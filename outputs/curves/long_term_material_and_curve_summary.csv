@@ -1,0 +1,7 @@
+﻿target_depth_um,ds,lambda_rho,fy,fu,E,fracture_strain,curve_file
+0.0,0.5,0.004,353.9,508.75,205775.0,0.4409030744640653,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_001_0um.csv
+250.0,3.0,0.011,348.4,502.5,204650.0,0.23028933680021746,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_002_250um.csv
+500.0,6.0,0.017,341.8,495.0,203300.0,0.17519061241799627,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_003_500um.csv
+750.0,9.0,0.023,335.2,487.5,201950.0,0.14680608141162313,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_004_750um.csv
+1000.0,12.0,0.029,328.6,480.0,200600.0,0.1279886291287014,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_005_1000um.csv
+1250.0,15.0,0.035,322.0,472.5,199250.0,0.1140302687841019,E:\CODEX文件\python腐蚀代码\腐蚀综合代码\outputs\curves\curve_006_1250um.csv
