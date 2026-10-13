@@ -1,1 +1,0 @@
-原算法不改；六值由原样本计算。calibration_ready=1
