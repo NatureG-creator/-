@@ -1,0 +1,240 @@
+FINISH
+/CLEAR,START
+/PREP7
+
+! === Parameters ===
+nx = 213    
+ny = 59 
+nlayers = 10        
+n_total_surf = nx*ny
+Area = 120         
+Length=nx*0.3   
+
+! 2. Define Arrays
+*DIM, x_arr, ARRAY, n_total_surf
+*DIM, y_arr, ARRAY, n_total_surf
+*DIM, z_arr, ARRAY, n_total_surf
+*DIM, x_arrf, ARRAY, n_total_surf
+*DIM, y_arrf, ARRAY, n_total_surf
+*DIM, z_arrf, ARRAY, n_total_surf
+
+! 3. Read Coordinates
+*VREAD, x_arr(1), DIANYUN_FRONT_X,txt
+(F12.6)
+*VREAD, y_arr(1), DIANYUN_FRONT_Y,txt
+(F12.6)
+*VREAD, z_arr(1), DIANYUN_FRONT_Z,txt
+(F12.6)
+*VREAD, z_arrf(1), DIANYUN_BACK_Z,txt
+(F12.6)
+
+! === Create Nodes ===
+total_nodes=n_total_surf*(nlayers+1)
+node_id = 0
+*DO, layer, 0, nlayers
+    ratio=(nlayers-layer)/nlayers   
+    *DO, i, 1, nx
+        *DO, j, 1, ny
+            node_id = node_id+1
+            idx = (i-1)*ny+j
+            z_coord = z_arr(idx)*ratio+z_arrf(idx)*(1 - ratio)
+            N, node_id, x_arr(idx), y_arr(idx), z_coord
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+! === Create Elements ===
+ET, 1, SOLID185
+KEYOPT, 1, 1, 0
+TYPE, 1
+MAT, 1
+! --------------------------
+! 多线性随动硬化本构定 
+! --------------------------
+! 1. 定义弹性属性（单位：MPa 
+MP, EX, 1, 185226    
+MP, PRXY, 1, 0.3     
+! 2. 定义塑性数据点数量
+TB,PLASTIC,1,0,49,MISO
+!允许出现负割线即屈服段
+TBEO, NEGSLOPE, 1
+TBPT,DEFI, 0, 332.87
+TBPT,DEFI, 0.000170, 350.30
+TBPT,DEFI, 0.000313, 366.19
+TBPT,DEFI, 0.000508, 379.66
+TBPT,DEFI, 0.000746, 390.83
+TBPT,DEFI, 0.001043, 400.05
+TBPT,DEFI, 0.001403, 407.29
+TBPT,DEFI, 0.001815, 410.74
+TBPT,DEFI, 0.002406, 409.89
+TBPT,DEFI, 0.002991, 407.96
+TBPT,DEFI, 0.003519, 409.16
+TBPT,DEFI, 0.004071, 410.17
+TBPT,DEFI, 0.004664, 411.13
+TBPT,DEFI, 0.005253, 411.17
+TBPT,DEFI, 0.005856, 412.37
+TBPT,DEFI, 0.006419, 414.25
+TBPT,DEFI, 0.006950, 416.31
+TBPT,DEFI, 0.007453, 418.03
+TBPT,DEFI, 0.007939, 419.85
+TBPT,DEFI, 0.008407, 422.07
+TBPT,DEFI, 0.012502, 437.92
+TBPT,DEFI, 0.016974, 453.65
+TBPT,DEFI, 0.020958, 466.57
+TBPT,DEFI, 0.025291, 479.23
+TBPT,DEFI, 0.029206, 489.70
+TBPT,DEFI, 0.033588, 500.36
+TBPT,DEFI, 0.037514, 509.03
+TBPT,DEFI, 0.041951, 517.94
+TBPT,DEFI, 0.045928, 525.45
+TBPT,DEFI, 0.050386, 533.20
+TBPT,DEFI, 0.054466, 539.57
+TBPT,DEFI, 0.058981, 546.38
+TBPT,DEFI, 0.063111, 552.24
+TBPT,DEFI, 0.067743, 558.30
+TBPT,DEFI, 0.071951, 563.35
+TBPT,DEFI, 0.076622, 568.95
+TBPT,DEFI, 0.080853, 573.45
+TBPT,DEFI, 0.085624, 578.50
+TBPT,DEFI, 0.089967, 582.78
+TBPT,DEFI, 0.094773, 587.41
+TBPT,DEFI, 0.099175, 591.55
+TBPT,DEFI, 0.104109, 595.73
+TBPT,DEFI, 0.108575, 599.40
+TBPT,DEFI, 0.113586, 603.65
+TBPT,DEFI, 0.118122, 606.99
+TBPT,DEFI, 0.123237, 610.89
+TBPT,DEFI, 0.127868, 614.16
+TBPT,DEFI, 0.133057, 617.66
+TBPT,DEFI, 0.137798, 621.16
+
+elem_id = 0
+*DO, layer, 0, nlayers-1
+    *DO, i, 1, nx-1
+        *DO, j, 1, ny-1
+        base=layer*n_total_surf
+        n1=base+(i-1)*ny+j      
+        n2 =base+i*ny+j          
+        n3 = base+i*ny+j+1        
+        n4 = base+(i-1)*ny+j+1    
+        n5 = n1+n_total_surf
+        n6 = n2+n_total_surf
+        n7 = n3+n_total_surf
+        n8 = n4+n_total_surf
+        elem_id = elem_id+1
+        E, n1, n2, n3, n4, n5, n6, n7, n8
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+! === Display Settings ===
+/EDGE, 1, 0
+/PNUM, NODE, 0
+/REPLOT
+FINISH
+! === Solution Section ===
+/SOLU
+ANTYPE,STATIC
+
+! --- solve control ---
+SOLCONTROL, ON
+AUTOTS, ON
+NLGEOM, ON
+OUTRES, ALL, ALL
+LNSRCH,1
+     ! ==========================================
+! 1. 施加基本约束 UX=0
+NSEL, S, LOC, X, 0.0
+D, ALL, UX, 0
+
+! 2. 将角点1全约束
+
+jiaodian1=ny
+jiaodian11=ny+nlayers*n_total_surf
+D, jiaodian1, UY, 0
+D, jiaodian1, UZ, 0
+D, jiaodian11, UY, 0           
+    
+! 3. 将角点2的绕X轴转动全约束
+!jiaodian2=1+nlayers*n_total_surf
+!D, jiaodian2, UZ, 0   
+
+! 3.5 恢复所有节点选择，准备施加载荷
+ALLSEL
+
+! 定义载荷步的时间
+TIME, 1.0
+NSUBST,100,450,50  
+! 设置固定的时间步长大小
+OUTRES, ALL, ALL
+! 4. 施加载荷边界 (目标位移)
+! ==========================================
+! 对 X=(nx-1)*0.3 的所有节点施加 X正方向位移
+nx_val = (nx)*0.3       
+NSEL, S, LOC, X, nx_val  
+disp_per_step1=8
+D, ALL, UX, disp_per_step1   
+ALLSEL                    
+   ! 5. 执行求解
+! ==========================================
+SOLVE                   
+FINISH                 
+/POST1
+
+! 选择 X 坐标等于 0 的所有节点
+NSEL, S, LOC, X, 0
+
+! 获取选中节点的数量
+*GET, node_count, NODE, 0, COUNT
+
+ALLSEL, ALL
+
+! === 2. 获取时间步总数 (修复版) ===
+! 方法：直接跳转到最后一个子步，然后获取它的子步号
+SET, LAST          ! 读取到最后一个子步
+*GET, maxSub, ACTIVE, 0, SET, NSET ! 获取当前子步的序号 (也就是总数量)
+
+! 如果需要回到第一个子步开始循环，取消下面这行的注释
+! SET, 1, 1
+
+! 定义数组存储数据
+*DIM, DispArray, ARRAY, maxSub
+*DIM, TotalForceArray, ARRAY, maxSub
+*DIM, TimeArray, ARRAY, maxSub
+
+! 通过获取节点记录位移
+! 选择角点作为位移记录
+RefNode=nx*ny
+
+! === 3. 循环计算每个时间步的合力 ===
+*DO, i, 1, maxSub
+    SET, 1, i        ! 读取第 i 个子步
+    Total_force=0
+    *GET, CurTime, ACTIVE, 0, SET, TIME 
+    *GET, total_disp, NODE, RefNode, U, X  	
+    *DO,j,0,nlayers
+	*DO,k,1,ny
+	idx=k+j*n_total_surf
+	*GET,Force,NODE,idx,S,X
+	Total_force=Total_force+Force
+	*ENDDO
+    *ENDDO
+    meanforce=Total_force/node_count
+   ! meanforce=Total_force    ! 存入数组
+    TimeArray(i) = CurTime
+    DispArray(i) = total_disp
+    TotalForceArray(i) = meanforce
+
+*ENDDO
+ALLSEL
+FINISH
+
+! 打开文件
+*CFOPEN, YB, TXT
+
+! 循环写入每一行数据
+    *VWRITE, DispArray(1), TotalForceArray(1)
+    (F10.5, 3X, F12.5)  ! 两个浮点数，每个宽度10，保留5位小数
+! 关闭文件
+*CFCLOS
+

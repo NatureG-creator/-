@@ -1,0 +1,178 @@
+{
+  "source_file": "E:\\CODEX文件\\python腐蚀代码\\00000腐蚀综合代码\\step2_stage_moni_result.npz",
+  "fields": [
+    "perfect_result_sd",
+    "perfect_parameter_sd",
+    "stage_numbers",
+    "a_sd",
+    "d_sd",
+    "cl_sd",
+    "perfect_a",
+    "perfect_d",
+    "perfect_cl",
+    "seed",
+    "target_data",
+    "space_xy_um",
+    "space_z_um"
+  ],
+  "stage_numbers": [
+    1
+  ],
+  "seed": 20260624,
+  "space_xy_um": 25.0,
+  "space_z_um": 25.0,
+  "error_values": [
+    0.0,
+    0.05,
+    0.01,
+    0.039999999999999994
+  ],
+  "error_weights": [
+    0.1,
+    0.3,
+    0.2,
+    0.4
+  ],
+  "weighted_error": 0.033,
+  "optimal_parameters": [
+    {
+      "index": 1,
+      "name": "p_uniform_base",
+      "meaning": "均匀腐蚀基础概率",
+      "value": 0.23595505617977527
+    },
+    {
+      "index": 2,
+      "name": "p_passive_base",
+      "meaning": "钝化基础概率",
+      "value": 0.3849535906204201
+    },
+    {
+      "index": 3,
+      "name": "p_break",
+      "meaning": "钝化膜破裂概率",
+      "value": 0.00011480214948705423
+    },
+    {
+      "index": 4,
+      "name": "cl_threshold",
+      "meaning": "氯离子腐蚀阈值",
+      "value": 29.60674157303371
+    },
+    {
+      "index": 5,
+      "name": "alpha_corrosion",
+      "meaning": "腐蚀反应系数",
+      "value": 29.103566194430876
+    },
+    {
+      "index": 6,
+      "name": "sensitive_point",
+      "meaning": "敏感点参数",
+      "value": 0.09242794333170494
+    },
+    {
+      "index": 7,
+      "name": "alpha_p_break",
+      "meaning": "破膜概率调节系数",
+      "value": 10.816316560820713
+    },
+    {
+      "index": 8,
+      "name": "p_h",
+      "meaning": "水平方向扩展概率",
+      "value": 0.15144113336590131
+    },
+    {
+      "index": 9,
+      "name": "p_v",
+      "meaning": "竖直方向扩展概率",
+      "value": 0.11553492916463116
+    },
+    {
+      "index": 10,
+      "name": "p_o",
+      "meaning": "其他方向扩展参数",
+      "value": 9.651685393258427
+    }
+  ],
+  "target_data": [
+    [
+      697.0,
+      262.0,
+      2.0,
+      5.79,
+      0.63,
+      0.23
+    ]
+  ],
+  "array_summaries": {
+    "a_sd": {
+      "shape": [
+        1,
+        100,
+        100,
+        101
+      ],
+      "dtype": "object",
+      "size": 1010000,
+      "note": "object 数组，仅记录结构，不展开全部内容"
+    },
+    "d_sd": {
+      "shape": [
+        1,
+        100,
+        100,
+        101
+      ],
+      "dtype": "object",
+      "size": 1010000,
+      "note": "object 数组，仅记录结构，不展开全部内容"
+    },
+    "cl_sd": {
+      "shape": [
+        1,
+        100,
+        100
+      ],
+      "dtype": "object",
+      "size": 10000,
+      "note": "object 数组，仅记录结构，不展开全部内容"
+    },
+    "perfect_a": {
+      "shape": [
+        100,
+        100,
+        101
+      ],
+      "dtype": "float64",
+      "size": 1010000,
+      "min": 0.0,
+      "max": 2.0,
+      "mean": 1.0387089108910892
+    },
+    "perfect_d": {
+      "shape": [
+        100,
+        100,
+        101
+      ],
+      "dtype": "float64",
+      "size": 1010000,
+      "min": 1.0,
+      "max": 3.0,
+      "mean": 2.6587524752475247
+    },
+    "perfect_cl": {
+      "shape": [
+        100,
+        100
+      ],
+      "dtype": "float64",
+      "size": 10000,
+      "min": 0.0,
+      "max": 8.0,
+      "mean": 0.2844
+    }
+  }
+}

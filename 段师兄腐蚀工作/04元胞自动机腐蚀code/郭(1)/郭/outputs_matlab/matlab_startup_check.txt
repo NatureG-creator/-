@@ -1,0 +1,2 @@
+MATLAB startup check OK: 28-Jun-2026 16:52:38
+Current folder: C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭

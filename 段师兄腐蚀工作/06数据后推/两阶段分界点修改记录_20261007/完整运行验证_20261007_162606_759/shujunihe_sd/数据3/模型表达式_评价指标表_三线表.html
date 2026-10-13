@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { font-family: SimSun, 宋体, serif; font-size: 10.5pt; }
+table { border-collapse: collapse; margin: 0 auto; border-top: 1.5pt solid black; border-bottom: 1.5pt solid black; width: 100%; }
+caption { caption-side: top; text-align: center; font-size: 10.5pt; margin-bottom: 6pt; }
+thead tr { border-bottom: 1.0pt solid black; }
+th, td { padding: 4pt 6pt; text-align: center; font-weight: normal; vertical-align: middle; }
+td.formula { text-align: left; }
+</style>
+</head>
+<body>
+<table>
+<caption>表 X 质量损失率与不均匀腐蚀深度关系的模型拟合结果</caption>
+<thead>
+<tr>
+<th>模型名称</th>
+<th>最终拟合模型表达式</th>
+<th>R<sup>2</sup></th>
+<th>RMSE</th>
+<th>验证集RMSE</th>
+<th>平均绝对相对误差/</tr>
+</thead>
+<tbody>
+<tr>
+<td>线性模型</td>
+<td class="formula">d = 0.0520η + 4.3015</td>
+<td>0.9998</td>
+<td>0.0045</td>
+<td>0.0034</td>
+<td>0.06</td>
+</tr>
+<tr>
+<td>幂函数模型</td>
+<td class="formula">d = 0.0360η^{1.1062} + 4.3574</td>
+<td>0.9997</td>
+<td>0.0051</td>
+<td>0.0111</td>
+<td>0.20</td>
+</tr>
+<tr>
+<td>指数饱和模型</td>
+<td class="formula">d = 277.9252[1-exp(-0.0002η)] + 4.3523</td>
+<td>0.9952</td>
+<td>0.0212</td>
+<td>0.0294</td>
+<td>0.53</td>
+</tr>
+<tr>
+<td>两阶段对数模型</td>
+<td class="formula">ln(d)=1.3574+0.0954ln(η), η<14.3976; ln(d)=1.3574+0.0954ln(η)+0.1030ln(η/14.3976), η≥14.3976</td>
+<td>0.9993</td>
+<td>0.0079</td>
+<td>0.0000</td>
+<td>0.00</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

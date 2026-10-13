@@ -1,0 +1,13 @@
+two_stage_selected,breakpoint,score,train_count,validation_count,source,input,input_variable,dataset
+1,22.9936,0.25601587054941,15,2,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\程序\shujunihe_sd.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\输入数据\sj1.mat,xiaosiy_sd2,1
+1,5.6725,0.149451622120588,7,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\程序\shujunihe_sd.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\输入数据\sj7.mat,wzy_sd,2
+1,14.3976357724869,0.00881037742393053,4,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\程序\shujunihe_sd.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\输入数据\gq2.mat,gq_sd2,3
+1,4.3534368737475,0.34088296874491,4,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\程序\shujunihe_sd.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\8_图3-8腐蚀坑深度对数均值_来源与复现\输入数据\sj5_bare_steel_sd.mat,sd_5,4
+1,21.0984584068136,44.3207263644716,15,2,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\程序\shujunihe_bjf.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\输入数据\sj1.mat,xiaosiy_bjf2,1
+1,9.4,106.240337186805,7,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\程序\shujunihe_bjf.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\输入数据\sj7.mat,wzy_bjf,2
+1,17.2,14.1635180969815,9,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\程序\shujunihe_bjf.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\输入数据\sj3_bjf.mat,bjf3,3
+0,NaN,NaN,3,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\程序\shujunihe_bjf.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\7_图3-7不均匀腐蚀深度_四模型来源与复现\输入数据\sj2_bjf.mat,bjf2,4
+1,8.65339211422846,0.190616689656673,17,2,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\程序\shujunihe3_jsb.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\输入数据\sj1.mat,xsy_jsb2,1
+1,9.68406813627255,0.538450556502855,7,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\程序\shujunihe3_jsb.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\输入数据\sj7.mat,wzy_jsb,2
+1,14.6471955434858,0.00468801966334073,4,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\程序\shujunihe3_jsb.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\输入数据\gq2.mat,gq_jsb2,3
+1,4.3534368737475,0.267698983644459,4,1,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\程序\shujunihe3_jsb.m,D:\Research Projects\段师兄腐蚀工作\06数据后推\9_图3-9腐蚀坑径深比对数均值_来源与复现\输入数据\sj5_bare_steel_jsb.mat,jsb_5,4

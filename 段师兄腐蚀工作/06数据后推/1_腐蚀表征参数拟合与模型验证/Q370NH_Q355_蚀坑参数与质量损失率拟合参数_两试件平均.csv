@@ -1,0 +1,5 @@
+Model,Formula,Document_R2,R2_RecalculatedFromTable,MassLossMode
+Q370NH pit depth,Hq = 3.31*eta^0.22,0.98,0.958251955832704,mean
+Q370NH pit aspect ratio,lambdaq = 5.52 - 1.60*eta^0.39,0.98,0.962722577387336,mean
+Q355 pit depth,Hq = 3.50*eta^0.18,0.87,0.87857921913382,mean
+Q355 pit aspect ratio,lambdaq = 5.48 - 1.54*eta^0.34,0.88,0.868535756410804,mean

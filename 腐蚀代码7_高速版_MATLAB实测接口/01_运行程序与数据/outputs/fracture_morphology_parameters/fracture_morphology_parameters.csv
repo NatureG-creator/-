@@ -1,0 +1,2 @@
+﻿control_direction,plate_thickness_um,smin_um2,save_um2,ds_fraction,ds,hmax_um,d_at_hmax_um,rho_at_hmax,lambda,lambda_rho,source_npz
+y,6000.0,147400000.0,148794750.0,0.00937365061603316,0.9373650616033159,425.0,28209.479177387817,0.015065857732696884,0.07083333333333333,0.001067164922732696,E:\CODEX文件\python腐蚀代码\00000腐蚀综合代码\step2_stage_moni_taichi_result.npz

@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>body{font-family:SimSun,serif;font-size:10.5pt;}table{border-collapse:collapse;margin:auto;width:100%;border-top:1.5pt solid black;border-bottom:1.5pt solid black;}th{border-bottom:1pt solid black;}th,td{padding:5px 8px;text-align:center;font-weight:normal;}td.eq{text-align:left;}</style>
+</head><body>
+<table><caption>表 X 腐蚀坑径深比对数均值模型拟合结果</caption>
+<thead><tr><th>模型名称</th><th>最终拟合模型表达式</th><th>R²</th><th>RMSE</th><th>测试集RMSE</th><th>平均绝对相对误差/%</th></tr></thead><tbody>
+<tr><td>线性模型</td><td class="eq">y = -0.684763 x + 6.644462</td><td>0.4347</td><td>1.2619</td><td>2.6847</td><td>208.11</td></tr>
+<tr><td>幂函数模型</td><td class="eq">y = -1959.114682 x^{0.001434} + 1966.408125</td><td>0.9342</td><td>0.4305</td><td>0.9285</td><td>71.98</td></tr>
+<tr><td>指数模型</td><td class="eq">y = 8.758118 exp(-0.355066 x) + 1.088310</td><td>0.9989</td><td>0.0554</td><td>0.0662</td><td>5.13</td></tr>
+<tr><td>两阶段对数模型</td><td class="eq">ln(y)=2.162657 + -0.737253 ln(x), x &lt; 6.525886; ln(y)=2.162657 + -0.737253 ln(x) + -1.122366 ln(x/6.525886), x &gt;= 6.525886</td><td>0.9779</td><td>0.2496</td><td>0.5582</td><td>43.27</td></tr>
+</tbody></table></body></html>

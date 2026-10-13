@@ -19,7 +19,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_RESULT_PATH = Path(
-    r"E:/CODEX文件/python腐蚀代码/腐蚀代码3/01_运行程序与数据/结果文件/step2_stage_moni_result7.npz"
+    r"E:/CODEX文件/python腐蚀代码/腐蚀代码7_高速版_MATLAB实测接口/01_运行程序与数据/结果文件/step2_stage_moni_result10z.npz"
 )
 
 # perfect_parameter_sd 中 10 个最优参数的固定排列顺序。

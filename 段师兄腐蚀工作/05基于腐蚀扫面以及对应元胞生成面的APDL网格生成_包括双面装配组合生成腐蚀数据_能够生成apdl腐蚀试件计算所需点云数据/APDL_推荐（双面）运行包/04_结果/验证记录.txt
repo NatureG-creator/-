@@ -1,0 +1,17 @@
+验证时间：2026-10-12
+
+静态检查：通过
+- MAT 文件源/目标数量：85/85
+- MAT 文件 SHA-256：全部一致
+- 默认 Z_filled/F_filled：60×193
+- MATLAB 输出文件名：6 个均存在于预处理脚本
+- APDL 读取文件：FRONT_X、FRONT_Y、FRONT_Z、BACK_Z
+- APDL 网格：104220 节点、90624 个 SOLID185 单元
+- APDL 后处理：RF,FX、model3_force_displacement.txt 均存在
+
+实际运行检查：受阻
+- 已调用 MATLAB 2024b -batch 运行 run_prepare_front_back.m
+- MATLAB 在启动阶段退出：failed to load settings errors_warnings plugin
+- 该错误发生在脚本执行前，未生成坐标文本文件
+- 已用临时 APPDATA/LOCALAPPDATA 重复测试，错误仍然存在，初步判断为 MATLAB 安装组件或运行环境问题，而非本项目脚本语法错误
+- 未修改用户 MATLAB 配置，也未声称 MAPDL 已运行成功

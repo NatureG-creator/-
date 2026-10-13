@@ -1,10 +1,10 @@
-"""仅供第二步高速入口使用；模型尺寸、目标数据和 GA 参数仍在 unified_config.py。"""
+"""高速入口的兼容映射；Taichi 设置统一在 unified_config.py 修改。"""
+
+from unified_config import TAICHI_CONFIG
 
 HIGH_SPEED_CONFIG = {
-    # False：NumPy/SciPy + Processes，启用仅回传误差优化，便于对照原 Python 数值。
-    # True：启用原 Taichi 边界内核及缓冲区复用；其原有 float32/原子更新差异仍存在。
-    "use_taichi": False,
-    "taichi_arch": "cpu",  # Taichi 后端：cpu 或 gpu，仅 use_taichi=True 时生效。
-    "allow_taichi_parallel": False,  # 同开 Taichi 和进程池可能竞争 CPU，默认关闭。
-    "verbose": True,  # 显示阶段、代数和约 5% 一次的个体/CA 进度。
+    "use_taichi": TAICHI_CONFIG["use_taichi"],
+    "taichi_arch": TAICHI_CONFIG["arch"],
+    "allow_taichi_parallel": TAICHI_CONFIG["allow_taichi_parallel"],
+    "verbose": TAICHI_CONFIG["verbose"],
 }

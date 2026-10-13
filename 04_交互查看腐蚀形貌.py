@@ -4,7 +4,8 @@
 - 自动读取 `腐蚀综合代码` 的 `.npz` 结果文件；
 - 从 `perfect_a / a` 计算 `depth_map` 与 `baseline`；
 - 弹出类似 MATLAB Figure 的窗口，可旋转、缩放、拖动查看；
-- 生成 3D 曲面、二维等高线极值点检测、数据直方图与拟合正态曲线。
+- 默认生成三张论文式图：三维/二维形貌图、对数坑深分布图、改进后的径深比对数分布图；
+- 三联分布图、单图和完整交互图仍可分别用 `comparison`、`single`、`full` 模式调用。
 
 使用：
     python .\腐蚀综合代码\04_交互查看腐蚀形貌.py
@@ -24,7 +25,7 @@ if str(ROOT) not in sys.path:
 
 # ==================== 在这里输入要读取的 .npz 结果文件 ====================
 # 可以只写同一文件夹内的文件名，也可以改成完整绝对路径。
-INPUT_RESULT_FILE = ROOT / "结果文件" / "step2_stage_moni_result7.npz"
+INPUT_RESULT_FILE = ROOT / "E:/CODEX文件/python腐蚀代码/腐蚀代码7_高速版_MATLAB实测接口/01_运行程序与数据/结果文件/step2_stage_moni_result10z.npz"
 
 import numpy as np
 from scipy.stats import norm
@@ -33,7 +34,9 @@ from corrosion_model.analysis import expand_matrix, jixiantiqu_3d, moving_avg_3d
 from corrosion_model.geometry import PaperGeometry
 from corrosion_model.distribution import _matlab_bin_edges
 from depth_distribution_diagnostics import (
-    prepare_depth_samples, make_report, export_diagnostics, plot_depth_comparison,
+    prepare_depth_samples, make_report, export_diagnostics,
+    plot_depth_comparison, plot_single_depth_distribution,
+    plot_single_ratio_distribution,
 )
 from unified_config import (
     FIGURE_CONFIG,
@@ -266,6 +269,7 @@ def plot_surface_and_contour(
 
     fig.suptitle(title)
     fig.tight_layout()
+    return fig
 
 
 def plot_distribution(
@@ -325,6 +329,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log-normalization", type=float, default=float(POSTPROCESS_CONFIG["log_normalization"]), help="正数 C，对数归一化因子，只缩放横坐标")
     parser.add_argument("--hist-bin-width", type=float, default=float(MATLAB_CA_COMPARISON_CONFIG["hist_bin_width"]), help="对数及归一化对数图的柱宽")
     parser.add_argument("--raw-bin-width-um", type=float, default=None, help="原始坑深图的柱宽，单位 μm；留空自动分箱")
+    parser.add_argument(
+        "--plot-mode",
+        choices=("paper", "single", "comparison", "full"),
+        default="paper",
+        help="paper：三张论文式图（默认）；single：只画坑深图；comparison：三联图；full：三联图加 3D 和等高线",
+    )
     parser.add_argument("--output-dir", default=str(ROOT / "outputs" / "depth_distribution_diagnostics"), help="诊断图、CSV、JSON 保存目录，每个结果文件使用独立子目录")
     parser.add_argument("--no-show", action="store_true", help="保存分布诊断图和数据，不弹出交互窗口")
     args = parser.parse_args(argv)
@@ -371,14 +381,62 @@ def main(argv: list[str] | None = None) -> int:
         import matplotlib
         matplotlib.use('Agg')
     configure_matplotlib()
-    comparison = plot_depth_comparison(samples,log_bin_width=args.hist_bin_width,
-                                      raw_bin_width_um=args.raw_bin_width_um,
-                                      dpi=int(FIGURE_CONFIG['distribution_dpi']))
     output_dir = Path(args.output_dir) / result_path.stem
     csv_path,json_path = export_diagnostics(samples,report,output_dir)
-    comparison.savefig(output_dir/'pit_depth_comparison.png',dpi=int(FIGURE_CONFIG['distribution_dpi']))
-    comparison.savefig(output_dir/'pit_depth_comparison.pdf')
-    comparison.savefig(output_dir/'pit_depth_comparison.svg')
+    figure = None
+    comparison = None
+    surface_figure = None
+    ratio_figure = None
+    if args.plot_mode == "paper":
+        surface_figure = plot_surface_and_contour(
+            surface_um=np.asarray(stats["baseline_um"], dtype=float),
+            max_locs=np.asarray(stats["max_locs"], dtype=int),
+            space=args.space_xy,
+            title=result_path.stem,
+        )
+        surface_figure.savefig(output_dir/'surface_and_contour.png', dpi=int(FIGURE_CONFIG['interactive_dpi']))
+        surface_figure.savefig(output_dir/'surface_and_contour.pdf')
+        surface_figure.savefig(output_dir/'surface_and_contour.svg')
+
+        figure = plot_single_depth_distribution(
+            samples,
+            log_bin_width=args.hist_bin_width,
+            dpi=int(FIGURE_CONFIG['distribution_dpi']),
+        )
+        figure.savefig(output_dir/'pit_depth_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
+        figure.savefig(output_dir/'pit_depth_distribution.pdf')
+        figure.savefig(output_dir/'pit_depth_distribution.svg')
+
+        ratio_figure = plot_single_ratio_distribution(
+            np.asarray(stats['jsb'], dtype=float),
+            bin_width=args.hist_bin_width,
+            dpi=int(FIGURE_CONFIG['distribution_dpi']),
+        )
+        ratio_figure.savefig(output_dir/'ratio_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
+        ratio_figure.savefig(output_dir/'ratio_distribution.pdf')
+        ratio_figure.savefig(output_dir/'ratio_distribution.svg')
+        print(f'三张论文式图已保存到: {output_dir}')
+    elif args.plot_mode == "single":
+        figure = plot_single_depth_distribution(
+            samples,
+            log_bin_width=args.hist_bin_width,
+            dpi=int(FIGURE_CONFIG['distribution_dpi']),
+        )
+        figure.savefig(output_dir/'pit_depth_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
+        figure.savefig(output_dir/'pit_depth_distribution.pdf')
+        figure.savefig(output_dir/'pit_depth_distribution.svg')
+        print(f'单张腐蚀坑深度分布图已保存到: {output_dir / "pit_depth_distribution.png"}')
+    else:
+        comparison = plot_depth_comparison(
+            samples,
+            log_bin_width=args.hist_bin_width,
+            raw_bin_width_um=args.raw_bin_width_um,
+            dpi=int(FIGURE_CONFIG['distribution_dpi']),
+        )
+        comparison.savefig(output_dir/'pit_depth_comparison.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
+        comparison.savefig(output_dir/'pit_depth_comparison.pdf')
+        comparison.savefig(output_dir/'pit_depth_comparison.svg')
+        print(f'三联分布诊断图已保存到: {output_dir / "pit_depth_comparison.png"}')
     print(f'分布诊断已保存到: {output_dir}')
 
     print(f"平均腐蚀深度 Average_depth = {stats['average_depth']:.6g} μm")
@@ -391,24 +449,39 @@ def main(argv: list[str] | None = None) -> int:
             wucha = 0.1 * perfect_result[0] + 0.3 * perfect_result[1] + 0.2 * perfect_result[2] + 0.4 * perfect_result[3]
             print(f"加权误差 wucha = {wucha:.6g}")
 
+    import matplotlib.pyplot as plt
     if not args.no_show:
-        title = result_path.stem
-        plot_surface_and_contour(
-            surface_um=np.asarray(stats["baseline_um"], dtype=float),
-            max_locs=np.asarray(stats["max_locs"], dtype=int),
-            space=args.space_xy,
-            title=title,
-        )
-        plot_distribution(np.asarray(stats["jsb"], dtype=float), "径深比对数转换量：数据分布与参考正态拟合",
-                          xlabel="ln(1 / (sjb / 缩放因子))",bin_width=args.hist_bin_width)
-
-        import matplotlib.pyplot as plt
-
-        print("已打开交互窗口：3D 图可用鼠标旋转/缩放；等高线图点击可查看数值。")
+        if args.plot_mode == "paper":
+            print("已打开三张论文式图：形貌图、坑深分布图和径深比对数分布图。")
+        elif args.plot_mode == "full":
+            title = result_path.stem
+            plot_surface_and_contour(
+                surface_um=np.asarray(stats["baseline_um"], dtype=float),
+                max_locs=np.asarray(stats["max_locs"], dtype=int),
+                space=args.space_xy,
+                title=title,
+            )
+            plot_distribution(
+                np.asarray(stats["jsb"], dtype=float),
+                "径深比对数转换量：数据分布与参考正态拟合",
+                xlabel="ln(1 / (sjb / 缩放因子))",
+                bin_width=args.hist_bin_width,
+            )
+            print("已打开完整交互窗口：3D 图可旋转，等高线图可点击读数。")
+        elif args.plot_mode == "comparison":
+            print("已打开三联分布图：第一幅为原始坑深标准图，另外两幅对数分布图保留。")
+        else:
+            print("已打开单张原始腐蚀坑深度直方图和正态拟合曲线。")
         plt.show()
     else:
-        import matplotlib.pyplot as plt
-        plt.close(comparison)
+        if figure is not None:
+            plt.close(figure)
+        if comparison is not None:
+            plt.close(comparison)
+        if surface_figure is not None:
+            plt.close(surface_figure)
+        if ratio_figure is not None:
+            plt.close(ratio_figure)
 
     elapsed = time.perf_counter() - start_time
     print(f"第四步交互查看总耗时: {format_elapsed_time(elapsed)}")

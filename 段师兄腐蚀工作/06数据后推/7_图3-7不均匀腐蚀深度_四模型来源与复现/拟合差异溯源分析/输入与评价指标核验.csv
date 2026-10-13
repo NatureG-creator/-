@@ -1,0 +1,5 @@
+Dataset,RawCount,RemovedCount,ValidCount,SavedTrainCount,InputMaxError,MetricMaxError
+1,18,1,17,15,0,0
+2,8,0,8,7,0,0
+3,10,0,10,9,0,0
+4,4,0,4,3,0,0

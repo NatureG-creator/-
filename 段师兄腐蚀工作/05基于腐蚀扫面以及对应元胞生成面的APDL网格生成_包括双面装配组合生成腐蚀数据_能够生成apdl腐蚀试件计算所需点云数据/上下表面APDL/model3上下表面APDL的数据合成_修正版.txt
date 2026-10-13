@@ -1,0 +1,206 @@
+FINISH
+/CLEAR,START
+/PREP7
+
+! === Parameters: MATLAB matrix is 60 rows by 193 columns ===
+nx = 193
+ny = 60
+nlayers = 8
+n_total_surf = nx*ny
+Area = 120
+Length = (nx-1)*0.3
+
+! Coordinate arrays use MATLAB column-major order: Y varies fastest.
+*DIM, x_arr, ARRAY, n_total_surf
+*DIM, y_arr, ARRAY, n_total_surf
+*DIM, z_arr, ARRAY, n_total_surf
+*DIM, z_arrf, ARRAY, n_total_surf
+
+! *VREAD must be run from this external input file (/INPUT).
+! Data files must be in the MAPDL working directory.
+! Each coordinate file must contain 11,580 values (60*193).
+
+*VREAD, x_arr(1), DIANYUN_FRONT_X, txt
+(F12.6)
+*VREAD, y_arr(1), DIANYUN_FRONT_Y, txt
+(F12.6)
+*VREAD, z_arr(1), DIANYUN_FRONT_Z, txt
+(F12.6)
+*VREAD, z_arrf(1), DIANYUN_BACK_Z, txt
+(F12.6)
+
+! Create 9 solid layers between front and back surfaces.
+*DO, layer, 0, nlayers
+    ratio = (nlayers-layer)/nlayers
+    *DO, i, 1, nx
+        *DO, j, 1, ny
+            node_id = layer*n_total_surf + (i-1)*ny + j
+            idx = (i-1)*ny+j
+            z_coord = z_arr(idx)*ratio + z_arrf(idx)*(1-ratio)
+            N, node_id, x_arr(idx), y_arr(idx), z_coord
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+! === Elements ===
+ET, 1, SOLID185
+KEYOPT, 1, 1, 0
+TYPE, 1
+MAT, 1
+
+! Material properties and plastic curve retained from the source file.
+MP, EX, 1, 185226
+MP, PRXY, 1, 0.3
+TB, PLASTIC, 1, 0, 49, MISO
+TBEO, NEGSLOPE, 1
+TBPT, DEFI, 0, 332.87
+TBPT, DEFI, 0.000170, 350.30
+TBPT, DEFI, 0.000313, 366.19
+TBPT, DEFI, 0.000508, 379.66
+TBPT, DEFI, 0.000746, 390.83
+TBPT, DEFI, 0.001043, 400.05
+TBPT, DEFI, 0.001403, 407.29
+TBPT, DEFI, 0.001815, 410.74
+TBPT, DEFI, 0.002406, 409.89
+TBPT, DEFI, 0.002991, 407.96
+TBPT, DEFI, 0.003519, 409.16
+TBPT, DEFI, 0.004071, 410.17
+TBPT, DEFI, 0.004664, 411.13
+TBPT, DEFI, 0.005253, 411.17
+TBPT, DEFI, 0.005856, 412.37
+TBPT, DEFI, 0.006419, 414.25
+TBPT, DEFI, 0.006950, 416.31
+TBPT, DEFI, 0.007453, 418.03
+TBPT, DEFI, 0.007939, 419.85
+TBPT, DEFI, 0.008407, 422.07
+TBPT, DEFI, 0.012502, 437.92
+TBPT, DEFI, 0.016974, 453.65
+TBPT, DEFI, 0.020958, 466.57
+TBPT, DEFI, 0.025291, 479.23
+TBPT, DEFI, 0.029206, 489.70
+TBPT, DEFI, 0.033588, 500.36
+TBPT, DEFI, 0.037514, 509.03
+TBPT, DEFI, 0.041951, 517.94
+TBPT, DEFI, 0.045928, 525.45
+TBPT, DEFI, 0.050386, 533.20
+TBPT, DEFI, 0.054466, 539.57
+TBPT, DEFI, 0.058981, 546.38
+TBPT, DEFI, 0.063111, 552.24
+TBPT, DEFI, 0.067743, 558.30
+TBPT, DEFI, 0.071951, 563.35
+TBPT, DEFI, 0.076622, 568.95
+TBPT, DEFI, 0.080853, 573.45
+TBPT, DEFI, 0.085624, 578.50
+TBPT, DEFI, 0.089967, 582.78
+TBPT, DEFI, 0.094773, 587.41
+TBPT, DEFI, 0.099175, 591.55
+TBPT, DEFI, 0.104109, 595.73
+TBPT, DEFI, 0.108575, 599.40
+TBPT, DEFI, 0.113586, 603.65
+TBPT, DEFI, 0.118122, 606.99
+TBPT, DEFI, 0.123237, 610.89
+TBPT, DEFI, 0.127868, 614.16
+TBPT, DEFI, 0.133057, 617.66
+TBPT, DEFI, 0.137798, 621.16
+
+! Connect adjacent Y nodes first, then adjacent X nodes.
+*DO, layer, 0, nlayers-1
+    base = layer*n_total_surf
+    *DO, i, 1, nx-1
+        *DO, j, 1, ny-1
+            n1 = base + (i-1)*ny + j
+            n2 = n1 + 1
+            n3 = base + i*ny + j + 1
+            n4 = base + i*ny + j
+            n5 = n1 + n_total_surf
+            n6 = n2 + n_total_surf
+            n7 = n3 + n_total_surf
+            n8 = n4 + n_total_surf
+            E, n1, n2, n3, n4, n5, n6, n7, n8
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+/EDGE, 1, 0
+/PNUM, NODE, 0
+/REPLOT
+FINISH
+
+! === Solution ===
+/SOLU
+ANTYPE, STATIC
+SOLCONTROL, ON
+AUTOTS, ON
+NLGEOM, ON
+OUTRES, ALL, ALL
+LNSRCH, 1
+
+! Boundary conditions copied from the original command stream.
+NSEL, S, LOC, X, 0
+D, ALL, UX, 0
+JiaoDian1 = ny
+JiaoDian11 = ny + nlayers*n_total_surf
+D, JiaoDian1, UY, 0
+D, JiaoDian1, UZ, 0
+D, JiaoDian11, UY, 0
+ALLSEL, ALL
+
+TIME, 1.0
+NSUBST, 100, 450, 50
+OUTRES, ALL, ALL
+
+! Displacement loading copied from the original command stream.
+nx_val = (nx-1)*0.3
+NSEL, S, LOC, X, nx_val
+D, ALL, UX, 11
+ALLSEL, ALL
+SOLVE
+FINISH
+
+! === Postprocessing ===
+/POST1
+SET, LAST
+*GET, maxSub, ACTIVE, 0, SET, NSET
+*DIM, DispArray, ARRAY, maxSub
+*DIM, TotalForceArray, ARRAY, maxSub
+*DIM, TimeArray, ARRAY, maxSub
+
+! Track displacement at the loaded corner.
+RefNode = nx*ny
+
+*DO, i, 1, maxSub
+    SET, 1, i
+    *GET, CurTime, ACTIVE, 0, SET, TIME
+    *GET, total_disp, NODE, RefNode, U, X
+    ! Sum the X reactions on the loaded edge.
+    Total_force = 0
+    NSEL, S, LOC, X, nx_val
+    *GET, edge_count, NODE, 0, COUNT
+    *GET, edge_node, NODE, 0, NUM, MIN
+    *DO, j, 1, edge_count
+        *GET, Force, NODE, edge_node, RF, FX
+        Total_force = Total_force + Force
+        *GET, next_node, NODE, edge_node, NXTH
+        edge_node = next_node
+    *ENDDO
+    ALLSEL, ALL
+    TimeArray(i) = CurTime
+    DispArray(i) = total_disp
+    TotalForceArray(i) = Total_force
+*ENDDO
+
+/AXLAB, X, Displacement (mm)
+/AXLAB, Y, Total Reaction Force FX
+
+/GFILE, 2400
+*VPLOT, DispArray(1), TotalForceArray(1)
+
+! Write results to a new file in the MAPDL working directory.
+*CFOPEN, model3_force_displacement, txt
+*DO, i, 1, maxSub
+    *VWRITE, TimeArray(i), DispArray(i), TotalForceArray(i)
+    (F12.5, ',', F12.5, ',', E16.8)
+*ENDDO
+*CFCLOS
+
+FINISH

@@ -1,0 +1,134 @@
+function [Z,Z_filled]=shujuguiyi(fill,grid_resolution,xiuzhenghang)
+% 读取txt文件（替换为你的实际文件名）
+data = readtable(fill);
+
+% 提取x、y、z坐标（假设数据列顺序为x,y,z）
+x = data{:, 1};
+y = data{:, 2};
+z = -data{:, 3};
+
+%% 步骤1：拟合原始数据的倾斜平面（同前）
+A = [x(:) y(:) ones(size(x))];
+coeff = A \ z(:);  % 平面方程：z = a*x + b*y + c
+
+%% 步骤2：旋转并平移平面至xy平面齐平（同前）
+normal_original = [coeff(1), coeff(2), -1];
+normal_original = normal_original / norm(normal_original);
+normal_target = [0, 0, 1];
+rotation_axis = cross(normal_original, normal_target);
+rotation_axis = rotation_axis / norm(rotation_axis);
+rotation_angle = acos(dot(normal_original, normal_target));
+
+u = rotation_axis;
+theta = rotation_angle;
+K = [0, -u(3), u(2); u(3), 0, -u(1); -u(2), u(1), 0];
+R = eye(3) + sin(theta)*K + (1 - cos(theta))*(K*K);
+
+points = [x(:), y(:), z(:)];
+rotated_points = points * R';  % 修正倾斜后的点
+
+z_rotated = rotated_points(:, 3);
+z_min = min(z_rotated);
+rotated_points(:, 3) = z_rotated - z_min;  % 平移后平面最低点z=0
+
+%% 步骤3：通过主成分分析（PCA）确定网格主方向
+% 提取修正后的x、y坐标（z已齐平，仅处理xy平面）
+xy_points = rotated_points(:, 1:2);
+
+% 计算协方差矩阵（反映数据分布方向）
+cov_matrix = cov(xy_points);
+
+% 主成分分析：特征向量对应主方向（第一特征向量为长轴方向）
+[V, ~] = eig(cov_matrix);  % V的列是特征向量（按特征值升序排列）
+major_axis = V(:, 2);  % 第二列对应最大特征值（长轴方向）
+
+% 计算当前长轴与X轴的夹角（弧度）
+angle_current = atan2(major_axis(2), major_axis(1));  % 长轴方向角
+
+%% 步骤4：计算旋转角度并对齐坐标轴
+% 目标角度为0（长轴与X轴平行）
+angle_rotate = -angle_current;  % 需旋转的角度（负号为顺时针旋转）
+
+% 构建二维旋转矩阵（绕Z轴旋转）
+R_2d = [cos(angle_rotate), -sin(angle_rotate);
+        sin(angle_rotate), cos(angle_rotate)];
+
+% 对xy坐标应用旋转（保持z坐标不变）
+rotated_xy = (xy_points - mean(xy_points)) * R_2d';  % 先中心化再旋转
+rotated_xy = rotated_xy + mean(xy_points);  % 恢复原中心位置（可选）
+
+%% 步骤5：生成边缘对齐坐标轴的网格数据
+% 提取旋转后的x、y、z坐标
+x_aligned = rotated_xy(:, 1);
+y_aligned = rotated_xy(:, 2);
+z_aligned = rotated_points(:, 3);  % z坐标保持不变
+
+% 生成网格范围（基于对齐后的x和y的最小/最大值）
+x_grid = min(x_aligned):grid_resolution:max(x_aligned);
+y_grid = min(y_aligned):grid_resolution:max(y_aligned);
+[X, Y] = meshgrid(x_grid, y_grid);
+
+% 插值生成对齐后的网格数据
+Z = griddata(x_aligned, y_aligned, z_aligned, X, Y);
+
+Z_filled = fillmissing(Z, 'nearest', 1);  % 1表示按列填充
+Z_filled = fillmissing(Z_filled, 'nearest', 2);
+
+%删除边缘坏点
+Z(1:xiuzhenghang,:)=[];
+Z(end-xiuzhenghang:end,:)=[];
+Z(:,1:xiuzhenghang)=[];
+Z(:,end-xiuzhenghang:end)=[];
+Z_filled(1:xiuzhenghang,:)=[];
+Z_filled(end-xiuzhenghang:end,:)=[];
+Z_filled(:,1:xiuzhenghang)=[];
+Z_filled(:,end-xiuzhenghang:end)=[];
+X=X(xiuzhenghang+1:end-(xiuzhenghang+1),xiuzhenghang+1:end-(xiuzhenghang+1));
+Y=Y(xiuzhenghang+1:end-(xiuzhenghang+1),xiuzhenghang+1:end-(xiuzhenghang+1));
+%Z=Z(:,2:70);
+%Z_filled=Z_filled(:,1:70);
+
+%% 步骤6：可视化和验证（核心修改：隐藏网格线+关闭阴影）
+figure;
+% 绘制曲面并隐藏网格线，关闭阴影
+s1 = surf(X, Y, Z);
+s1.EdgeColor = 'none';  % 隐藏网格线
+s1.FaceColor = 'interp'; % 按z值插值着色
+s1.FaceLighting = 'none'; % 关闭曲面光照/阴影效果
+shading flat;  % 取消平滑着色，避免光影过渡（可选）
+lighting none; % 全局关闭光照（彻底消除阴影）
+xlabel('X (边缘对齐后)');
+ylabel('Y (边缘对齐后)');
+zlabel('Z (边缘对齐后)');
+title('网格边缘与坐标轴平行的曲面数据');
+axis tight;
+view(2);  % 俯视视角，观察边缘是否与坐标轴平行
+colorbar; % 可选：添加色标，便于查看z值分布
+
+figure;
+s2 = surf(X, Y, Z_filled);
+s2.EdgeColor = 'none';  % 隐藏网格线
+s2.FaceColor = 'interp';
+s2.FaceLighting = 'none'; % 关闭曲面光照/阴影效果
+shading flat;
+lighting none; % 全局关闭光照
+xlabel('X (边缘对齐后)');
+ylabel('Y (边缘对齐后)');
+zlabel('Z_filled (边缘对齐后)');
+title('网格边缘与坐标轴平行的曲面数据（填充后）');
+axis tight;
+view(1);  % 俯视视角，观察边缘是否与坐标轴平行
+colorbar;
+
+% 绘制原始网格和对齐后的网格对比（可选）
+figure;
+scatter(xy_points(:,1), xy_points(:,2), 10, 'b', 'filled');
+hold on;
+scatter(x_aligned, y_aligned, 10, 'r', 'filled');
+xlabel('X');
+ylabel('Y');
+title('原始网格（蓝）vs 对齐后网格（红）');
+legend('原始', '对齐后');
+axis equal;
+lighting none; % 对比图也关闭光照阴影
+end

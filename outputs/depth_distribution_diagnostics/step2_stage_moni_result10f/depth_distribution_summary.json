@@ -1,0 +1,59 @@
+{
+  "metadata": {
+    "source_npz": "E:\\CODEX文件\\python腐蚀代码\\腐蚀代码7_高速版_MATLAB实测接口\\01_运行程序与数据\\结果文件\\step2_stage_moni_result10f.npz",
+    "source_type": "CA/导入的三维元胞结果",
+    "surface_shape": [
+      100,
+      100,
+      101
+    ],
+    "window_size": 7,
+    "gaussian_sigma": 2.0,
+    "min_prominence": 0.001,
+    "min_distance": 15,
+    "neighborhood": 12,
+    "threshold": 0.3,
+    "log_bin_width": 0.1,
+    "raw_bin_width_um": null,
+    "boundary_fallback_count": 0,
+    "pit_depth_definition": "原提取算法：非空边界坑 (baseline_at_max-min(baseline)+1)*space_z_um；空边界默认 1 层"
+  },
+  "formula": "H=depth_cells*space_z_um; L=ln(H/(1 um)); Y=L/C",
+  "normal_fit_formula": "f(L)=exp(-(L-mu_L)^2/(2*sigma_L^2))/(sigma_L*sqrt(2*pi)); mu_L=mean(L); sigma_L=std(L,ddof=1)",
+  "normalization": 1.04,
+  "space_z_um": 25.0,
+  "extracted_count": 16,
+  "valid_count": 16,
+  "invalid_count": 0,
+  "raw_depth_um": {
+    "count": 16,
+    "mean": 668.06482925667,
+    "std": 624.0050333959966,
+    "min": 44.902706709070074,
+    "max": 1419.7493826283746,
+    "skewness": 0.050586987135328054,
+    "shapiro_p": 0.0003793185127281968,
+    "normality_note": "在 5% 水平拒绝正态假设"
+  },
+  "log_depth": {
+    "count": 16,
+    "mean": 5.659449998849592,
+    "std": 1.549130836350128,
+    "min": 3.804498075984044,
+    "max": 7.25823564391214,
+    "skewness": -0.06491739779959785,
+    "shapiro_p": 0.0005355975497367618,
+    "normality_note": "在 5% 水平拒绝正态假设"
+  },
+  "normalized_log_depth": {
+    "count": 16,
+    "mean": 5.4417788450476845,
+    "std": 1.4895488811058926,
+    "min": 3.6581712269077347,
+    "max": 6.979072734530903,
+    "skewness": -0.06491739779959801,
+    "shapiro_p": 0.0005355975497367618,
+    "normality_note": "在 5% 水平拒绝正态假设"
+  },
+  "note": "正的常数 C 仅缩放横坐标，不改变偏态或使非正态样本变为正态。"
+}

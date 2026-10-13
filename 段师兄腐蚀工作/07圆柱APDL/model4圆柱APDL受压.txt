@@ -1,0 +1,204 @@
+FINISH
+/CLEAR,START
+/PREP7
+CSYS,1
+SHPP,OFF,,0.5   
+SHPP,WARNING    
+! ==============================
+! PARAMETERS
+! ==============================
+nx = 280
+ny = 1000
+nlayers = 3
+L = 1000
+
+n_total_surf = nx*nlayers
+
+! ==============================
+! READ COORDINATES
+! ==============================
+*DIM, R_in,ARRAY, n_total_surf*ny
+*DIM, R_out,ARRAY, n_total_surf*ny
+*DIM, Theta_arr,ARRAY, n_total_surf*ny
+*DIM, Z_r,ARRAY, n_total_surf*ny
+
+*VREAD, R_in(1),DIANYUN_INNER_R,txt    
+(F12.6)
+*VREAD, R_out(1),DIANYUN_OUTER_R,txt    
+(F12.6)
+*VREAD, Theta_arr(1),DIANYUN_THETA,txt      
+(F12.6)
+*VREAD, Z_r(1),DIANYUN_Z,txt          
+(F12.6)
+
+! ==============================
+! CREATE NODES
+! ==============================
+node_id = 0
+
+*DO, layer, 0, ny-1
+    *DO, b, 1, nx
+        *DO, d, 1, nlayers
+            idx = layer*(nx*nlayers) + (b-1)*nlayers + d
+            ratio_r = (d-1)/(nlayers-1)
+            R = R_in(idx) + (R_out(idx)-R_in(idx))*ratio_r
+            TH = Theta_arr(idx)
+            Z = Z_r(idx)
+            node_id = node_id + 1
+            N, node_id, R, TH, Z
+       *ENDDO
+    *ENDDO
+*ENDDO
+
+! ==============================
+! MATERIAL PROPERTIES
+! ==============================
+ET,1,SOLID185
+KEYOPT,1,2,0
+TYPE,1
+MAT,1
+MP,EX,1,197540
+MP,PRXY,1,0.3
+TB,PLASTIC,1,0,15,MISO
+TBEO,NEGSLOPE,1
+TBPT,DEFI,0.00000000,343.000
+TBPT,DEFI,0.01114463,347.444
+TBPT,DEFI,0.02228926,369.030
+TBPT,DEFI,0.03343389,398.745
+TBPT,DEFI,0.04457852,428.103
+TBPT,DEFI,0.05572315,453.254
+TBPT,DEFI,0.06686778,471.535
+TBPT,DEFI,0.07801241,485.151
+TBPT,DEFI,0.08915704,496.842
+TBPT,DEFI,0.10030167,507.922
+TBPT,DEFI,0.11144630,518.895
+TBPT,DEFI,0.12259093,529.956
+TBPT,DEFI,0.13373556,541.188
+TBPT,DEFI,0.14488020,552.630
+TBPT,DEFI,0.15602483,564.304
+
+! ==============================
+! CREATE ELEMENTS
+! ==============================
+
+elem_id = 0
+*DO, z_layer, 0, ny-2
+    *DO, c, 1, nx-2
+        *DO, e, 1, nlayers-1
+            
+            ! 【正确】base 严格匹配你的节点公式
+            base = z_layer*nx*nlayers
+            
+            ! 底面 4 节点（完全匹配你的节点编号）
+            n1 = base + (c-1)*nlayers + e
+            n2 = base + c*nlayers + e
+            n3 = base + c*nlayers + (e+1)
+            n4 = base + (c-1)*nlayers + (e+1)
+            
+            ! 顶面 4 节点（上一层 Z，偏移量正确）
+            offset = nx*nlayers
+            n5 = n1 + offset
+            n6 = n2 + offset
+            n7 = n3 + offset
+            n8 = n4 + offset
+            
+            ! 生成单元（标准 SOLID185 顺序）
+            elem_id = elem_id + 1
+            E, n1, n2, n3, n4, n5, n6, n7, n8
+            
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+*DO, z_layer, 0, ny-2
+        *DO, e, 1, nlayers-1
+            c=nx-1
+            ! 【正确】base 严格匹配你的节点公式
+            base = z_layer*nx*nlayers
+            
+            ! 底面 4 节点（完全匹配你的节点编号）
+            n1 = base + (c-1)*nlayers + e
+            n2 = base +  e
+            n3 = base + (e+1)
+            n4 = base + (c-1)*nlayers + (e+1)
+            
+            ! 顶面 4 节点（上一层 Z，偏移量正确）
+            offset = nx*nlayers
+            n5 = n1 + offset
+            n6 = n2 + offset
+            n7 = n3 + offset
+            n8 = n4 + offset
+            
+            ! 生成单元（标准 SOLID185 顺序）
+            elem_id = elem_id + 1
+            E, n1, n2, n3, n4, n5, n6, n7, n8
+            
+        *ENDDO
+*ENDDO
+
+
+ET,2,mass21
+m1=0.00001
+R,2,m1
+N,999999,0,0,0
+N,1000000,0,0,L
+Type,2
+Real,2
+E,999999
+E,1000000
+
+!构建刚性耦合
+NUMMRG, NODE, 1.0E-4
+NSEL, S, LOC, Z, 0 
+nplot
+CM, TOP_NODES, NODE
+!合并节点
+CERIG,node(0,0,0),all,UX,UY,UZ,ROTX,ROTY,ROTZ
+!柔性耦合
+!RBE3,node(0,0,0),all,UZ
+
+!构建刚性耦合
+NUMMRG, NODE, 1.0E-4
+NSEL, S, LOC, Z, L 
+nplot
+CM, TOP_NODES, NODE
+!合并节点
+CERIG,node(0,0,L),all,UX,UY,UZ,ROTX,ROTY,ROTZ
+
+! === Display Settings ===
+/EDGE, 1, 0
+/PNUM, NODE, 0
+/REPLOT
+FINISH
+! === Solution Section ===
+/SOLU
+ANTYPE,STATIC
+! --- solve control ---
+SOLCONTROL, ON
+AUTOTS, ON
+NLGEOM, ON
+OUTRES, ALL, ALL
+LNSRCH,1
+! ==========================================
+! 1. 施加基本约束 UX=0
+ALLSEL
+
+D,999999,UX,0
+D,999999,UY,0
+D,999999,ROTX,0
+D,999999,ROTZ,0
+
+D,1000000,UX,0
+D,1000000,UY,0
+D,1000000,UZ,0
+D,1000000,ROTX,0
+D,1000000,ROTZ,0
+! 定义载荷步的时间
+TIME, 1.0
+OUTRES, ALL, ALL
+NSUBST,50,350,50
+disp_per_step1=15
+D, 999999, UZ, disp_per_step1 
+SOLVE                   
+FINISH  
+

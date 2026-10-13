@@ -1,0 +1,438 @@
+FINISH
+/CLEAR,START
+/FILNAME,hysteresis_endpoint_all
+
+/PREP7
+CSYS,1
+SHPP,OFF,,0.5   
+SHPP,WARNING    
+
+! ==============================
+! PARAMETERS
+! ==============================
+nx = 280
+ny = 1000
+nlayers = 3
+L = 1000
+
+n_total_surf = nx*nlayers
+
+! ==============================
+! READ COORDINATES
+! ==============================
+*DIM, R_in,ARRAY, n_total_surf*ny
+*DIM, R_out,ARRAY, n_total_surf*ny
+*DIM, Theta_arr,ARRAY, n_total_surf*ny
+*DIM, Z_r,ARRAY, n_total_surf*ny
+
+*VREAD, R_in(1),DIANYUN_INNER_R,txt    
+(F12.6)
+*VREAD, R_out(1),DIANYUN_OUTER_R,txt    
+(F12.6)
+*VREAD, Theta_arr(1),DIANYUN_THETA,txt      
+(F12.6)
+*VREAD, Z_r(1),DIANYUN_Z,txt          
+(F12.6)
+
+! ==============================
+! CREATE NODES
+! ==============================
+node_id = 0
+
+*DO, layer, 0, ny-1
+    *DO, b, 1, nx
+        *DO, d, 1, nlayers
+            idx = layer*(nx*nlayers) + (b-1)*nlayers + d
+            ratio_r = (d-1)/(nlayers-1)
+            R = R_in(idx) + (R_out(idx)-R_in(idx))*ratio_r
+            TH = Theta_arr(idx)
+            Z = Z_r(idx)
+            node_id = node_id + 1
+            N, node_id, R, TH, Z
+       *ENDDO
+    *ENDDO
+*ENDDO
+
+! ==============================
+! MATERIAL PROPERTIES
+! ==============================
+ET,1,SOLID185
+KEYOPT,1,2,1
+
+TYPE,1
+MAT,1
+
+! 弹性参数，单位体系：N - mm - MPa
+MP,EX,1,189244
+MP,PRXY,1,0.3
+
+! Chaboche + Voce 混合强化参数
+sig0 = 400
+Qinf = 30
+biso = 1.2
+
+Ckin1 = 14000
+gam1  = 500
+Ckin2 = 12000
+gam2  = 330
+Ckin3 = 4500
+gam3  = 100
+Ckin4 = 2100
+gam4  = 30
+
+! Chaboche 非线性随动强化：4组背应力
+TB,CHAB,1,1,4
+TBDATA,1,sig0
+TBDATA,2,Ckin1,gam1
+TBDATA,4,Ckin2,gam2
+TBDATA,6,Ckin3,gam3
+TBDATA,8,Ckin4,gam4
+
+! Voce 非线性各向同性强化
+! sigma_y = sig0 + 0*p + Qinf*(1-exp(-biso*p))
+TB,NLISO,1,,,VOCE
+TBDATA,1,sig0,0,Qinf,biso
+
+! ==============================
+! CREATE ELEMENTS
+! ==============================
+elem_id = 0
+
+*DO, z_layer, 0, ny-2
+    *DO, c, 1, nx-2
+        *DO, e, 1, nlayers-1
+            
+            base = z_layer*nx*nlayers
+            
+            n1 = base + (c-1)*nlayers + e
+            n2 = base + c*nlayers + e
+            n3 = base + c*nlayers + (e+1)
+            n4 = base + (c-1)*nlayers + (e+1)
+            
+            offset = nx*nlayers
+            n5 = n1 + offset
+            n6 = n2 + offset
+            n7 = n3 + offset
+            n8 = n4 + offset
+            
+            elem_id = elem_id + 1
+            E, n1, n2, n3, n4, n5, n6, n7, n8
+            
+        *ENDDO
+    *ENDDO
+*ENDDO
+
+*DO, z_layer, 0, ny-2
+    *DO, e, 1, nlayers-1
+
+        c = nx-1
+        base = z_layer*nx*nlayers
+        
+        n1 = base + (c-1)*nlayers + e
+        n2 = base + e
+        n3 = base + (e+1)
+        n4 = base + (c-1)*nlayers + (e+1)
+        
+        offset = nx*nlayers
+        n5 = n1 + offset
+        n6 = n2 + offset
+        n7 = n3 + offset
+        n8 = n4 + offset
+        
+        elem_id = elem_id + 1
+        E, n1, n2, n3, n4, n5, n6, n7, n8
+        
+    *ENDDO
+*ENDDO
+
+! ==============================
+! MASS POINTS
+! ==============================
+ET,2,MASS21
+m1 = 0.00001
+R,2,m1
+
+N,999999,0,0,0
+N,1000000,0,0,L
+
+TYPE,2
+REAL,2
+E,999999
+E,1000000
+
+! ===========================================================
+! MONITOR NODES FOR HYSTERESIS OUTPUT
+! ===========================================================
+ALLSEL
+NSEL,S,NODE,,999999
+NSEL,A,NODE,,1000000
+CM,MON_NODES,NODE
+ALLSEL
+
+! ==============================
+! RIGID COUPLING AT Z=0
+! ==============================
+NUMMRG, NODE, 1.0E-4
+NSEL, S, LOC, Z, 0 
+NPLOT
+CM, TOP_NODES, NODE
+CERIG,node(0,0,0),ALL,UX,UY,UZ,ROTX,ROTY,ROTZ
+
+! ==============================
+! RIGID COUPLING AT Z=L
+! ==============================
+NUMMRG, NODE, 1.0E-4
+NSEL, S, LOC, Z, L 
+NPLOT
+CM, TOP_NODES, NODE
+CERIG,node(0,0,L),ALL,UX,UY,UZ,ROTX,ROTY,ROTZ
+
+! === Display Settings ===
+/EDGE, 1, 0
+/PNUM, NODE, 0
+/REPLOT
+
+FINISH
+
+! ===========================================================
+! SOLUTION SECTION
+! ===========================================================
+/SOLU
+ANTYPE,STATIC
+
+SOLCONTROL, ON
+AUTOTS, ON
+NLGEOM, ON
+KBC,0
+LNSRCH,1
+NEQIT,50
+
+! ===========================================================
+! RESULT OUTPUT CONTROL
+!
+! 关键修改：
+! OUTRES,ALL,LAST
+!
+! 含义：
+! 每一个人为载荷步 TIME=i 的最后一个子步保存全部结果。
+!
+! 可以保存：
+! 1. 两端质量点转角 ROTY；
+! 2. 两端质量点反力矩 MY；
+! 3. 每一步位移云图；
+! 4. 每一步米塞斯应力云图；
+! 5. 后处理 POST26 中的转角—弯矩曲线。
+!
+! 相比 OUTRES,ALL,ALL：
+! 不保存每个自动子步的全场结果，文件小很多。
+! ===========================================================
+OUTRES,ALL,-3
+
+! ==========================================
+! BASIC CONSTRAINTS
+! ==========================================
+ALLSEL
+
+D,999999,UX,0
+D,999999,UY,0
+D,1000000,UZ,0
+D,999999,ROTX,0
+D,999999,ROTZ,0
+
+D,1000000,UX,0
+D,1000000,UZ,0
+D,1000000,UY,0
+D,1000000,ROTX,0
+D,1000000,ROTZ,0
+
+! ===========================================================
+! VARIABLE AMPLITUDE CYCLIC ROTATION PARAMETERS
+! 变幅滞回加载：0.01 -> 0.15 rad
+!
+! branch_div = 3：
+! 比 12 快很多；
+! 又比 1 的端点连接更平滑。
+!
+! 加载路径：
+! 0 -> +amp -> -amp -> +amp
+! 最后从最终 +amp 回到 0
+! ===========================================================
+
+amp_start = 0.02
+amp_end   = 0.20
+amp_inc   = 0.02
+
+cycles_per_amp = 1
+branch_div = 2
+
+
+
+! 幅值级数
+namp = (amp_end - amp_start)/amp_inc + 1
+
+! 每个幅值每个循环包含 3 个分支：
+! current -> +amp
+! +amp -> -amp
+! -amp -> +amp
+! 最后再从最终 +amp -> 0
+nstate = 1 + namp*cycles_per_amp*3*branch_div + branch_div
+
+*DIM,rot_vals,ARRAY,nstate
+
+idx_load = 1
+rot_vals(idx_load) = 0
+rot_prev = 0
+
+*DO,ia,1,namp
+
+    amp_now = amp_start + (ia-1)*amp_inc
+
+    *DO,icyc,1,cycles_per_amp
+
+        ! Branch 1: current rotation -> +amp_now
+        rot_target = amp_now
+        *DO,j,1,branch_div
+            idx_load = idx_load + 1
+            rot_vals(idx_load) = rot_prev + (rot_target-rot_prev)*j/branch_div
+        *ENDDO
+        rot_prev = rot_target
+
+        ! Branch 2: +amp_now -> -amp_now
+        rot_target = -amp_now
+        *DO,j,1,branch_div
+            idx_load = idx_load + 1
+            rot_vals(idx_load) = rot_prev + (rot_target-rot_prev)*j/branch_div
+        *ENDDO
+        rot_prev = rot_target
+
+        ! Branch 3: -amp_now -> +amp_now
+        rot_target = amp_now
+        *DO,j,1,branch_div
+            idx_load = idx_load + 1
+            rot_vals(idx_load) = rot_prev + (rot_target-rot_prev)*j/branch_div
+        *ENDDO
+        rot_prev = rot_target
+
+    *ENDDO
+
+*ENDDO
+
+! 最终从最后一级正向幅值回到 0
+rot_target = 0
+*DO,j,1,branch_div
+    idx_load = idx_load + 1
+    rot_vals(idx_load) = rot_prev + (rot_target-rot_prev)*j/branch_div
+*ENDDO
+
+nstate = idx_load
+
+! ===========================================================
+! PROGRESS OUTPUT FILE
+! ===========================================================
+*CFOPEN,progress_hysteresis,txt
+*VWRITE,'Step','TotalStep','Amplitude','Rotation','Status'
+(A8,',',A10,',',A12,',',A12,',',A12)
+*CFCLOS
+
+! ===========================================================
+! SOLVE EACH LOAD STEP
+! ===========================================================
+*DO,i,1,nstate
+
+    TIME,i
+
+    rot_now = rot_vals(i)
+    amp_abs = ABS(rot_now)
+
+    ! -------------------------------------------------------
+    ! 输出控制：
+    ! 每个 TIME=i 的最后一个子步保存全部结果。
+    ! 这是为了保证：
+    ! 1. 转角—弯矩曲线可以输出；
+    ! 2. 每一步应力云图可以查看。
+    ! -------------------------------------------------------
+    OUTRES,ALL,-3
+
+    ! -------------------------------------------------------
+    ! 子步控制
+    ! -------------------------------------------------------
+    *IF,i,EQ,1,THEN
+        NSUBST,10,100,5
+    *ELSEIF,amp_abs,LE,0.03,THEN
+        NSUBST,20,200,5
+    *ELSEIF,amp_abs,LE,0.06,THEN
+        NSUBST,30,300,5
+    *ELSEIF,amp_abs,LE,0.10,THEN
+        NSUBST,40,800,10
+    *ELSE
+        NSUBST,60,1200,10
+    *ENDIF
+
+    ! 两端对称反向旋转
+    D,999999,ROTY,rot_now
+    D,1000000,ROTY,-rot_now
+
+    ! 写入开始状态
+    *CFOPEN,progress_hysteresis,txt,,APPEND
+    *VWRITE,i,nstate,amp_abs,rot_now,'START'
+    (I8,',',I10,',',E12.5,',',E12.5,',',A12)
+    *CFCLOS
+
+    /COM, ==================================================
+    /COM, VARIABLE AMPLITUDE HYSTERESIS PROGRESS
+    /COM, Current step / total step / rotation:
+    /COM, ==================================================
+    *STATUS,i
+    *STATUS,nstate
+    *STATUS,rot_now
+
+    SOLVE
+
+    ! 写入完成状态
+    *CFOPEN,progress_hysteresis,txt,,APPEND
+    *VWRITE,i,nstate,amp_abs,rot_now,'DONE'
+    (I8,',',I10,',',E12.5,',',E12.5,',',A12)
+    *CFCLOS
+
+*ENDDO
+
+SAVE
+FINISH
+
+! ===========================================================
+! POST26: AVERAGE MOMENT - ROTATION HYSTERESIS CURVE
+! ===========================================================
+/POST26
+RESET
+NUMVAR,50
+
+! 读取当前结果文件
+FILE,hysteresis_endpoint_all,RST
+
+! 两端质量点转角
+NSOL,2,999999,ROT,Y,ROT_END1
+NSOL,3,1000000,ROT,Y,ROT_END2
+
+! 两端质量点反力矩
+RFORCE,4,999999,M,Y,MOM_END1
+RFORCE,5,1000000,M,Y,MOM_END2
+
+! 平均弯矩
+! 如果图像方向反了，把 0.5,-0.5 改成 -0.5,0.5
+ADD,6,4,5,,MOM_AVG,,0.5,-0.5
+
+STORE,MERGE
+
+/AXLAB,X,Rotation ROTY / rad
+/AXLAB,Y,Average Bending Moment / N-mm
+/GRID,1
+
+XVAR,2
+PLVAR,6
+
+/OUTPUT,hysteresis_rot_avgmoment,txt
+PRVAR,2,3,4,5,6
+/OUTPUT
+
+FINISH
+

@@ -1,0 +1,1291 @@
+========== stage_moni 开始：28-Jun-2026 17:07:52 ==========
+结果目录: C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\outputs_matlab
+
+========== 阶段 1/1 开始 ==========
+目标 data_x = 1063.0000, 当前 stage_number = 1
+
+========== GA 开始：阶段 1 ==========
+网格尺寸: 100 x 100 x 100, 最大 CA 迭代 F = 2000, GA 最大代数 = 9
+目标数据: [1063.0000  459.0000    1.2300    6.2300    0.5500    0.2900]
+
+[阶段 1] GA 第 1/9 代开始...
+[阶段 1 | 第 1 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        parfor i = 1:NIND
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 1 代] 个体 100/100 完成
+[阶段 1 | 第 1 代] 个体 99/100 完成
+[阶段 1 | 第 1 代] 个体 98/100 完成
+[阶段 1 | 第 1 代] 个体 97/100 完成
+[阶段 1 | 第 1 代] 个体 96/100 完成
+[阶段 1 | 第 1 代] 个体 95/100 完成
+[阶段 1 | 第 1 代] 个体 94/100 完成
+[阶段 1 | 第 1 代] 个体 93/100 完成
+[阶段 1 | 第 1 代] 个体 92/100 完成
+[阶段 1 | 第 1 代] 个体 91/100 完成
+[阶段 1 | 第 1 代] 个体 90/100 完成
+[阶段 1 | 第 1 代] 个体 89/100 完成
+[阶段 1 | 第 1 代] 个体 88/100 完成
+[阶段 1 | 第 1 代] 个体 87/100 完成
+[阶段 1 | 第 1 代] 个体 86/100 完成
+[阶段 1 | 第 1 代] 个体 85/100 完成
+[阶段 1 | 第 1 代] 个体 84/100 完成
+[阶段 1 | 第 1 代] 个体 83/100 完成
+[阶段 1 | 第 1 代] 个体 82/100 完成
+[阶段 1 | 第 1 代] 个体 81/100 完成
+[阶段 1 | 第 1 代] 个体 80/100 完成
+[阶段 1 | 第 1 代] 个体 79/100 完成
+[阶段 1 | 第 1 代] 个体 78/100 完成
+[阶段 1 | 第 1 代] 个体 77/100 完成
+[阶段 1 | 第 1 代] 个体 76/100 完成
+[阶段 1 | 第 1 代] 个体 75/100 完成
+[阶段 1 | 第 1 代] 个体 74/100 完成
+[阶段 1 | 第 1 代] 个体 73/100 完成
+[阶段 1 | 第 1 代] 个体 72/100 完成
+[阶段 1 | 第 1 代] 个体 71/100 完成
+[阶段 1 | 第 1 代] 个体 70/100 完成
+[阶段 1 | 第 1 代] 个体 69/100 完成
+[阶段 1 | 第 1 代] 个体 68/100 完成
+[阶段 1 | 第 1 代] 个体 67/100 完成
+[阶段 1 | 第 1 代] 个体 66/100 完成
+[阶段 1 | 第 1 代] 个体 65/100 完成
+[阶段 1 | 第 1 代] 个体 64/100 完成
+[阶段 1 | 第 1 代] 个体 63/100 完成
+[阶段 1 | 第 1 代] 个体 62/100 完成
+[阶段 1 | 第 1 代] 个体 61/100 完成
+[阶段 1 | 第 1 代] 个体 60/100 完成
+[阶段 1 | 第 1 代] 个体 59/100 完成
+[阶段 1 | 第 1 代] 个体 58/100 完成
+[阶段 1 | 第 1 代] 个体 57/100 完成
+[阶段 1 | 第 1 代] 个体 56/100 完成
+[阶段 1 | 第 1 代] 个体 55/100 完成
+[阶段 1 | 第 1 代] 个体 54/100 完成
+[阶段 1 | 第 1 代] 个体 53/100 完成
+[阶段 1 | 第 1 代] 个体 52/100 完成
+[阶段 1 | 第 1 代] 个体 51/100 完成
+[阶段 1 | 第 1 代] 个体 50/100 完成
+[阶段 1 | 第 1 代] 个体 49/100 完成
+[阶段 1 | 第 1 代] 个体 48/100 完成
+[阶段 1 | 第 1 代] 个体 47/100 完成
+[阶段 1 | 第 1 代] 个体 46/100 完成
+[阶段 1 | 第 1 代] 个体 45/100 完成
+[阶段 1 | 第 1 代] 个体 44/100 完成
+[阶段 1 | 第 1 代] 个体 43/100 完成
+[阶段 1 | 第 1 代] 个体 42/100 完成
+[阶段 1 | 第 1 代] 个体 41/100 完成
+[阶段 1 | 第 1 代] 个体 40/100 完成
+[阶段 1 | 第 1 代] 个体 39/100 完成
+[阶段 1 | 第 1 代] 个体 38/100 完成
+[阶段 1 | 第 1 代] 个体 37/100 完成
+[阶段 1 | 第 1 代] 个体 36/100 完成
+[阶段 1 | 第 1 代] 个体 35/100 完成
+[阶段 1 | 第 1 代] 个体 34/100 完成
+[阶段 1 | 第 1 代] 个体 33/100 完成
+[阶段 1 | 第 1 代] 个体 32/100 完成
+[阶段 1 | 第 1 代] 个体 31/100 完成
+[阶段 1 | 第 1 代] 个体 30/100 完成
+[阶段 1 | 第 1 代] 个体 29/100 完成
+[阶段 1 | 第 1 代] 个体 28/100 完成
+[阶段 1 | 第 1 代] 个体 27/100 完成
+[阶段 1 | 第 1 代] 个体 26/100 完成
+[阶段 1 | 第 1 代] 个体 25/100 完成
+[阶段 1 | 第 1 代] 个体 24/100 完成
+[阶段 1 | 第 1 代] 个体 23/100 完成
+[阶段 1 | 第 1 代] 个体 22/100 完成
+[阶段 1 | 第 1 代] 个体 21/100 完成
+[阶段 1 | 第 1 代] 个体 20/100 完成
+[阶段 1 | 第 1 代] 个体 19/100 完成
+[阶段 1 | 第 1 代] 个体 18/100 完成
+[阶段 1 | 第 1 代] 个体 17/100 完成
+[阶段 1 | 第 1 代] 个体 16/100 完成
+[阶段 1 | 第 1 代] 个体 15/100 完成
+[阶段 1 | 第 1 代] 个体 14/100 完成
+[阶段 1 | 第 1 代] 个体 13/100 完成
+[阶段 1 | 第 1 代] 个体 12/100 完成
+[阶段 1 | 第 1 代] 个体 11/100 完成
+[阶段 1 | 第 1 代] 个体 10/100 完成
+[阶段 1 | 第 1 代] 个体 9/100 完成
+[阶段 1 | 第 1 代] 个体 8/100 完成
+[阶段 1 | 第 1 代] 个体 7/100 完成
+[阶段 1 | 第 1 代] 个体 6/100 完成
+[阶段 1 | 第 1 代] 个体 5/100 完成
+[阶段 1 | 第 1 代] 个体 4/100 完成
+[阶段 1 | 第 1 代] 个体 3/100 完成
+[阶段 1 | 第 1 代] 个体 2/100 完成
+[阶段 1 | 第 1 代] 个体 1/100 完成
+[阶段 1 | 第 1 代] 全部个体评估完成，用时 1750.85 秒。
+[阶段 1] 第 1 代当前最优个体: 94, 加权误差: 0.228800, 分项误差: [0.0100 0.3100 0.4100 0.1320]
+[阶段 1] GA 第 1 代结束，用时 1752.41 秒。历史最佳加权误差: 0.228800
+
+[阶段 1] GA 第 2/9 代开始...
+[阶段 1 | 第 2 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 2 代] 个体 100/100 完成
+[阶段 1 | 第 2 代] 个体 99/100 完成
+[阶段 1 | 第 2 代] 个体 98/100 完成
+[阶段 1 | 第 2 代] 个体 97/100 完成
+[阶段 1 | 第 2 代] 个体 96/100 完成
+[阶段 1 | 第 2 代] 个体 95/100 完成
+[阶段 1 | 第 2 代] 个体 94/100 完成
+[阶段 1 | 第 2 代] 个体 93/100 完成
+[阶段 1 | 第 2 代] 个体 92/100 完成
+[阶段 1 | 第 2 代] 个体 91/100 完成
+[阶段 1 | 第 2 代] 个体 90/100 完成
+[阶段 1 | 第 2 代] 个体 89/100 完成
+[阶段 1 | 第 2 代] 个体 88/100 完成
+[阶段 1 | 第 2 代] 个体 87/100 完成
+[阶段 1 | 第 2 代] 个体 86/100 完成
+[阶段 1 | 第 2 代] 个体 85/100 完成
+[阶段 1 | 第 2 代] 个体 84/100 完成
+[阶段 1 | 第 2 代] 个体 83/100 完成
+[阶段 1 | 第 2 代] 个体 82/100 完成
+[阶段 1 | 第 2 代] 个体 81/100 完成
+[阶段 1 | 第 2 代] 个体 80/100 完成
+[阶段 1 | 第 2 代] 个体 79/100 完成
+[阶段 1 | 第 2 代] 个体 78/100 完成
+[阶段 1 | 第 2 代] 个体 77/100 完成
+[阶段 1 | 第 2 代] 个体 76/100 完成
+[阶段 1 | 第 2 代] 个体 75/100 完成
+[阶段 1 | 第 2 代] 个体 74/100 完成
+[阶段 1 | 第 2 代] 个体 73/100 完成
+[阶段 1 | 第 2 代] 个体 72/100 完成
+[阶段 1 | 第 2 代] 个体 71/100 完成
+[阶段 1 | 第 2 代] 个体 70/100 完成
+[阶段 1 | 第 2 代] 个体 69/100 完成
+[阶段 1 | 第 2 代] 个体 68/100 完成
+[阶段 1 | 第 2 代] 个体 67/100 完成
+[阶段 1 | 第 2 代] 个体 66/100 完成
+[阶段 1 | 第 2 代] 个体 65/100 完成
+[阶段 1 | 第 2 代] 个体 64/100 完成
+[阶段 1 | 第 2 代] 个体 63/100 完成
+[阶段 1 | 第 2 代] 个体 62/100 完成
+[阶段 1 | 第 2 代] 个体 61/100 完成
+[阶段 1 | 第 2 代] 个体 60/100 完成
+[阶段 1 | 第 2 代] 个体 59/100 完成
+[阶段 1 | 第 2 代] 个体 58/100 完成
+[阶段 1 | 第 2 代] 个体 57/100 完成
+[阶段 1 | 第 2 代] 个体 56/100 完成
+[阶段 1 | 第 2 代] 个体 55/100 完成
+[阶段 1 | 第 2 代] 个体 54/100 完成
+[阶段 1 | 第 2 代] 个体 53/100 完成
+[阶段 1 | 第 2 代] 个体 52/100 完成
+[阶段 1 | 第 2 代] 个体 51/100 完成
+[阶段 1 | 第 2 代] 个体 50/100 完成
+[阶段 1 | 第 2 代] 个体 49/100 完成
+[阶段 1 | 第 2 代] 个体 48/100 完成
+[阶段 1 | 第 2 代] 个体 47/100 完成
+[阶段 1 | 第 2 代] 个体 46/100 完成
+[阶段 1 | 第 2 代] 个体 45/100 完成
+[阶段 1 | 第 2 代] 个体 44/100 完成
+[阶段 1 | 第 2 代] 个体 43/100 完成
+[阶段 1 | 第 2 代] 个体 42/100 完成
+[阶段 1 | 第 2 代] 个体 41/100 完成
+[阶段 1 | 第 2 代] 个体 40/100 完成
+[阶段 1 | 第 2 代] 个体 39/100 完成
+[阶段 1 | 第 2 代] 个体 38/100 完成
+[阶段 1 | 第 2 代] 个体 37/100 完成
+[阶段 1 | 第 2 代] 个体 36/100 完成
+[阶段 1 | 第 2 代] 个体 35/100 完成
+[阶段 1 | 第 2 代] 个体 34/100 完成
+[阶段 1 | 第 2 代] 个体 33/100 完成
+[阶段 1 | 第 2 代] 个体 32/100 完成
+[阶段 1 | 第 2 代] 个体 31/100 完成
+[阶段 1 | 第 2 代] 个体 30/100 完成
+[阶段 1 | 第 2 代] 个体 29/100 完成
+[阶段 1 | 第 2 代] 个体 28/100 完成
+[阶段 1 | 第 2 代] 个体 27/100 完成
+[阶段 1 | 第 2 代] 个体 26/100 完成
+[阶段 1 | 第 2 代] 个体 25/100 完成
+[阶段 1 | 第 2 代] 个体 24/100 完成
+[阶段 1 | 第 2 代] 个体 23/100 完成
+[阶段 1 | 第 2 代] 个体 22/100 完成
+[阶段 1 | 第 2 代] 个体 21/100 完成
+[阶段 1 | 第 2 代] 个体 20/100 完成
+[阶段 1 | 第 2 代] 个体 19/100 完成
+[阶段 1 | 第 2 代] 个体 18/100 完成
+[阶段 1 | 第 2 代] 个体 17/100 完成
+[阶段 1 | 第 2 代] 个体 16/100 完成
+[阶段 1 | 第 2 代] 个体 15/100 完成
+[阶段 1 | 第 2 代] 个体 14/100 完成
+[阶段 1 | 第 2 代] 个体 13/100 完成
+[阶段 1 | 第 2 代] 个体 12/100 完成
+[阶段 1 | 第 2 代] 个体 11/100 完成
+[阶段 1 | 第 2 代] 个体 10/100 完成
+[阶段 1 | 第 2 代] 个体 9/100 完成
+[阶段 1 | 第 2 代] 个体 8/100 完成
+[阶段 1 | 第 2 代] 个体 7/100 完成
+[阶段 1 | 第 2 代] 个体 6/100 完成
+[阶段 1 | 第 2 代] 个体 5/100 完成
+[阶段 1 | 第 2 代] 个体 4/100 完成
+[阶段 1 | 第 2 代] 个体 3/100 完成
+[阶段 1 | 第 2 代] 个体 2/100 完成
+[阶段 1 | 第 2 代] 个体 1/100 完成
+[阶段 1 | 第 2 代] 全部个体评估完成，用时 1733.59 秒。
+[阶段 1] 第 2 代当前最优个体: 94, 加权误差: 0.200800, 分项误差: [0.0000 0.3200 0.4800 0.0220]
+[阶段 1] GA 第 2 代结束，用时 1733.75 秒。历史最佳加权误差: 0.200800
+
+[阶段 1] GA 第 3/9 代开始...
+[阶段 1 | 第 3 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 3 代] 个体 100/100 完成
+[阶段 1 | 第 3 代] 个体 99/100 完成
+[阶段 1 | 第 3 代] 个体 98/100 完成
+[阶段 1 | 第 3 代] 个体 97/100 完成
+[阶段 1 | 第 3 代] 个体 96/100 完成
+[阶段 1 | 第 3 代] 个体 95/100 完成
+[阶段 1 | 第 3 代] 个体 94/100 完成
+[阶段 1 | 第 3 代] 个体 93/100 完成
+[阶段 1 | 第 3 代] 个体 92/100 完成
+[阶段 1 | 第 3 代] 个体 91/100 完成
+[阶段 1 | 第 3 代] 个体 90/100 完成
+[阶段 1 | 第 3 代] 个体 89/100 完成
+[阶段 1 | 第 3 代] 个体 88/100 完成
+[阶段 1 | 第 3 代] 个体 87/100 完成
+[阶段 1 | 第 3 代] 个体 86/100 完成
+[阶段 1 | 第 3 代] 个体 85/100 完成
+[阶段 1 | 第 3 代] 个体 84/100 完成
+[阶段 1 | 第 3 代] 个体 83/100 完成
+[阶段 1 | 第 3 代] 个体 82/100 完成
+[阶段 1 | 第 3 代] 个体 81/100 完成
+[阶段 1 | 第 3 代] 个体 80/100 完成
+[阶段 1 | 第 3 代] 个体 79/100 完成
+[阶段 1 | 第 3 代] 个体 78/100 完成
+[阶段 1 | 第 3 代] 个体 77/100 完成
+[阶段 1 | 第 3 代] 个体 76/100 完成
+[阶段 1 | 第 3 代] 个体 75/100 完成
+[阶段 1 | 第 3 代] 个体 74/100 完成
+[阶段 1 | 第 3 代] 个体 73/100 完成
+[阶段 1 | 第 3 代] 个体 72/100 完成
+[阶段 1 | 第 3 代] 个体 71/100 完成
+[阶段 1 | 第 3 代] 个体 70/100 完成
+[阶段 1 | 第 3 代] 个体 69/100 完成
+[阶段 1 | 第 3 代] 个体 68/100 完成
+[阶段 1 | 第 3 代] 个体 67/100 完成
+[阶段 1 | 第 3 代] 个体 66/100 完成
+[阶段 1 | 第 3 代] 个体 65/100 完成
+[阶段 1 | 第 3 代] 个体 64/100 完成
+[阶段 1 | 第 3 代] 个体 63/100 完成
+[阶段 1 | 第 3 代] 个体 62/100 完成
+[阶段 1 | 第 3 代] 个体 61/100 完成
+[阶段 1 | 第 3 代] 个体 60/100 完成
+[阶段 1 | 第 3 代] 个体 59/100 完成
+[阶段 1 | 第 3 代] 个体 58/100 完成
+[阶段 1 | 第 3 代] 个体 57/100 完成
+[阶段 1 | 第 3 代] 个体 56/100 完成
+[阶段 1 | 第 3 代] 个体 55/100 完成
+[阶段 1 | 第 3 代] 个体 54/100 完成
+[阶段 1 | 第 3 代] 个体 53/100 完成
+[阶段 1 | 第 3 代] 个体 52/100 完成
+[阶段 1 | 第 3 代] 个体 51/100 完成
+[阶段 1 | 第 3 代] 个体 50/100 完成
+[阶段 1 | 第 3 代] 个体 49/100 完成
+[阶段 1 | 第 3 代] 个体 48/100 完成
+[阶段 1 | 第 3 代] 个体 47/100 完成
+[阶段 1 | 第 3 代] 个体 46/100 完成
+[阶段 1 | 第 3 代] 个体 45/100 完成
+[阶段 1 | 第 3 代] 个体 44/100 完成
+[阶段 1 | 第 3 代] 个体 43/100 完成
+[阶段 1 | 第 3 代] 个体 42/100 完成
+[阶段 1 | 第 3 代] 个体 41/100 完成
+[阶段 1 | 第 3 代] 个体 40/100 完成
+[阶段 1 | 第 3 代] 个体 39/100 完成
+[阶段 1 | 第 3 代] 个体 38/100 完成
+[阶段 1 | 第 3 代] 个体 37/100 完成
+[阶段 1 | 第 3 代] 个体 36/100 完成
+[阶段 1 | 第 3 代] 个体 35/100 完成
+[阶段 1 | 第 3 代] 个体 34/100 完成
+[阶段 1 | 第 3 代] 个体 33/100 完成
+[阶段 1 | 第 3 代] 个体 32/100 完成
+[阶段 1 | 第 3 代] 个体 31/100 完成
+[阶段 1 | 第 3 代] 个体 30/100 完成
+[阶段 1 | 第 3 代] 个体 29/100 完成
+[阶段 1 | 第 3 代] 个体 28/100 完成
+[阶段 1 | 第 3 代] 个体 27/100 完成
+[阶段 1 | 第 3 代] 个体 26/100 完成
+[阶段 1 | 第 3 代] 个体 25/100 完成
+[阶段 1 | 第 3 代] 个体 24/100 完成
+[阶段 1 | 第 3 代] 个体 23/100 完成
+[阶段 1 | 第 3 代] 个体 22/100 完成
+[阶段 1 | 第 3 代] 个体 21/100 完成
+[阶段 1 | 第 3 代] 个体 20/100 完成
+[阶段 1 | 第 3 代] 个体 19/100 完成
+[阶段 1 | 第 3 代] 个体 18/100 完成
+[阶段 1 | 第 3 代] 个体 17/100 完成
+[阶段 1 | 第 3 代] 个体 16/100 完成
+[阶段 1 | 第 3 代] 个体 15/100 完成
+[阶段 1 | 第 3 代] 个体 14/100 完成
+[阶段 1 | 第 3 代] 个体 13/100 完成
+[阶段 1 | 第 3 代] 个体 12/100 完成
+[阶段 1 | 第 3 代] 个体 11/100 完成
+[阶段 1 | 第 3 代] 个体 10/100 完成
+[阶段 1 | 第 3 代] 个体 9/100 完成
+[阶段 1 | 第 3 代] 个体 8/100 完成
+[阶段 1 | 第 3 代] 个体 7/100 完成
+[阶段 1 | 第 3 代] 个体 6/100 完成
+[阶段 1 | 第 3 代] 个体 5/100 完成
+[阶段 1 | 第 3 代] 个体 4/100 完成
+[阶段 1 | 第 3 代] 个体 3/100 完成
+[阶段 1 | 第 3 代] 个体 2/100 完成
+[阶段 1 | 第 3 代] 个体 1/100 完成
+[阶段 1 | 第 3 代] 全部个体评估完成，用时 1750.05 秒。
+[阶段 1] 第 3 代当前最优个体: 94, 加权误差: 0.207400, 分项误差: [0.0000 0.3100 0.4000 0.0860]
+[阶段 1] GA 第 3 代结束，用时 1750.18 秒。历史最佳加权误差: 0.207400
+
+[阶段 1] GA 第 4/9 代开始...
+[阶段 1 | 第 4 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 4 代] 个体 100/100 完成
+[阶段 1 | 第 4 代] 个体 99/100 完成
+[阶段 1 | 第 4 代] 个体 98/100 完成
+[阶段 1 | 第 4 代] 个体 97/100 完成
+[阶段 1 | 第 4 代] 个体 96/100 完成
+[阶段 1 | 第 4 代] 个体 95/100 完成
+[阶段 1 | 第 4 代] 个体 94/100 完成
+[阶段 1 | 第 4 代] 个体 93/100 完成
+[阶段 1 | 第 4 代] 个体 92/100 完成
+[阶段 1 | 第 4 代] 个体 91/100 完成
+[阶段 1 | 第 4 代] 个体 90/100 完成
+[阶段 1 | 第 4 代] 个体 89/100 完成
+[阶段 1 | 第 4 代] 个体 88/100 完成
+[阶段 1 | 第 4 代] 个体 87/100 完成
+[阶段 1 | 第 4 代] 个体 86/100 完成
+[阶段 1 | 第 4 代] 个体 85/100 完成
+[阶段 1 | 第 4 代] 个体 84/100 完成
+[阶段 1 | 第 4 代] 个体 83/100 完成
+[阶段 1 | 第 4 代] 个体 82/100 完成
+[阶段 1 | 第 4 代] 个体 81/100 完成
+[阶段 1 | 第 4 代] 个体 80/100 完成
+[阶段 1 | 第 4 代] 个体 79/100 完成
+[阶段 1 | 第 4 代] 个体 78/100 完成
+[阶段 1 | 第 4 代] 个体 77/100 完成
+[阶段 1 | 第 4 代] 个体 76/100 完成
+[阶段 1 | 第 4 代] 个体 75/100 完成
+[阶段 1 | 第 4 代] 个体 74/100 完成
+[阶段 1 | 第 4 代] 个体 73/100 完成
+[阶段 1 | 第 4 代] 个体 72/100 完成
+[阶段 1 | 第 4 代] 个体 71/100 完成
+[阶段 1 | 第 4 代] 个体 70/100 完成
+[阶段 1 | 第 4 代] 个体 69/100 完成
+[阶段 1 | 第 4 代] 个体 68/100 完成
+[阶段 1 | 第 4 代] 个体 67/100 完成
+[阶段 1 | 第 4 代] 个体 66/100 完成
+[阶段 1 | 第 4 代] 个体 65/100 完成
+[阶段 1 | 第 4 代] 个体 64/100 完成
+[阶段 1 | 第 4 代] 个体 63/100 完成
+[阶段 1 | 第 4 代] 个体 62/100 完成
+[阶段 1 | 第 4 代] 个体 61/100 完成
+[阶段 1 | 第 4 代] 个体 60/100 完成
+[阶段 1 | 第 4 代] 个体 59/100 完成
+[阶段 1 | 第 4 代] 个体 58/100 完成
+[阶段 1 | 第 4 代] 个体 57/100 完成
+[阶段 1 | 第 4 代] 个体 56/100 完成
+[阶段 1 | 第 4 代] 个体 55/100 完成
+[阶段 1 | 第 4 代] 个体 54/100 完成
+[阶段 1 | 第 4 代] 个体 53/100 完成
+[阶段 1 | 第 4 代] 个体 52/100 完成
+[阶段 1 | 第 4 代] 个体 51/100 完成
+[阶段 1 | 第 4 代] 个体 50/100 完成
+[阶段 1 | 第 4 代] 个体 49/100 完成
+[阶段 1 | 第 4 代] 个体 48/100 完成
+[阶段 1 | 第 4 代] 个体 47/100 完成
+[阶段 1 | 第 4 代] 个体 46/100 完成
+[阶段 1 | 第 4 代] 个体 45/100 完成
+[阶段 1 | 第 4 代] 个体 44/100 完成
+[阶段 1 | 第 4 代] 个体 43/100 完成
+[阶段 1 | 第 4 代] 个体 42/100 完成
+[阶段 1 | 第 4 代] 个体 41/100 完成
+[阶段 1 | 第 4 代] 个体 40/100 完成
+[阶段 1 | 第 4 代] 个体 39/100 完成
+[阶段 1 | 第 4 代] 个体 38/100 完成
+[阶段 1 | 第 4 代] 个体 37/100 完成
+[阶段 1 | 第 4 代] 个体 36/100 完成
+[阶段 1 | 第 4 代] 个体 35/100 完成
+[阶段 1 | 第 4 代] 个体 34/100 完成
+[阶段 1 | 第 4 代] 个体 33/100 完成
+[阶段 1 | 第 4 代] 个体 32/100 完成
+[阶段 1 | 第 4 代] 个体 31/100 完成
+[阶段 1 | 第 4 代] 个体 30/100 完成
+[阶段 1 | 第 4 代] 个体 29/100 完成
+[阶段 1 | 第 4 代] 个体 28/100 完成
+[阶段 1 | 第 4 代] 个体 27/100 完成
+[阶段 1 | 第 4 代] 个体 26/100 完成
+[阶段 1 | 第 4 代] 个体 25/100 完成
+[阶段 1 | 第 4 代] 个体 24/100 完成
+[阶段 1 | 第 4 代] 个体 23/100 完成
+[阶段 1 | 第 4 代] 个体 22/100 完成
+[阶段 1 | 第 4 代] 个体 21/100 完成
+[阶段 1 | 第 4 代] 个体 20/100 完成
+[阶段 1 | 第 4 代] 个体 19/100 完成
+[阶段 1 | 第 4 代] 个体 18/100 完成
+[阶段 1 | 第 4 代] 个体 17/100 完成
+[阶段 1 | 第 4 代] 个体 16/100 完成
+[阶段 1 | 第 4 代] 个体 15/100 完成
+[阶段 1 | 第 4 代] 个体 14/100 完成
+[阶段 1 | 第 4 代] 个体 13/100 完成
+[阶段 1 | 第 4 代] 个体 12/100 完成
+[阶段 1 | 第 4 代] 个体 11/100 完成
+[阶段 1 | 第 4 代] 个体 10/100 完成
+[阶段 1 | 第 4 代] 个体 9/100 完成
+[阶段 1 | 第 4 代] 个体 8/100 完成
+[阶段 1 | 第 4 代] 个体 7/100 完成
+[阶段 1 | 第 4 代] 个体 6/100 完成
+[阶段 1 | 第 4 代] 个体 5/100 完成
+[阶段 1 | 第 4 代] 个体 4/100 完成
+[阶段 1 | 第 4 代] 个体 3/100 完成
+[阶段 1 | 第 4 代] 个体 2/100 完成
+[阶段 1 | 第 4 代] 个体 1/100 完成
+[阶段 1 | 第 4 代] 全部个体评估完成，用时 1801.11 秒。
+[阶段 1] 第 4 代当前最优个体: 9, 加权误差: 0.275800, 分项误差: [0.0100 0.5200 0.3300 0.1320]
+[阶段 1] GA 第 4 代结束，用时 1801.22 秒。历史最佳加权误差: 0.207400
+
+[阶段 1] GA 第 5/9 代开始...
+[阶段 1 | 第 5 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 5 代] 个体 100/100 完成
+[阶段 1 | 第 5 代] 个体 99/100 完成
+[阶段 1 | 第 5 代] 个体 98/100 完成
+[阶段 1 | 第 5 代] 个体 97/100 完成
+[阶段 1 | 第 5 代] 个体 96/100 完成
+[阶段 1 | 第 5 代] 个体 95/100 完成
+[阶段 1 | 第 5 代] 个体 94/100 完成
+[阶段 1 | 第 5 代] 个体 93/100 完成
+[阶段 1 | 第 5 代] 个体 92/100 完成
+[阶段 1 | 第 5 代] 个体 91/100 完成
+[阶段 1 | 第 5 代] 个体 90/100 完成
+[阶段 1 | 第 5 代] 个体 89/100 完成
+[阶段 1 | 第 5 代] 个体 88/100 完成
+[阶段 1 | 第 5 代] 个体 87/100 完成
+[阶段 1 | 第 5 代] 个体 86/100 完成
+[阶段 1 | 第 5 代] 个体 85/100 完成
+[阶段 1 | 第 5 代] 个体 84/100 完成
+[阶段 1 | 第 5 代] 个体 83/100 完成
+[阶段 1 | 第 5 代] 个体 82/100 完成
+[阶段 1 | 第 5 代] 个体 81/100 完成
+[阶段 1 | 第 5 代] 个体 80/100 完成
+[阶段 1 | 第 5 代] 个体 79/100 完成
+[阶段 1 | 第 5 代] 个体 78/100 完成
+[阶段 1 | 第 5 代] 个体 77/100 完成
+[阶段 1 | 第 5 代] 个体 76/100 完成
+[阶段 1 | 第 5 代] 个体 75/100 完成
+[阶段 1 | 第 5 代] 个体 74/100 完成
+[阶段 1 | 第 5 代] 个体 73/100 完成
+[阶段 1 | 第 5 代] 个体 72/100 完成
+[阶段 1 | 第 5 代] 个体 71/100 完成
+[阶段 1 | 第 5 代] 个体 70/100 完成
+[阶段 1 | 第 5 代] 个体 69/100 完成
+[阶段 1 | 第 5 代] 个体 68/100 完成
+[阶段 1 | 第 5 代] 个体 67/100 完成
+[阶段 1 | 第 5 代] 个体 66/100 完成
+[阶段 1 | 第 5 代] 个体 65/100 完成
+[阶段 1 | 第 5 代] 个体 64/100 完成
+[阶段 1 | 第 5 代] 个体 63/100 完成
+[阶段 1 | 第 5 代] 个体 62/100 完成
+[阶段 1 | 第 5 代] 个体 61/100 完成
+[阶段 1 | 第 5 代] 个体 60/100 完成
+[阶段 1 | 第 5 代] 个体 59/100 完成
+[阶段 1 | 第 5 代] 个体 58/100 完成
+[阶段 1 | 第 5 代] 个体 57/100 完成
+[阶段 1 | 第 5 代] 个体 56/100 完成
+[阶段 1 | 第 5 代] 个体 55/100 完成
+[阶段 1 | 第 5 代] 个体 54/100 完成
+[阶段 1 | 第 5 代] 个体 53/100 完成
+[阶段 1 | 第 5 代] 个体 52/100 完成
+[阶段 1 | 第 5 代] 个体 51/100 完成
+[阶段 1 | 第 5 代] 个体 50/100 完成
+[阶段 1 | 第 5 代] 个体 49/100 完成
+[阶段 1 | 第 5 代] 个体 48/100 完成
+[阶段 1 | 第 5 代] 个体 47/100 完成
+[阶段 1 | 第 5 代] 个体 46/100 完成
+[阶段 1 | 第 5 代] 个体 45/100 完成
+[阶段 1 | 第 5 代] 个体 44/100 完成
+[阶段 1 | 第 5 代] 个体 43/100 完成
+[阶段 1 | 第 5 代] 个体 42/100 完成
+[阶段 1 | 第 5 代] 个体 41/100 完成
+[阶段 1 | 第 5 代] 个体 40/100 完成
+[阶段 1 | 第 5 代] 个体 39/100 完成
+[阶段 1 | 第 5 代] 个体 38/100 完成
+[阶段 1 | 第 5 代] 个体 37/100 完成
+[阶段 1 | 第 5 代] 个体 36/100 完成
+[阶段 1 | 第 5 代] 个体 35/100 完成
+[阶段 1 | 第 5 代] 个体 34/100 完成
+[阶段 1 | 第 5 代] 个体 33/100 完成
+[阶段 1 | 第 5 代] 个体 32/100 完成
+[阶段 1 | 第 5 代] 个体 31/100 完成
+[阶段 1 | 第 5 代] 个体 30/100 完成
+[阶段 1 | 第 5 代] 个体 29/100 完成
+[阶段 1 | 第 5 代] 个体 28/100 完成
+[阶段 1 | 第 5 代] 个体 27/100 完成
+[阶段 1 | 第 5 代] 个体 26/100 完成
+[阶段 1 | 第 5 代] 个体 25/100 完成
+[阶段 1 | 第 5 代] 个体 24/100 完成
+[阶段 1 | 第 5 代] 个体 23/100 完成
+[阶段 1 | 第 5 代] 个体 22/100 完成
+[阶段 1 | 第 5 代] 个体 21/100 完成
+[阶段 1 | 第 5 代] 个体 20/100 完成
+[阶段 1 | 第 5 代] 个体 19/100 完成
+[阶段 1 | 第 5 代] 个体 18/100 完成
+[阶段 1 | 第 5 代] 个体 17/100 完成
+[阶段 1 | 第 5 代] 个体 16/100 完成
+[阶段 1 | 第 5 代] 个体 15/100 完成
+[阶段 1 | 第 5 代] 个体 14/100 完成
+[阶段 1 | 第 5 代] 个体 13/100 完成
+[阶段 1 | 第 5 代] 个体 12/100 完成
+[阶段 1 | 第 5 代] 个体 11/100 完成
+[阶段 1 | 第 5 代] 个体 10/100 完成
+[阶段 1 | 第 5 代] 个体 9/100 完成
+[阶段 1 | 第 5 代] 个体 8/100 完成
+[阶段 1 | 第 5 代] 个体 7/100 完成
+[阶段 1 | 第 5 代] 个体 6/100 完成
+[阶段 1 | 第 5 代] 个体 5/100 完成
+[阶段 1 | 第 5 代] 个体 4/100 完成
+[阶段 1 | 第 5 代] 个体 3/100 完成
+[阶段 1 | 第 5 代] 个体 2/100 完成
+[阶段 1 | 第 5 代] 个体 1/100 完成
+[阶段 1 | 第 5 代] 全部个体评估完成，用时 1731.91 秒。
+[阶段 1] 第 5 代当前最优个体: 94, 加权误差: 0.193200, 分项误差: [0.0000 0.2800 0.2900 0.1280]
+[阶段 1] GA 第 5 代结束，用时 1732.29 秒。历史最佳加权误差: 0.193200
+
+[阶段 1] GA 第 6/9 代开始...
+[阶段 1 | 第 6 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 6 代] 个体 100/100 完成
+[阶段 1 | 第 6 代] 个体 99/100 完成
+[阶段 1 | 第 6 代] 个体 98/100 完成
+[阶段 1 | 第 6 代] 个体 97/100 完成
+[阶段 1 | 第 6 代] 个体 96/100 完成
+[阶段 1 | 第 6 代] 个体 95/100 完成
+[阶段 1 | 第 6 代] 个体 94/100 完成
+[阶段 1 | 第 6 代] 个体 93/100 完成
+[阶段 1 | 第 6 代] 个体 92/100 完成
+[阶段 1 | 第 6 代] 个体 91/100 完成
+[阶段 1 | 第 6 代] 个体 90/100 完成
+[阶段 1 | 第 6 代] 个体 89/100 完成
+[阶段 1 | 第 6 代] 个体 88/100 完成
+[阶段 1 | 第 6 代] 个体 87/100 完成
+[阶段 1 | 第 6 代] 个体 86/100 完成
+[阶段 1 | 第 6 代] 个体 85/100 完成
+[阶段 1 | 第 6 代] 个体 84/100 完成
+[阶段 1 | 第 6 代] 个体 83/100 完成
+[阶段 1 | 第 6 代] 个体 82/100 完成
+[阶段 1 | 第 6 代] 个体 81/100 完成
+[阶段 1 | 第 6 代] 个体 80/100 完成
+[阶段 1 | 第 6 代] 个体 79/100 完成
+[阶段 1 | 第 6 代] 个体 78/100 完成
+[阶段 1 | 第 6 代] 个体 77/100 完成
+[阶段 1 | 第 6 代] 个体 76/100 完成
+[阶段 1 | 第 6 代] 个体 75/100 完成
+[阶段 1 | 第 6 代] 个体 74/100 完成
+[阶段 1 | 第 6 代] 个体 73/100 完成
+[阶段 1 | 第 6 代] 个体 72/100 完成
+[阶段 1 | 第 6 代] 个体 71/100 完成
+[阶段 1 | 第 6 代] 个体 70/100 完成
+[阶段 1 | 第 6 代] 个体 69/100 完成
+[阶段 1 | 第 6 代] 个体 68/100 完成
+[阶段 1 | 第 6 代] 个体 67/100 完成
+[阶段 1 | 第 6 代] 个体 66/100 完成
+[阶段 1 | 第 6 代] 个体 65/100 完成
+[阶段 1 | 第 6 代] 个体 64/100 完成
+[阶段 1 | 第 6 代] 个体 63/100 完成
+[阶段 1 | 第 6 代] 个体 62/100 完成
+[阶段 1 | 第 6 代] 个体 61/100 完成
+[阶段 1 | 第 6 代] 个体 60/100 完成
+[阶段 1 | 第 6 代] 个体 59/100 完成
+[阶段 1 | 第 6 代] 个体 58/100 完成
+[阶段 1 | 第 6 代] 个体 57/100 完成
+[阶段 1 | 第 6 代] 个体 56/100 完成
+[阶段 1 | 第 6 代] 个体 55/100 完成
+[阶段 1 | 第 6 代] 个体 54/100 完成
+[阶段 1 | 第 6 代] 个体 53/100 完成
+[阶段 1 | 第 6 代] 个体 52/100 完成
+[阶段 1 | 第 6 代] 个体 51/100 完成
+[阶段 1 | 第 6 代] 个体 50/100 完成
+[阶段 1 | 第 6 代] 个体 49/100 完成
+[阶段 1 | 第 6 代] 个体 48/100 完成
+[阶段 1 | 第 6 代] 个体 47/100 完成
+[阶段 1 | 第 6 代] 个体 46/100 完成
+[阶段 1 | 第 6 代] 个体 45/100 完成
+[阶段 1 | 第 6 代] 个体 44/100 完成
+[阶段 1 | 第 6 代] 个体 43/100 完成
+[阶段 1 | 第 6 代] 个体 42/100 完成
+[阶段 1 | 第 6 代] 个体 41/100 完成
+[阶段 1 | 第 6 代] 个体 40/100 完成
+[阶段 1 | 第 6 代] 个体 39/100 完成
+[阶段 1 | 第 6 代] 个体 38/100 完成
+[阶段 1 | 第 6 代] 个体 37/100 完成
+[阶段 1 | 第 6 代] 个体 36/100 完成
+[阶段 1 | 第 6 代] 个体 35/100 完成
+[阶段 1 | 第 6 代] 个体 34/100 完成
+[阶段 1 | 第 6 代] 个体 33/100 完成
+[阶段 1 | 第 6 代] 个体 32/100 完成
+[阶段 1 | 第 6 代] 个体 31/100 完成
+[阶段 1 | 第 6 代] 个体 30/100 完成
+[阶段 1 | 第 6 代] 个体 29/100 完成
+[阶段 1 | 第 6 代] 个体 28/100 完成
+[阶段 1 | 第 6 代] 个体 27/100 完成
+[阶段 1 | 第 6 代] 个体 26/100 完成
+[阶段 1 | 第 6 代] 个体 25/100 完成
+[阶段 1 | 第 6 代] 个体 24/100 完成
+[阶段 1 | 第 6 代] 个体 23/100 完成
+[阶段 1 | 第 6 代] 个体 22/100 完成
+[阶段 1 | 第 6 代] 个体 21/100 完成
+[阶段 1 | 第 6 代] 个体 20/100 完成
+[阶段 1 | 第 6 代] 个体 19/100 完成
+[阶段 1 | 第 6 代] 个体 18/100 完成
+[阶段 1 | 第 6 代] 个体 17/100 完成
+[阶段 1 | 第 6 代] 个体 16/100 完成
+[阶段 1 | 第 6 代] 个体 15/100 完成
+[阶段 1 | 第 6 代] 个体 14/100 完成
+[阶段 1 | 第 6 代] 个体 13/100 完成
+[阶段 1 | 第 6 代] 个体 12/100 完成
+[阶段 1 | 第 6 代] 个体 11/100 完成
+[阶段 1 | 第 6 代] 个体 10/100 完成
+[阶段 1 | 第 6 代] 个体 9/100 完成
+[阶段 1 | 第 6 代] 个体 8/100 完成
+[阶段 1 | 第 6 代] 个体 7/100 完成
+[阶段 1 | 第 6 代] 个体 6/100 完成
+[阶段 1 | 第 6 代] 个体 5/100 完成
+[阶段 1 | 第 6 代] 个体 4/100 完成
+[阶段 1 | 第 6 代] 个体 3/100 完成
+[阶段 1 | 第 6 代] 个体 2/100 完成
+[阶段 1 | 第 6 代] 个体 1/100 完成
+[阶段 1 | 第 6 代] 全部个体评估完成，用时 1826.19 秒。
+[阶段 1] 第 6 代当前最优个体: 96, 加权误差: 0.218800, 分项误差: [0.0000 0.0200 0.7600 0.1520]
+[阶段 1] GA 第 6 代结束，用时 1826.29 秒。历史最佳加权误差: 0.193200
+
+[阶段 1] GA 第 7/9 代开始...
+[阶段 1 | 第 7 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 7 代] 个体 100/100 完成
+[阶段 1 | 第 7 代] 个体 99/100 完成
+[阶段 1 | 第 7 代] 个体 98/100 完成
+[阶段 1 | 第 7 代] 个体 97/100 完成
+[阶段 1 | 第 7 代] 个体 96/100 完成
+[阶段 1 | 第 7 代] 个体 95/100 完成
+[阶段 1 | 第 7 代] 个体 94/100 完成
+[阶段 1 | 第 7 代] 个体 93/100 完成
+[阶段 1 | 第 7 代] 个体 92/100 完成
+[阶段 1 | 第 7 代] 个体 91/100 完成
+[阶段 1 | 第 7 代] 个体 90/100 完成
+[阶段 1 | 第 7 代] 个体 89/100 完成
+[阶段 1 | 第 7 代] 个体 88/100 完成
+[阶段 1 | 第 7 代] 个体 87/100 完成
+[阶段 1 | 第 7 代] 个体 86/100 完成
+[阶段 1 | 第 7 代] 个体 85/100 完成
+[阶段 1 | 第 7 代] 个体 84/100 完成
+[阶段 1 | 第 7 代] 个体 83/100 完成
+[阶段 1 | 第 7 代] 个体 82/100 完成
+[阶段 1 | 第 7 代] 个体 81/100 完成
+[阶段 1 | 第 7 代] 个体 80/100 完成
+[阶段 1 | 第 7 代] 个体 79/100 完成
+[阶段 1 | 第 7 代] 个体 78/100 完成
+[阶段 1 | 第 7 代] 个体 77/100 完成
+[阶段 1 | 第 7 代] 个体 76/100 完成
+[阶段 1 | 第 7 代] 个体 75/100 完成
+[阶段 1 | 第 7 代] 个体 74/100 完成
+[阶段 1 | 第 7 代] 个体 73/100 完成
+[阶段 1 | 第 7 代] 个体 72/100 完成
+[阶段 1 | 第 7 代] 个体 71/100 完成
+[阶段 1 | 第 7 代] 个体 70/100 完成
+[阶段 1 | 第 7 代] 个体 69/100 完成
+[阶段 1 | 第 7 代] 个体 68/100 完成
+[阶段 1 | 第 7 代] 个体 67/100 完成
+[阶段 1 | 第 7 代] 个体 66/100 完成
+[阶段 1 | 第 7 代] 个体 65/100 完成
+[阶段 1 | 第 7 代] 个体 64/100 完成
+[阶段 1 | 第 7 代] 个体 63/100 完成
+[阶段 1 | 第 7 代] 个体 62/100 完成
+[阶段 1 | 第 7 代] 个体 61/100 完成
+[阶段 1 | 第 7 代] 个体 60/100 完成
+[阶段 1 | 第 7 代] 个体 59/100 完成
+[阶段 1 | 第 7 代] 个体 58/100 完成
+[阶段 1 | 第 7 代] 个体 57/100 完成
+[阶段 1 | 第 7 代] 个体 56/100 完成
+[阶段 1 | 第 7 代] 个体 55/100 完成
+[阶段 1 | 第 7 代] 个体 54/100 完成
+[阶段 1 | 第 7 代] 个体 53/100 完成
+[阶段 1 | 第 7 代] 个体 52/100 完成
+[阶段 1 | 第 7 代] 个体 51/100 完成
+[阶段 1 | 第 7 代] 个体 50/100 完成
+[阶段 1 | 第 7 代] 个体 49/100 完成
+[阶段 1 | 第 7 代] 个体 48/100 完成
+[阶段 1 | 第 7 代] 个体 47/100 完成
+[阶段 1 | 第 7 代] 个体 46/100 完成
+[阶段 1 | 第 7 代] 个体 45/100 完成
+[阶段 1 | 第 7 代] 个体 44/100 完成
+[阶段 1 | 第 7 代] 个体 43/100 完成
+[阶段 1 | 第 7 代] 个体 42/100 完成
+[阶段 1 | 第 7 代] 个体 41/100 完成
+[阶段 1 | 第 7 代] 个体 40/100 完成
+[阶段 1 | 第 7 代] 个体 39/100 完成
+[阶段 1 | 第 7 代] 个体 38/100 完成
+[阶段 1 | 第 7 代] 个体 37/100 完成
+[阶段 1 | 第 7 代] 个体 36/100 完成
+[阶段 1 | 第 7 代] 个体 35/100 完成
+[阶段 1 | 第 7 代] 个体 34/100 完成
+[阶段 1 | 第 7 代] 个体 33/100 完成
+[阶段 1 | 第 7 代] 个体 32/100 完成
+[阶段 1 | 第 7 代] 个体 31/100 完成
+[阶段 1 | 第 7 代] 个体 30/100 完成
+[阶段 1 | 第 7 代] 个体 29/100 完成
+[阶段 1 | 第 7 代] 个体 28/100 完成
+[阶段 1 | 第 7 代] 个体 27/100 完成
+[阶段 1 | 第 7 代] 个体 26/100 完成
+[阶段 1 | 第 7 代] 个体 25/100 完成
+[阶段 1 | 第 7 代] 个体 24/100 完成
+[阶段 1 | 第 7 代] 个体 23/100 完成
+[阶段 1 | 第 7 代] 个体 22/100 完成
+[阶段 1 | 第 7 代] 个体 21/100 完成
+[阶段 1 | 第 7 代] 个体 20/100 完成
+[阶段 1 | 第 7 代] 个体 19/100 完成
+[阶段 1 | 第 7 代] 个体 18/100 完成
+[阶段 1 | 第 7 代] 个体 17/100 完成
+[阶段 1 | 第 7 代] 个体 16/100 完成
+[阶段 1 | 第 7 代] 个体 15/100 完成
+[阶段 1 | 第 7 代] 个体 14/100 完成
+[阶段 1 | 第 7 代] 个体 13/100 完成
+[阶段 1 | 第 7 代] 个体 12/100 完成
+[阶段 1 | 第 7 代] 个体 11/100 完成
+[阶段 1 | 第 7 代] 个体 10/100 完成
+[阶段 1 | 第 7 代] 个体 9/100 完成
+[阶段 1 | 第 7 代] 个体 8/100 完成
+[阶段 1 | 第 7 代] 个体 7/100 完成
+[阶段 1 | 第 7 代] 个体 6/100 完成
+[阶段 1 | 第 7 代] 个体 5/100 完成
+[阶段 1 | 第 7 代] 个体 4/100 完成
+[阶段 1 | 第 7 代] 个体 3/100 完成
+[阶段 1 | 第 7 代] 个体 2/100 完成
+[阶段 1 | 第 7 代] 个体 1/100 完成
+[阶段 1 | 第 7 代] 全部个体评估完成，用时 1755.02 秒。
+[阶段 1] 第 7 代当前最优个体: 94, 加权误差: 0.219000, 分项误差: [0.0000 0.2700 0.4700 0.1100]
+[阶段 1] GA 第 7 代结束，用时 1755.11 秒。历史最佳加权误差: 0.193200
+
+[阶段 1] GA 第 8/9 代开始...
+[阶段 1 | 第 8 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 8 代] 个体 100/100 完成
+[阶段 1 | 第 8 代] 个体 99/100 完成
+[阶段 1 | 第 8 代] 个体 98/100 完成
+[阶段 1 | 第 8 代] 个体 97/100 完成
+[阶段 1 | 第 8 代] 个体 96/100 完成
+[阶段 1 | 第 8 代] 个体 95/100 完成
+[阶段 1 | 第 8 代] 个体 94/100 完成
+[阶段 1 | 第 8 代] 个体 93/100 完成
+[阶段 1 | 第 8 代] 个体 92/100 完成
+[阶段 1 | 第 8 代] 个体 91/100 完成
+[阶段 1 | 第 8 代] 个体 90/100 完成
+[阶段 1 | 第 8 代] 个体 89/100 完成
+[阶段 1 | 第 8 代] 个体 88/100 完成
+[阶段 1 | 第 8 代] 个体 87/100 完成
+[阶段 1 | 第 8 代] 个体 86/100 完成
+[阶段 1 | 第 8 代] 个体 85/100 完成
+[阶段 1 | 第 8 代] 个体 84/100 完成
+[阶段 1 | 第 8 代] 个体 83/100 完成
+[阶段 1 | 第 8 代] 个体 82/100 完成
+[阶段 1 | 第 8 代] 个体 81/100 完成
+[阶段 1 | 第 8 代] 个体 80/100 完成
+[阶段 1 | 第 8 代] 个体 79/100 完成
+[阶段 1 | 第 8 代] 个体 78/100 完成
+[阶段 1 | 第 8 代] 个体 77/100 完成
+[阶段 1 | 第 8 代] 个体 76/100 完成
+[阶段 1 | 第 8 代] 个体 75/100 完成
+[阶段 1 | 第 8 代] 个体 74/100 完成
+[阶段 1 | 第 8 代] 个体 73/100 完成
+[阶段 1 | 第 8 代] 个体 72/100 完成
+[阶段 1 | 第 8 代] 个体 71/100 完成
+[阶段 1 | 第 8 代] 个体 70/100 完成
+[阶段 1 | 第 8 代] 个体 69/100 完成
+[阶段 1 | 第 8 代] 个体 68/100 完成
+[阶段 1 | 第 8 代] 个体 67/100 完成
+[阶段 1 | 第 8 代] 个体 66/100 完成
+[阶段 1 | 第 8 代] 个体 65/100 完成
+[阶段 1 | 第 8 代] 个体 64/100 完成
+[阶段 1 | 第 8 代] 个体 63/100 完成
+[阶段 1 | 第 8 代] 个体 62/100 完成
+[阶段 1 | 第 8 代] 个体 61/100 完成
+[阶段 1 | 第 8 代] 个体 60/100 完成
+[阶段 1 | 第 8 代] 个体 59/100 完成
+[阶段 1 | 第 8 代] 个体 58/100 完成
+[阶段 1 | 第 8 代] 个体 57/100 完成
+[阶段 1 | 第 8 代] 个体 56/100 完成
+[阶段 1 | 第 8 代] 个体 55/100 完成
+[阶段 1 | 第 8 代] 个体 54/100 完成
+[阶段 1 | 第 8 代] 个体 53/100 完成
+[阶段 1 | 第 8 代] 个体 52/100 完成
+[阶段 1 | 第 8 代] 个体 51/100 完成
+[阶段 1 | 第 8 代] 个体 50/100 完成
+[阶段 1 | 第 8 代] 个体 49/100 完成
+[阶段 1 | 第 8 代] 个体 48/100 完成
+[阶段 1 | 第 8 代] 个体 47/100 完成
+[阶段 1 | 第 8 代] 个体 46/100 完成
+[阶段 1 | 第 8 代] 个体 45/100 完成
+[阶段 1 | 第 8 代] 个体 44/100 完成
+[阶段 1 | 第 8 代] 个体 43/100 完成
+[阶段 1 | 第 8 代] 个体 42/100 完成
+[阶段 1 | 第 8 代] 个体 41/100 完成
+[阶段 1 | 第 8 代] 个体 40/100 完成
+[阶段 1 | 第 8 代] 个体 39/100 完成
+[阶段 1 | 第 8 代] 个体 38/100 完成
+[阶段 1 | 第 8 代] 个体 37/100 完成
+[阶段 1 | 第 8 代] 个体 36/100 完成
+[阶段 1 | 第 8 代] 个体 35/100 完成
+[阶段 1 | 第 8 代] 个体 34/100 完成
+[阶段 1 | 第 8 代] 个体 33/100 完成
+[阶段 1 | 第 8 代] 个体 32/100 完成
+[阶段 1 | 第 8 代] 个体 31/100 完成
+[阶段 1 | 第 8 代] 个体 30/100 完成
+[阶段 1 | 第 8 代] 个体 29/100 完成
+[阶段 1 | 第 8 代] 个体 28/100 完成
+[阶段 1 | 第 8 代] 个体 27/100 完成
+[阶段 1 | 第 8 代] 个体 26/100 完成
+[阶段 1 | 第 8 代] 个体 25/100 完成
+[阶段 1 | 第 8 代] 个体 24/100 完成
+[阶段 1 | 第 8 代] 个体 23/100 完成
+[阶段 1 | 第 8 代] 个体 22/100 完成
+[阶段 1 | 第 8 代] 个体 21/100 完成
+[阶段 1 | 第 8 代] 个体 20/100 完成
+[阶段 1 | 第 8 代] 个体 19/100 完成
+[阶段 1 | 第 8 代] 个体 18/100 完成
+[阶段 1 | 第 8 代] 个体 17/100 完成
+[阶段 1 | 第 8 代] 个体 16/100 完成
+[阶段 1 | 第 8 代] 个体 15/100 完成
+[阶段 1 | 第 8 代] 个体 14/100 完成
+[阶段 1 | 第 8 代] 个体 13/100 完成
+[阶段 1 | 第 8 代] 个体 12/100 完成
+[阶段 1 | 第 8 代] 个体 11/100 完成
+[阶段 1 | 第 8 代] 个体 10/100 完成
+[阶段 1 | 第 8 代] 个体 9/100 完成
+[阶段 1 | 第 8 代] 个体 8/100 完成
+[阶段 1 | 第 8 代] 个体 7/100 完成
+[阶段 1 | 第 8 代] 个体 6/100 完成
+[阶段 1 | 第 8 代] 个体 5/100 完成
+[阶段 1 | 第 8 代] 个体 4/100 完成
+[阶段 1 | 第 8 代] 个体 3/100 完成
+[阶段 1 | 第 8 代] 个体 2/100 完成
+[阶段 1 | 第 8 代] 个体 1/100 完成
+[阶段 1 | 第 8 代] 全部个体评估完成，用时 1936.76 秒。
+[阶段 1] 第 8 代当前最优个体: 94, 加权误差: 0.182400, 分项误差: [0.0000 0.3000 0.2900 0.0860]
+[阶段 1] GA 第 8 代结束，用时 1936.88 秒。历史最佳加权误差: 0.182400
+
+[阶段 1] GA 第 9/9 代开始...
+[阶段 1 | 第 9 代] 开始评估 100 个个体...
+正在使用 'Processes' 配置文件启动并行池(parpool)...
+保留 ID 为 1 的作业，因为它们包含崩溃转储文件。
+您可以使用 'delete(myCluster.Jobs)' 来删除使用配置文件 Processes 创建的所有作业。要创建 'myCluster'，请使用 'myCluster = parcluster('Processes')'。
+使用 'Processes' 配置文件的并行池正在关闭。
+
+[警告: 无法使用默认并行环境自动创建并行池。将改为在客户端上串行运行。回退到串行执行的功能将在以后的版本中删除。错误详细信息:
+
+错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.parpool.getOrCreateCurrentPool', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m', 16)" style="font-weight:bold">parallel.internal.parpool.getOrCreateCurrentPool</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+parpool\getOrCreateCurrentPool.m',16,0)">第 16 行</a>)
+并行池无法启动，出现以下错误。有关更多详细信息，请验证集群配置文件管理器中的配置文件 'Processes'。
+
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('pctTryCreatePoolIfNecessary', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m', 20)" style="font-weight:bold">pctTryCreatePoolIfNecessary</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\cluster\pctTryCreatePoolIfNecessary.m',20,0)">第 20 行</a>)
+    pool = parallel.internal.parpool.getOrCreateCurrentPool();
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel_function', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m', 395)" style="font-weight:bold">parallel_function</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\lang\parallel_function.m',395,0)">第 395 行</a>)
+    [isPoolRunning, pool] = pctTryCreatePoolIfNecessary();
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('fitness', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m', 27)" style="font-weight:bold">fitness</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\fitness.m',27,0)">第 27 行</a>)
+        % 注意：Processes 池会启动多个独立 MATLAB worker，若环境中有崩溃残留、
+        ^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('GA', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m', 70)" style="font-weight:bold">GA</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\GA.m',70,0)">第 70 行</a>)
+    [objv,sd_a,sd_d,sd_cl]=fitness(XY,NIND,data,data_x,a_jisuan,F,n,w,l,space,d_jisuan,stage_number,CL_concentration_jisuan,gen);
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+出错 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('stage_moni', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m', 61)" style="font-weight:bold">stage_moni</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\stage_moni.m',61,0)">第 61 行</a>)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+原因:
+    错误使用 <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('parallel.internal.pool.AbstractClusterPool>iStartClient', 'E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m', 812)" style="font-weight:bold">parallel.internal.pool.AbstractClusterPool>iStartClient</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\parallel\cluster\+parallel\+internal\+pool\@AbstractClusterPool\AbstractClusterPool.m',812,0)">第 812 行</a>)
+    The parallel pool job errored with the following message: MATLAB worker shut down unexpectedly with status -1073741819 during task
+    execution.
+        MATLAB worker shut down unexpectedly with status -1073741819 during task execution.] 
+[阶段 1 | 第 9 代] 个体 100/100 完成
+[阶段 1 | 第 9 代] 个体 99/100 完成
+[阶段 1 | 第 9 代] 个体 98/100 完成
+[阶段 1 | 第 9 代] 个体 97/100 完成
+[阶段 1 | 第 9 代] 个体 96/100 完成
+[阶段 1 | 第 9 代] 个体 95/100 完成
+[阶段 1 | 第 9 代] 个体 94/100 完成
+[阶段 1 | 第 9 代] 个体 93/100 完成
+[阶段 1 | 第 9 代] 个体 92/100 完成
+[阶段 1 | 第 9 代] 个体 91/100 完成
+[阶段 1 | 第 9 代] 个体 90/100 完成
+[阶段 1 | 第 9 代] 个体 89/100 完成
+[阶段 1 | 第 9 代] 个体 88/100 完成
+[阶段 1 | 第 9 代] 个体 87/100 完成
+[阶段 1 | 第 9 代] 个体 86/100 完成
+[阶段 1 | 第 9 代] 个体 85/100 完成
+[阶段 1 | 第 9 代] 个体 84/100 完成
+[阶段 1 | 第 9 代] 个体 83/100 完成
+[阶段 1 | 第 9 代] 个体 82/100 完成
+[阶段 1 | 第 9 代] 个体 81/100 完成
+[阶段 1 | 第 9 代] 个体 80/100 完成
+[阶段 1 | 第 9 代] 个体 79/100 完成
+[阶段 1 | 第 9 代] 个体 78/100 完成
+[阶段 1 | 第 9 代] 个体 77/100 完成
+[阶段 1 | 第 9 代] 个体 76/100 完成
+[阶段 1 | 第 9 代] 个体 75/100 完成
+[阶段 1 | 第 9 代] 个体 74/100 完成
+[阶段 1 | 第 9 代] 个体 73/100 完成
+[阶段 1 | 第 9 代] 个体 72/100 完成
+[阶段 1 | 第 9 代] 个体 71/100 完成
+[阶段 1 | 第 9 代] 个体 70/100 完成
+[阶段 1 | 第 9 代] 个体 69/100 完成
+[阶段 1 | 第 9 代] 个体 68/100 完成
+[阶段 1 | 第 9 代] 个体 67/100 完成
+[阶段 1 | 第 9 代] 个体 66/100 完成
+[阶段 1 | 第 9 代] 个体 65/100 完成
+[阶段 1 | 第 9 代] 个体 64/100 完成
+[阶段 1 | 第 9 代] 个体 63/100 完成
+[阶段 1 | 第 9 代] 个体 62/100 完成
+[阶段 1 | 第 9 代] 个体 61/100 完成
+[阶段 1 | 第 9 代] 个体 60/100 完成
+[阶段 1 | 第 9 代] 个体 59/100 完成
+[阶段 1 | 第 9 代] 个体 58/100 完成
+[阶段 1 | 第 9 代] 个体 57/100 完成
+[阶段 1 | 第 9 代] 个体 56/100 完成
+[阶段 1 | 第 9 代] 个体 55/100 完成
+[阶段 1 | 第 9 代] 个体 54/100 完成
+[阶段 1 | 第 9 代] 个体 53/100 完成
+[阶段 1 | 第 9 代] 个体 52/100 完成
+[阶段 1 | 第 9 代] 个体 51/100 完成
+[阶段 1 | 第 9 代] 个体 50/100 完成
+[阶段 1 | 第 9 代] 个体 49/100 完成
+[阶段 1 | 第 9 代] 个体 48/100 完成
+[阶段 1 | 第 9 代] 个体 47/100 完成
+[阶段 1 | 第 9 代] 个体 46/100 完成
+[阶段 1 | 第 9 代] 个体 45/100 完成
+[阶段 1 | 第 9 代] 个体 44/100 完成
+[阶段 1 | 第 9 代] 个体 43/100 完成
+[阶段 1 | 第 9 代] 个体 42/100 完成
+[阶段 1 | 第 9 代] 个体 41/100 完成
+[阶段 1 | 第 9 代] 个体 40/100 完成
+[阶段 1 | 第 9 代] 个体 39/100 完成
+[阶段 1 | 第 9 代] 个体 38/100 完成
+[阶段 1 | 第 9 代] 个体 37/100 完成
+[阶段 1 | 第 9 代] 个体 36/100 完成
+[阶段 1 | 第 9 代] 个体 35/100 完成
+[阶段 1 | 第 9 代] 个体 34/100 完成
+[阶段 1 | 第 9 代] 个体 33/100 完成
+[阶段 1 | 第 9 代] 个体 32/100 完成
+[阶段 1 | 第 9 代] 个体 31/100 完成
+[阶段 1 | 第 9 代] 个体 30/100 完成
+[阶段 1 | 第 9 代] 个体 29/100 完成
+[阶段 1 | 第 9 代] 个体 28/100 完成
+[阶段 1 | 第 9 代] 个体 27/100 完成
+[阶段 1 | 第 9 代] 个体 26/100 完成
+[阶段 1 | 第 9 代] 个体 25/100 完成
+[阶段 1 | 第 9 代] 个体 24/100 完成
+[阶段 1 | 第 9 代] 个体 23/100 完成
+[阶段 1 | 第 9 代] 个体 22/100 完成
+[阶段 1 | 第 9 代] 个体 21/100 完成
+[阶段 1 | 第 9 代] 个体 20/100 完成
+[阶段 1 | 第 9 代] 个体 19/100 完成
+[阶段 1 | 第 9 代] 个体 18/100 完成
+[阶段 1 | 第 9 代] 个体 17/100 完成
+[阶段 1 | 第 9 代] 个体 16/100 完成
+[阶段 1 | 第 9 代] 个体 15/100 完成
+[阶段 1 | 第 9 代] 个体 14/100 完成
+[阶段 1 | 第 9 代] 个体 13/100 完成
+[阶段 1 | 第 9 代] 个体 12/100 完成
+[阶段 1 | 第 9 代] 个体 11/100 完成
+[阶段 1 | 第 9 代] 个体 10/100 完成
+[阶段 1 | 第 9 代] 个体 9/100 完成
+[阶段 1 | 第 9 代] 个体 8/100 完成
+[阶段 1 | 第 9 代] 个体 7/100 完成
+[阶段 1 | 第 9 代] 个体 6/100 完成
+[阶段 1 | 第 9 代] 个体 5/100 完成
+[阶段 1 | 第 9 代] 个体 4/100 完成
+[阶段 1 | 第 9 代] 个体 3/100 完成
+[阶段 1 | 第 9 代] 个体 2/100 完成
+[阶段 1 | 第 9 代] 个体 1/100 完成
+[阶段 1 | 第 9 代] 全部个体评估完成，用时 2022.22 秒。
+[阶段 1] 第 9 代当前最优个体: 94, 加权误差: 0.205200, 分项误差: [0.0000 0.3000 0.3200 0.1280]
+[阶段 1] GA 第 9 代结束，用时 2022.34 秒。历史最佳加权误差: 0.182400
+=== 最优解 ===
+代际: 10, 个体索引: 94
+参数: [0.2223  0.4827  0.0000 13.4563 12.4108  0.0104 11.7797  0.4294  0.0151 13.3039]
+误差: 0.0000% (平均腐蚀深度), 30.0000% (bjf)
+, 29.0000% (sjb)
+, 8.6000% (sd)
+历时 16310.563743 秒。
+阶段 1 完成，用时 16312.15 秒。
+阶段 1 最优误差: [0.000000 0.300000 0.290000 0.086000]
+阶段 1 最优参数: [0.222325  0.482658  0.000020 13.456277 12.410845  0.010357 11.779678  0.429409  0.015144 13.303859]
+阶段 1 结果已保存到: C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\outputs_matlab\stage_moni_latest.mat
+
+========== stage_moni 正常结束：28-Jun-2026 21:39:45 ==========
+最终结果文件: C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\outputs_matlab\stage_moni_20260628_170752.mat
+untitled
+不均匀腐蚀深度=297.1512
+[警告: 忽略额外的图例条目。] 
+[> 位置：<a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend>process_inputs', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 517)" style="font-weight:bold">legend>process_inputs</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',517,0)">第 517 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend>make_legend', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 233)" style="font-weight:bold">legend>make_legend</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',233,0)">第 233 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 184)" style="font-weight:bold">legend</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',184,0)">第 184 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('Copy_of_jixiantiqu_3D', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\Copy_of_jixiantiqu_3D.m', 34)" style="font-weight:bold">Copy_of_jixiantiqu_3D</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\Copy_of_jixiantiqu_3D.m',34,0)">第 34 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('untitled', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\untitled.m', 11)" style="font-weight:bold">untitled</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\untitled.m',11,0)">第 11 行</a>)] 
+均值 μ = 0.68176
+标准差 σ = 0.52563
+均值 μ = 6.2846
+标准差 σ = 0.28928
+
+Average_depth =
+
+   1.0663e+03
+
+
+wucha =
+
+    0.1824
+
+untitled
+不均匀腐蚀深度=297.1512
+[警告: 忽略额外的图例条目。] 
+[> 位置：<a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend>process_inputs', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 517)" style="font-weight:bold">legend>process_inputs</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',517,0)">第 517 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend>make_legend', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 233)" style="font-weight:bold">legend>make_legend</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',233,0)">第 233 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('legend', 'E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m', 184)" style="font-weight:bold">legend</a> (<a href="matlab: opentoline('E:\learning APP\MATLAB.R2026a\toolbox\matlab\graphics\graphics\scribe\legend.m',184,0)">第 184 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('Copy_of_jixiantiqu_3D', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\Copy_of_jixiantiqu_3D.m', 34)" style="font-weight:bold">Copy_of_jixiantiqu_3D</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\Copy_of_jixiantiqu_3D.m',34,0)">第 34 行</a>)
+位置: <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('untitled', 'C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\untitled.m', 11)" style="font-weight:bold">untitled</a> (<a href="matlab: opentoline('C:\Users\lenovo\Desktop\研究生\腐蚀焊接节点的抗震性能演化\code\郭(1)\郭\untitled.m',11,0)">第 11 行</a>)] 
+均值 μ = 0.68176
+标准差 σ = 0.52563
+均值 μ = 6.2846
+标准差 σ = 0.28928
+
+Average_depth =
+
+   1.0663e+03
+
+
+wucha =
+
+    0.1824
+

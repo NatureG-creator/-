@@ -1,0 +1,10 @@
+{
+  "fy_intercept": 355.0,
+  "fy_slope": -2.199999999999999,
+  "fu_intercept": 510.0,
+  "fu_slope": -2.4999999999999987,
+  "e_intercept": 206000.0,
+  "e_slope": -449.9999999999997,
+  "sample_count": 10,
+  "model": "linear_vs_ds"
+}

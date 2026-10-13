@@ -54,6 +54,8 @@ def summarize_values(values):
 def make_report(samples,metadata=None):
     valid = samples['valid_mask']
     return dict(metadata=metadata or {},formula='H=depth_cells*space_z_um; L=ln(H/(1 um)); Y=L/C',
+                normal_fit_formula='f(L)=exp(-(L-mu_L)^2/(2*sigma_L^2))/(sigma_L*sqrt(2*pi)); '
+                                   'mu_L=mean(L); sigma_L=std(L,ddof=1)',
                 normalization=samples['normalization'],space_z_um=samples['space_z_um'],
                 extracted_count=int(valid.size),valid_count=int(np.count_nonzero(valid)),
                 invalid_count=int(np.count_nonzero(~valid)),
@@ -79,6 +81,127 @@ def export_diagnostics(samples,report,output_dir):
     return csv_path,json_path
 
 
+def plot_single_depth_distribution(
+    samples,
+    *,
+    log_bin_width=0.1,
+    figsize=(7.2, 5.4),
+    dpi=160,
+    title='Data Histogram and Fitting Curve',
+    xlabel='ln(H / 1 μm)',
+    ylabel='Probability Density',
+):
+    """绘制对数坑深直方图和正态拟合曲线。
+
+    先按 ``H_i = depth_cells_i * space_z_um`` 得到坑深，再按
+    ``L_i = ln(H_i / 1 μm)`` 转换。直方图和正态拟合均在 L 域完成，
+    因而横坐标的均值是 ``mean(L)``，不是原始深度 ``mean(H)``。
+    """
+    import matplotlib.pyplot as plt
+    from corrosion_model.distribution import _matlab_bin_edges
+
+    valid = np.asarray(samples['valid_mask'], dtype=bool)
+    values = np.asarray(samples['log_depth'], dtype=float)[valid]
+    values = values[np.isfinite(values)]
+    if not np.isfinite(log_bin_width) or log_bin_width <= 0:
+        raise ValueError('对数深度柱宽必须为正的有限数值')
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=int(dpi))
+    if values.size == 0:
+        ax.text(0.5, 0.5, 'No valid corrosion-depth samples',
+                ha='center', va='center', transform=ax.transAxes)
+    else:
+        edges = (
+            np.histogram_bin_edges(values, bins='auto')
+            if log_bin_width is None
+            else _matlab_bin_edges(values, float(log_bin_width))
+        )
+        ax.hist(
+            values,
+            bins=edges,
+            density=True,
+            color='#8ecae6',
+            edgecolor='black',
+            linewidth=0.7,
+            alpha=0.85,
+            label='Data Distribution',
+        )
+        sigma = float(np.std(values, ddof=1)) if values.size > 1 else 0.0
+        if sigma > 0:
+            mu = float(np.mean(values))
+            xs = np.linspace(float(edges[0]), float(edges[-1]), 300)
+            ax.plot(
+                xs,
+                stats.norm.pdf(xs, mu, sigma),
+                color='red',
+                linewidth=2.0,
+                label='Fitted Normal Curve',
+            )
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.2)
+    ax.legend(loc='upper right')
+    fig.tight_layout()
+    return fig
+
+
+def plot_single_ratio_distribution(
+    values,
+    *,
+    bin_width=0.1,
+    figsize=(7.2, 5.4),
+    dpi=160,
+    title='Aspect-Ratio Distribution and Normal Fit',
+    xlabel='ln(1 / (sjb / scaling factor))',
+    ylabel='Probability Density',
+):
+    """绘制清晰的径深比对数分布图，格式与坑深单图一致。"""
+    import matplotlib.pyplot as plt
+    from corrosion_model.distribution import _matlab_bin_edges
+
+    values = np.asarray(values, dtype=float).reshape(-1)
+    values = values[np.isfinite(values)]
+    if not np.isfinite(bin_width) or bin_width <= 0:
+        raise ValueError('径深比图柱宽必须为正的有限数值')
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=int(dpi))
+    if values.size == 0:
+        ax.text(0.5, 0.5, 'No valid aspect-ratio samples',
+                ha='center', va='center', transform=ax.transAxes)
+    else:
+        edges = _matlab_bin_edges(values, float(bin_width))
+        ax.hist(
+            values,
+            bins=edges,
+            density=True,
+            color='#8ecae6',
+            edgecolor='black',
+            linewidth=0.7,
+            alpha=0.85,
+            label='Data Distribution',
+        )
+        sigma = float(np.std(values, ddof=1)) if values.size > 1 else 0.0
+        if sigma > 0:
+            mu = float(np.mean(values))
+            xs = np.linspace(float(edges[0]), float(edges[-1]), 300)
+            ax.plot(
+                xs,
+                stats.norm.pdf(xs, mu, sigma),
+                color='red',
+                linewidth=2.0,
+                label='Fitted Normal Curve',
+            )
+    ax.set_title(f'{title}\nValid pits n={values.size}')
+    ax.set_xlabel(xlabel, fontsize=11)
+    ax.set_ylabel(ylabel, fontsize=11)
+    ax.tick_params(axis='both', labelsize=10)
+    ax.grid(True, alpha=0.2)
+    ax.legend(loc='upper right', fontsize=9)
+    fig.tight_layout()
+    return fig
+
+
 def plot_depth_comparison(samples,*,log_bin_width=.1,raw_bin_width_um=None,figsize=(18.,5.4),dpi=160):
     """同一批坑的原值、自然对数、归一化对数并排比较；曲线只作参考拟合。"""
     import matplotlib.pyplot as plt
@@ -91,12 +214,14 @@ def plot_depth_comparison(samples,*,log_bin_width=.1,raw_bin_width_um=None,figsi
     fig,axes = plt.subplots(1,3,figsize=figsize,dpi=dpi)
     valid = samples['valid_mask']
     panels = [
-        ('raw_depth_um','原始腐蚀坑深度','H / μm','概率密度 (1/μm)',raw_bin_width_um),
+        ('raw_depth_um','Data Histogram and Fitting Curve','Corrosion Depth','Probability Density',
+         raw_bin_width_um,'Data Distribution','Fitted Normal Curve'),
         ('log_depth','腐蚀坑深度的自然对数','ln(H / 1 μm)','概率密度',log_width),
         ('normalized_log_depth',f"归一化对数深度（C={samples['normalization']:g}）",
-         'ln(H / 1 μm) / C','概率密度',log_width),
+         'ln(H / 1 μm) / C','概率密度',log_width,'样本分布','正态拟合（参考）'),
     ]
-    for ax,(key,title,xlabel,ylabel,width) in zip(axes,panels):
+    panels[1] = panels[1] + ('样本分布','正态拟合（参考）')
+    for ax,(key,title,xlabel,ylabel,width,hist_label,fit_label) in zip(axes,panels):
         values = samples[key][valid]
         summary = summarize_values(values)
         ax.set_title(f"{title}\n有效坑数 n={values.size}",fontsize=11)
@@ -106,10 +231,10 @@ def plot_depth_comparison(samples,*,log_bin_width=.1,raw_bin_width_um=None,figsi
             continue
         edges = (np.histogram_bin_edges(values,bins='auto') if width is None
                  else _matlab_bin_edges(values,float(width)))
-        ax.hist(values,bins=edges,density=True,color='#9fd0f0',edgecolor='black',label='样本分布')
+        ax.hist(values,bins=edges,density=True,color='#9fd0f0',edgecolor='black',label=hist_label)
         if summary['std'] > 0:
             xs = np.linspace(edges[0],edges[-1],300)
-            ax.plot(xs,stats.norm.pdf(xs,summary['mean'],summary['std']),color='#cf3030',label='正态拟合（参考）')
+            ax.plot(xs,stats.norm.pdf(xs,summary['mean'],summary['std']),color='#cf3030',label=fit_label)
         ax.text(.03,.96,f"均值={summary['mean']:.4g}\n标准差={summary['std']:.4g}",
                 transform=ax.transAxes,va='top',fontsize=9)
         ax.grid(alpha=.2); ax.legend(loc='best',fontsize=9)

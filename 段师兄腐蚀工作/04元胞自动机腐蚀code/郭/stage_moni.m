@@ -1,0 +1,57 @@
+%引入不同阶段对应参数
+%date_x为质量损失率
+%date1,date2为均匀质量损失和不均匀质量损失
+%data3-jsb_标准差
+%clc
+%clear
+%初始元胞尺寸
+%长宽高
+debug_mode=true; % 调试阶段先用小规模参数；正式计算改为false。
+if debug_mode
+    w=30;
+    l=30;
+    n=30;
+else
+    w=100;
+    l=100;
+    n=100;
+end
+data_x=1063;
+data_y=459;
+data1=1.23;
+data2=6.23;
+data3=0.55;
+data4=0.29;
+data=[data_x' data_y' data1' data2' data3' data4'];
+parameter_single=10;%参数个数
+%即每代元胞自动机质量损失率不超过F次
+        space=25;
+        if debug_mode
+            F=100;
+        else
+            F=2000;
+        end
+        stage_number=2;
+        if exist('a_output','var') && exist('d_output','var') && exist('cl_output','var')
+            a_input=a_output;
+            d_input=d_output;
+            cl_input=cl_output;
+        else
+            a_input=[];
+            d_input=[];
+            cl_input=[];
+            stage_number=1;
+        end
+        perfect_result_sd=zeros(size(data_x,2),size(data,2)-2);
+        perfect_parameter_sd=zeros(size(data_x,2),parameter_single);
+        a_sd=cell(size(data_x,2),1);
+for i=1:size(data_x,2)
+        [perfect_result,perfect_parameter,a_output,d_output,cl_output]=GA(w,l,n,data_x(i),data(i,:),a_input,F,stage_number,space,d_input,cl_input);
+        perfect_result_sd(i,:)=perfect_result;
+        perfect_parameter_sd(i,:)=perfect_parameter;
+        a_sd{i}=a_output;
+        a_input=a_output;
+        d_input=d_output;
+        cl_input=cl_output;
+        stage_number=stage_number+1;
+end

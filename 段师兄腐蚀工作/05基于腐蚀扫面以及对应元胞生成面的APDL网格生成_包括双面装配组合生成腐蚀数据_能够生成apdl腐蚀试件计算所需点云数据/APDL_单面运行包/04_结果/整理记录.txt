@@ -1,0 +1,9 @@
+单面运行包静态整理记录
+
+- 原始单面脚本：matlab_apdl_danmian.m，已原样复制。
+- 原始配置版：原项目 matlab_apdl.m 和 step00_corrosion_config.m，已放入 01_MATLAB预处理/原始配置版。
+- MAT 文件：从原项目 C、NH、元胞自动机碳钢、元胞自动机NH 四个目录复制，未修改内容。
+- 推荐单面输入：C/C17_100D/60/Z60193.mat，变量 Z_filled，尺寸 60×193。
+- 单面输出：DIANYUN_X.txt、DIANYUN_Y.txt、DIANYUN_Z.txt。
+- 当前原始目录未发现明确配套的单面 APDL 求解命令流；双面 model3 未复制为单面模型。
+- 本次完成文件和变量的静态核对；MATLAB 实际运行仍需在修复此前的 `failed to load settings errors_warnings plugin` 启动环境问题后验证。
