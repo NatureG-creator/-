@@ -22,15 +22,19 @@ POINT_EXTENSIONS = {".txt", ".csv", ".xyz", ".tsv"}
 
 
 def inspect_xyz(path: Path) -> dict:
+    started = time.perf_counter()
     path = Path(path)
     if path.suffix.lower() not in POINT_EXTENSIONS:
         raise ValueError("点云仅接受 TXT、CSV、TSV、XYZ 文件")
     minima = [math.inf, math.inf, math.inf]
     maxima = [-math.inf, -math.inf, -math.inf]
-    count = 0
+    count, first_nonempty = 0, True
+    sample_points = []
     with path.open("r", encoding="utf-8-sig") as stream:
         for line_no, line in enumerate(stream, 1):
             cells = next(csv.reader([line])) if "," in line else line.split()
+            if not line.strip():
+                continue
             if len(cells) < 3:
                 if not line.strip():
                     continue
@@ -38,19 +42,31 @@ def inspect_xyz(path: Path) -> dict:
             try:
                 xyz = [float(item) for item in cells[:3]]
             except ValueError as exc:
-                if count == 0 and line_no == 1:
+                if first_nonempty and all(not any(char.isdigit() for char in cell) for cell in cells[:3]):
+                    first_nonempty = False
                     continue
                 raise ValueError(f"第{line_no}行XYZ不是数字") from exc
             if not all(math.isfinite(item) for item in xyz):
                 raise ValueError(f"第{line_no}行含NaN或无穷值")
             count += 1
+            first_nonempty = False
+            if len(sample_points) < 1000:
+                sample_points.append(xyz)
+            else:
+                # 均匀确定性蓄水采样，仅作真实点云预览，不参与科学计算。
+                # LCG 哈希截断后再取余，避免与科学运行的随机数状态交互。
+                slot = ((count * 2654435761) & 0xFFFFFFFF) % count
+                if slot < 1000:
+                    sample_points[slot] = xyz
             for index, item in enumerate(xyz):
                 minima[index] = min(minima[index], item)
                 maxima[index] = max(maxima[index], item)
     if count < 3:
         raise ValueError("点云至少需要3个有效XYZ点")
     return {"points": count, "minimum": minima, "maximum": maxima,
-            "size_mm": [maxima[0] - minima[0], maxima[1] - minima[1]]}
+            "size_mm": [maxima[0] - minima[0], maxima[1] - minima[1]],
+            "sample_points": sample_points, "sample_only": count > len(sample_points),
+            "reading_seconds": round(time.perf_counter() - started, 6)}
 
 
 def _sha256(path: Path) -> str:

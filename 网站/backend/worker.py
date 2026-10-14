@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .pointcloud_runner import run_pointcloud
 from .runner import _atomic_json, run_simulation
+from .system_info import process_alive
 
 
 def run_job(job_id: str, runtime: Path) -> None:
@@ -24,23 +25,40 @@ def run_job(job_id: str, runtime: Path) -> None:
         state["updated_at"] = time.time()
         _atomic_json(status_path, state)
 
-    update({"state": "running", "pid": os.getpid()})
+    lock_path = job_dir / "worker.lock"
+    if lock_path.exists():
+        try:
+            previous_pid = int(lock_path.read_text(encoding="ascii"))
+        except (OSError, ValueError):
+            previous_pid = None
+        if process_alive(previous_pid):
+            raise RuntimeError("该任务已经有活动进程，拒绝重复计算")
+        lock_path.unlink(missing_ok=True)
+    with lock_path.open("x", encoding="ascii") as lock:
+        lock.write(str(os.getpid()))
+    update({"state": "running", "phase": "starting", "pid": os.getpid(),
+            "started_at": time.time(), "error": None})
     started = time.perf_counter()
     try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
         else:
-            reference = runtime / "uploads" / spec["reference_id"] / "input"
-            detail = runtime / "uploads" / spec["detail_id"] / "input"
-            reference = reference.with_suffix(spec["reference_extension"])
-            detail = detail.with_suffix(spec["detail_extension"])
+            reference = job_dir / "inputs" / ("reference" + spec["reference_extension"])
+            detail = job_dir / "inputs" / ("detail" + spec["detail_extension"])
+            if not reference.exists():
+                reference = (runtime / "uploads" / spec["reference_id"] / "input").with_suffix(spec["reference_extension"])
+            if not detail.exists():
+                detail = (runtime / "uploads" / spec["detail_id"] / "input").with_suffix(spec["detail_extension"])
+            update({"phase": "matlab"})
             result = run_pointcloud(job_dir, reference, detail, spec["pointcloud_config"])
-        update({"state": "completed", "result": result,
+        update({"state": "completed", "phase": "completed", "result": result,
                 "elapsed_seconds": round(time.perf_counter() - started, 3)})
     except Exception as exc:
         traceback.print_exc()
         update({"state": "failed", "error": str(exc),
                 "elapsed_seconds": round(time.perf_counter() - started, 3)})
+    finally:
+        lock_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

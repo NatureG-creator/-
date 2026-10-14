@@ -1,0 +1,3 @@
+-r requirements.txt
+# 需要有兼容当前Python版本的Taichi发行包；不可用时仍可运行严格模式。
+taichi>=1.7

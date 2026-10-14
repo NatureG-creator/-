@@ -7,7 +7,7 @@ figures_before=findall(groot,'Type','figure'); % 只保存本次新图，不动�
 %% 第1步：核对文件来源；来自同一扫描也不代表独立齐平后的高度基准相同。
 files_190=dir(cfg.input.point_cloud_190_pattern);
 files_190=files_190(~[files_190.isdir]);
-assert(isscalar(files_190),'input:Ambiguous190','必须指定唯一190 mm扫描文件，不能默选第一份。');
+assert(isscalar(files_190),'input:Ambiguous190','必须指定唯一完整参考扫描文件，不能默选第一份。');
 file_190=fullfile(files_190(1).folder,files_190(1).name);
 points190=readmatrix(file_190,'FileType','text');
 points50=readmatrix(cfg.input.point_cloud_50_file,'FileType','text');
@@ -15,9 +15,9 @@ assert(size(points190,2)>=3 && size(points50,2)>=3 && ...
     all(isfinite(points190(:,1:3)),'all') && all(isfinite(points50(:,1:3)),'all'), ...
     'input:InvalidXYZ','扫描前三列XYZ必须为有限数值。');
 assert(all(ismember(points50(:,1:3),points190(:,1:3),'rows')), ...
-    'input:NotSubset','50 mm文件不是190 mm扫描的同坐标XYZ子集，先核对来源，不自动拼接。');
+    'input:NotSubset','局部扫描文件不是参考扫描的同坐标XYZ子集，先核对来源，不自动拼接。');
 
-%% 第2步：190 mm单独核对参考区；50 mm恢复原独立齐平与平滑流程。
+%% 第2步：完整扫描单独核对参考区；局部扫描恢复原独立齐平与平滑流程。
 cfg.figure.show_preprocessing_surface=false; % 此处还是高程，稍后画正向相对深度。
 [Z190,Z190_filled,grid190]=shujuguiyi(file_190,grid_resolution, ...
     cfg.preprocessing.trim_edge_rows,cfg);
@@ -26,7 +26,7 @@ uniform_190_signed_mm=H_flat-H_corroded; % 保留旧反向差值，便于追溯�
 [Z,H_raw,grid50]=shujuguiyi(cfg.input.point_cloud_50_file,grid_resolution, ...
     cfg.preprocessing.trim_edge_rows,cfg);
 if cfg.preprocessing.main_gaussian_sigma>0
-    H=imgaussfilt(H_raw,cfg.preprocessing.main_gaussian_sigma); % 只平滑一次，保持旧50 mm坑样本。
+    H=imgaussfilt(H_raw,cfg.preprocessing.main_gaussian_sigma); % 只平滑一次，保持旧局部扫描坑样本。
 else
     H=H_raw;
 end
@@ -37,7 +37,7 @@ Z_filled_raw_for_export=max(H_raw(:))-H_raw; % 只用于相对起伏诊断，不
 junyunfushi=uniform_190_diagnostic_mm; % 物理腐蚀深度：腐蚀区最高高程-参考面，正值。
 X=grid50.X_mm;X=X-X(1,1);
 Y=grid50.Y_mm;Y=Y-Y(1,1);
-processing=struct('analysis_input','independently aligned 50 mm scan', ...
+processing=struct('analysis_input','independently aligned local scan', ...
     'reference_verified',false,'x_span_mm',max(X(:))-min(X(:)), ...
     'y_span_mm',max(Y(:))-min(Y(:)), ...
     'reference_190_diagnostic_mm',uniform_190_diagnostic_mm,'reference_columns_190',columns190);
@@ -69,8 +69,8 @@ fprintf('平均总腐蚀深度（均匀+不均匀）：%.6f mm\n',avg_total_corr
 fprintf('平均坑深（表面最高点到坑底）：%.4f μm\n',mean(pit_depth_um));
 fprintf('实际分析范围：%.3f × %.3f mm，矩阵%d×%d\n', ...
     processing.x_span_mm,processing.y_span_mm,size(Z_filled,1),size(Z_filled,2));
-fprintf('190 mm均匀分量：%.6f mm；旧反向差值：%.6f mm\n',uniform_190_diagnostic_mm,uniform_190_signed_mm);
-fprintf('[提示] 均匀分量按旧190 mm公式输出；它与独立齐平的50 mm相对矩阵不是同一高度基准，暂不自动拼成CA-GA六指标。\n');
+fprintf('参考扫描均匀分量：%.6f mm；旧反向差值：%.6f mm\n',uniform_190_diagnostic_mm,uniform_190_signed_mm);
+fprintf('[提示] 均匀分量按原参考区公式输出；它与独立齐平的局部相对矩阵不是同一高度基准，暂不自动拼成CA-GA六指标。\n');
 
 %% 第5步：坑样本取自然对数，保持直方图、正态拟合及Q-Q图。
 jsb=log(1./sjb);jsb=jsb(isfinite(jsb));
@@ -189,3 +189,4 @@ sources=struct('point_cloud_190',file_190,'point_cloud_50',cfg.input.point_cloud
 [ca_target_path,ca_target_export]=export_original_ca_target( ...
     Z_filled_raw_for_export,display_depth_mm,junyunfushi,shengdu,sjb,zhijin,max_locs,cfg,sources);
 fprintf('本次结果：%s\n',output_folder);
+

@@ -5,3 +5,8 @@ engine/**/__pycache__/
 engine/**/outputs/
 engine/**/结果文件/
 *.pyc
+output/
+node_modules/
+.env
+.env.*
+!.env.example

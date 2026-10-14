@@ -20,11 +20,11 @@ cfg = struct();
 cfg.project_root = root;
 
 %% ==================== 1. 输入文件（常用） ====================
-% 190 mm点云：必须同时包含左侧平坦参考区和中间腐蚀区。主要用于确定整体腐蚀参考面，通过未腐蚀区域拟合基准面，计算材料整体损失程度，包括平均总腐蚀深度和不均匀腐蚀深度等宏观指标；
+% 完整参考扫描：包含左侧平坦参考区和中间腐蚀区；历史190 mm文件模式仅为默认文件名，实际尺寸由输入点云与列数参数决定。
 cfg.input.point_cloud_190_pattern = fullfile(root, '*190*chongxin*');
-% 50 mm点云：恢复原独立齐平、坑底分析；不能和190 mm独立齐平高度直接拼接。
+% 局部腐蚀扫描：保持原独立齐平、坑底分析；必须为参考扫描XYZ子集，实际范围由数据决定。
 cfg.input.point_cloud_50_file = fullfile(root, 'C17_100d_z_50_chongxin.txt');
-% 两个边缘处理脚本默认读取同一份50 mm点云，避免路径不一致。
+% 两个边缘处理脚本默认读取同一份局部点云，避免路径不一致。
 cfg.input.edge_processing_file = cfg.input.point_cloud_50_file;
 
 %% ==================== 2. 点云预处理（常用） ====================
@@ -157,19 +157,24 @@ end
 scan_reference = getenv('CORROSION_SCAN_REFERENCE');
 scan_detail = getenv('CORROSION_SCAN_DETAIL');
 task_root = getenv('CORROSION_TASK_ROOT');
+output_root = getenv('CORROSION_OUTPUT_BASE');
 if ~isempty(scan_reference), cfg.input.point_cloud_190_pattern = scan_reference; end
 if ~isempty(scan_detail)
     cfg.input.point_cloud_50_file = scan_detail;
     cfg.input.edge_processing_file = scan_detail;
 end
 if ~isempty(task_root)
-    cfg.project_root = task_root;
-    cfg.output.pit_statistics_excel = fullfile(task_root, '腐蚀坑深度统计.xlsx');
-    cfg.output.edge_removed_txt = fullfile(task_root, 'point_cloud_without_edges.txt');
-    cfg.output.edge_reversed_txt = fullfile(task_root, 'point_cloud_reversed_z.txt');
-    cfg.output.apdl_x_txt = fullfile(task_root, 'DIANYUN_X.txt');
-    cfg.output.apdl_y_txt = fullfile(task_root, 'DIANYUN_Y.txt');
-    cfg.output.apdl_z_txt = fullfile(task_root, 'DIANYUN_Z.txt');
+    if isempty(output_root), output_root = fullfile(task_root, 'outputs'); end
+end
+if ~isempty(output_root)
+    if ~isfolder(output_root), mkdir(output_root); end
+    cfg.project_root = output_root;
+    cfg.output.pit_statistics_excel = fullfile(output_root, '腐蚀坑深度统计.xlsx');
+    cfg.output.edge_removed_txt = fullfile(output_root, 'point_cloud_without_edges.txt');
+    cfg.output.edge_reversed_txt = fullfile(output_root, 'point_cloud_reversed_z.txt');
+    cfg.output.apdl_x_txt = fullfile(output_root, 'DIANYUN_X.txt');
+    cfg.output.apdl_y_txt = fullfile(output_root, 'DIANYUN_Y.txt');
+    cfg.output.apdl_z_txt = fullfile(output_root, 'DIANYUN_Z.txt');
 end
 validate_config(cfg);
 cached_cfg = cfg;
@@ -190,4 +195,13 @@ assert(cfg.watershed.threshold > 0 && cfg.watershed.threshold < 1, ...
 assert(cfg.distribution.hist_bin_width > 0, '直方图柱宽必须大于0。');
 assert(cfg.reference.flat_column_count >= 1 && cfg.reference.corrosion_column_count >= 1, ...
     '参考区和腐蚀区列数必须为正整数。');
+assert(cfg.reference.flat_column_count == fix(cfg.reference.flat_column_count) && ...
+    cfg.reference.corrosion_column_count == fix(cfg.reference.corrosion_column_count), ...
+    '参考区和腐蚀区列数必须为整数。');
+assert(cfg.reference.flat_height_ratio >= 0 && cfg.reference.flat_height_ratio <= 1, ...
+    '参考高度极差比例必须在[0,1]。');
+assert(numel(cfg.pit_detection.neighborhood) == 2 && ...
+    all(cfg.pit_detection.neighborhood == fix(cfg.pit_detection.neighborhood)) && ...
+    cfg.pit_detection.neighborhood(1) == cfg.pit_detection.neighborhood(2), ...
+    '当前Python校准接口要求两个相同的正整数邻域。');
 end

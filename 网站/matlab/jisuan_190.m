@@ -2,12 +2,18 @@ function [junyunfushi,Z_pingtanmian,Z_fushimian,columns] = jisuan_190(Z, cfg)
 if nargin < 2 || isempty(cfg)
     cfg = step00_corrosion_config();
 end
-% 参考区与腐蚀区使用同一190 mm齐平高程时，物理腐蚀深度取正值：
+% 参考区与腐蚀区使用同一完整扫描的齐平高程；函数名保留历史兼容，尺寸由矩阵和配置决定。
+% 物理腐蚀深度取正值：
 % 腐蚀区最高点 - 参考面。旧的反向差值另由主程序保存为有符号诊断。
 % 返回值单位与输入Z一致，通常为mm。
 
 flat_count = cfg.reference.flat_column_count;
 corrosion_count = cfg.reference.corrosion_column_count;
+assert(isnumeric(Z) && ismatrix(Z) && ~isempty(Z) && all(isfinite(Z(:))), ...
+    'reference:InvalidMatrix','参考扫描矩阵必须为非空有限二维数值矩阵。');
+assert(isscalar(flat_count) && isfinite(flat_count) && flat_count >= 1 && flat_count == fix(flat_count) && ...
+    isscalar(corrosion_count) && isfinite(corrosion_count) && corrosion_count >= 1 && corrosion_count == fix(corrosion_count), ...
+    'reference:InvalidColumns','参考区和腐蚀区列数必须为正整数。');
 if size(Z,2) < flat_count
     error('jisuan_190: 输入矩阵列数不足，至少需要%d列。', flat_count);
 end

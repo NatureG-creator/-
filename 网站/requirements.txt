@@ -2,5 +2,4 @@ numpy
 scipy
 matplotlib
 scikit-image
-# 高速模式需要；严格模式不依赖 Taichi。
-taichi>=1.7
+# 严格模式不依赖Taichi；高速模式依赖见 requirements-fast.txt。
