@@ -22,6 +22,8 @@ python start_server.py
 
 浏览器打开 `http://127.0.0.1:8523/`。
 
+源代码修改后，可双击 `sync.cmd` 一键提交并推送 `网站/` 到 GitHub 的 `main` 分支。脚本只暂存网站目录，不会提交仓库中的其他科研目录。
+
 运行网站测试：
 
 ```powershell
