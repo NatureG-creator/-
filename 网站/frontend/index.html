@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>腐蚀研究工作台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="eyebrow">CORROSION RESEARCH</span><h1>腐蚀研究工作台</h1></div>
+    <div class="health"><span id="health-dot"></span><span id="health-text">正在检查服务</span></div>
+  </header>
+  <main>
+    <section class="hero-band">
+      <div><p class="kicker">可复现计算 · 参数可追溯 · 结果可下载</p><h2>从实测点云到多阶段腐蚀演化</h2><p>上传输入文件，配置本次任务，查看每个阶段的目标、参数、误差和过程图。</p></div>
+      <div class="hero-stats"><div><strong id="job-count">0</strong><span>历史任务</span></div><div><strong id="capability">检测中</strong><span>计算后端</span></div></div>
+    </section>
+    <nav class="tabs"><button class="tab active" data-panel="simulation-panel">多阶段模拟</button><button class="tab" data-panel="pointcloud-panel">实测点云 → 六指标</button><button class="tab" data-panel="history-panel">任务记录</button></nav>
+    <section id="simulation-panel" class="panel active">
+      <div class="section-heading"><div><span class="section-index">01</span><h3>多阶段模拟</h3><p>按原有 stage_moni → GA → CA 链路逐阶段运行。</p></div><span class="badge" id="sim-backend">读取配置中</span></div>
+      <div class="grid two">
+        <div class="field"><label for="sim-mode">运行模式</label><select id="sim-mode"><option value="strict">严格可复现（支持检查点恢复）</option><option value="fast">高速模式（Taichi，需本机安装）</option></select></div>
+        <div class="field"><label for="sim-seed">随机种子</label><input id="sim-seed" type="number" min="0" max="4294967295" step="1"></div>
+      </div>
+      <div class="field"><label>阶段目标矩阵（每行六项）</label><textarea id="targets" rows="5" spellcheck="false"></textarea><small>列顺序：平均腐蚀深度、不均匀腐蚀深度、深径比指标、坑深分布指标、sigma1、sigma2。</small></div>
+      <div class="subheading"><h4>关键可调参数</h4><button id="sim-reset" class="button ghost">恢复默认</button></div>
+      <div id="sim-fields" class="parameter-grid"></div>
+      <div class="actions"><button id="run-simulation" class="button primary">运行多阶段模拟 <span>▶</span></button><button id="export-config" class="button secondary">导出当前配置</button><label class="button secondary file-button">导入配置<input id="import-config" type="file" accept=".json"></label></div>
+      <div id="sim-message" class="message" hidden></div>
+    </section>
+    <section id="pointcloud-panel" class="panel">
+      <div class="section-heading"><div><span class="section-index">02</span><h3>实测点云 → MATLAB 六指标</h3><p>保留 MATLAB 原流程：齐平、网格化、参考面、坑识别、六指标导出。</p></div><span class="badge">MATLAB 入口</span></div>
+      <div class="upload-grid"><div class="upload-box"><label>190 mm参考点云（TXT / CSV / TSV / XYZ）</label><input id="reference-file" type="file" accept=".txt,.csv,.tsv,.xyz"><div id="reference-preview" class="preview">未选择文件</div></div><div class="upload-box"><label>细节点云（可变尺寸）</label><input id="detail-file" type="file" accept=".txt,.csv,.tsv,.xyz"><div id="detail-preview" class="preview">未选择文件</div></div></div>
+      <div class="subheading"><h4>step00_corrosion_config.m 参数</h4><button id="pointcloud-reset" class="button ghost">恢复默认</button></div>
+      <div id="pointcloud-fields" class="parameter-grid"></div>
+      <div class="actions"><button id="run-pointcloud" class="button primary">运行 MATLAB 六指标 <span>▶</span></button></div>
+      <div id="pointcloud-message" class="message" hidden></div>
+    </section>
+    <section id="history-panel" class="panel"><div class="section-heading"><div><span class="section-index">03</span><h3>任务记录</h3><p>恢复中断的严格模式任务，或下载已生成的数值和图像文件。</p></div><button id="refresh-history" class="button secondary">刷新</button></div><div id="history-list" class="history-list"></div></section>
+    <section id="results-panel" class="panel result-panel"><div class="section-heading"><div><span class="section-index">04</span><h3>当前任务</h3><p id="result-subtitle">提交任务后在这里查看进度。</p></div><span id="result-state" class="badge neutral">未运行</span></div><div class="progress-track"><div id="progress-bar"></div></div><div id="progress-text" class="progress-text">等待任务</div><div id="result-content" class="result-content"></div></section>
+  </main>
+  <footer><span>网站副本与科研引擎分离保存</span><span id="footer-version">本地任务服务</span></footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

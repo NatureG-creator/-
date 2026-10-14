@@ -1,0 +1,27 @@
+import unittest
+
+from backend.config import default_simulation_config, validate_simulation_config, validate_targets
+
+
+class ConfigTests(unittest.TestCase):
+    def test_target_rows_follow_selected_mode(self):
+        self.assertEqual(validate_targets([[10, 2, 1, 3, 0.2, 0.3]], "single"), 1)
+        with self.assertRaisesRegex(ValueError, "一行"):
+            validate_targets([[10, 2, 1, 3, 0.2, 0.3], [12, 3, 1, 4, 0.2, 0.3]], "single")
+
+    def test_invalid_postprocess_is_rejected_before_run(self):
+        config = default_simulation_config()
+        config["MATLAB_CA_COMPARISON_CONFIG"]["sjb_divisor"] = 0
+        with self.assertRaisesRegex(ValueError, "sjb_divisor"):
+            validate_simulation_config(config)
+
+    def test_strict_mode_uses_numpy_single_worker(self):
+        config = default_simulation_config()
+        config["mode"] = "strict"
+        config["STAGE_GA_CONFIG"]["parallel_workers"] = 2
+        with self.assertRaisesRegex(ValueError, "parallel_workers"):
+            validate_simulation_config(config)
+
+
+if __name__ == "__main__":
+    unittest.main()

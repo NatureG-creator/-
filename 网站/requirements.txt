@@ -1,0 +1,6 @@
+numpy
+scipy
+matplotlib
+scikit-image
+# 高速模式需要；严格模式不依赖 Taichi。
+taichi>=1.7
