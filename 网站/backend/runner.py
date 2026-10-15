@@ -24,6 +24,7 @@ from .scientific_outputs import (METRIC_NAMES, PARAMETER_NAMES,
 from corrosion_model.ga_优化版 import GAConfig, run_ga
 from corrosion_model.ca_优化版 import first_metal_depth
 from corrosion_model.fitness_优化版 import _fitness_worker_init as _engine_worker_init
+from .system_info import current_memory_bytes, runtime_provenance
 
 
 def _atomic_npz(path: Path, **arrays) -> None:
@@ -175,6 +176,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
     frozen = freeze_spec(spec)
     fingerprint = fingerprint_config(spec)
     engine_fingerprint = engine_environment_fingerprint()
+    provenance = runtime_provenance()
     frozen.update(fingerprint=fingerprint, engine_fingerprint=engine_fingerprint)
     _atomic_json(job_dir / "request.json", frozen)
     _atomic_json(output / "effective_config.json", frozen)
@@ -188,7 +190,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
     timing = {"reading_seconds": float(spec.get("reading_seconds", 0)),
               "compute_seconds": 0.0, "checkpoint_seconds": 0.0,
               "export_seconds": 0.0, "plotting_seconds": 0.0,
-              "postprocess_seconds": 0.0}
+              "postprocess_seconds": 0.0, "peak_memory_bytes": None}
     if config["mode"] == "fast":
         warnings.append("高速模式沿用原GA；不提供逐个体检查点及严格中断恢复。")
 
@@ -198,6 +200,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
             document[key] += sum(value for name, value in timing.items()
                                  if name.startswith("stage_") and name.endswith("_" + key))
         document["session_seconds"] = time.perf_counter() - started
+        document["peak_memory_bytes"] = current_memory_bytes()
         document["scope_note"] = "阶段计算/检查点时间含可恢复历史；session_seconds仅本次进程，读取包含已冻结输入读取。"
         return document
 
@@ -217,6 +220,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
             "objective_rule": "六指标相对误差绝对值先舍入至2位；去除第5项；第4/6项按0.6/0.4合并；四项按0.1/0.3/0.2/0.4加权。全局最优更新仍比较四项之和。",
             "metric_note": "实际六指标使用原CA形貌后处理；无法定义的分布参数为null附原因，原GA内部回退不改变。",
             "compatibility_export": "逐阶段流式ZIP/NPY导出，避免所有阶段体数组同时驻留内存；会重复读取已保存阶段。",
+            "provenance": provenance,
         })
         buffer = io.StringIO(newline="")
         writer = csv.writer(buffer)

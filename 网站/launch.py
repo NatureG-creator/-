@@ -43,7 +43,7 @@ def launch(*, open_browser=True, preferred_port=8523):
             if open_browser:
                 webbrowser.open(url)
             return url
-    missing = [name for name in ("numpy", "scipy", "matplotlib", "skimage")
+    missing = [name for name in ("numpy", "scipy", "matplotlib", "skimage", "openpyxl", "psutil")
                if importlib.util.find_spec(name) is None]
     if missing:
         raise RuntimeError("当前Python缺少依赖：" + "、".join(missing) +

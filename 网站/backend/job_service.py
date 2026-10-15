@@ -22,7 +22,7 @@ from .runner import _atomic_json
 from .system_info import ROOT, find_matlab, json_record, process_alive, sha256
 from .targets import inspect_target, load_targets
 
-UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat"}
+UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
@@ -77,7 +77,7 @@ class JobService:
     def upload(self, name, stream, length):
         extension = Path(name).suffix.lower()
         if extension not in UPLOAD_EXTENSIONS:
-            raise ValueError("文件类型仅支持 TXT、CSV、TSV、XYZ、MAT")
+            raise ValueError("文件类型仅支持 TXT、CSV、TSV、XYZ、MAT、XLSX")
         if not isinstance(length, int) or not 0 < length <= MAX_UPLOAD_BYTES:
             raise ValueError("文件必须非空且不超过1GB")
         upload_id = uuid.uuid4().hex
@@ -145,11 +145,13 @@ class JobService:
                 import importlib.util
                 if importlib.util.find_spec("taichi") is None:
                     raise ValueError("当前Python未安装Taichi，请使用严格模式或安装可兼容版本")
+            from .parameter_catalog import estimate_resources
             spec = {"kind": kind, "config": config, "targets": targets, "run_mode": run_mode,
                     "reading_seconds": time.perf_counter() - started,
                     "target_options": {"variable": payload.get("variable"),
                                        "orientation": payload.get("orientation", "auto")},
                     "target_source": source_info,
+                    "resource_estimate": estimate_resources(config, len(targets), run_mode),
                     "case_name": str(payload.get("case_name", ""))[:100]}
         else:
             reference, ref_path = self.get_upload(payload["reference_id"])

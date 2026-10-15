@@ -1,10 +1,12 @@
 clear
 clear step00_corrosion_config % 修改配置后重新加载，避免persistent缓存。
 cfg=step00_corrosion_config();
+wb_total_tick=tic;
 grid_resolution=cfg.preprocessing.grid_resolution_mm;
 figures_before=findall(groot,'Type','figure'); % 只保存本次新图，不动原来已打开的图窗。
 
 %% 第1步：核对文件来源；来自同一扫描也不代表独立齐平后的高度基准相同。
+wb_input_tick=tic;
 files_190=dir(cfg.input.point_cloud_190_pattern);
 files_190=files_190(~[files_190.isdir]);
 assert(isscalar(files_190),'input:Ambiguous190','必须指定唯一完整参考扫描文件，不能默选第一份。');
@@ -16,8 +18,10 @@ assert(size(points190,2)>=3 && size(points50,2)>=3 && ...
     'input:InvalidXYZ','扫描前三列XYZ必须为有限数值。');
 assert(all(ismember(points50(:,1:3),points190(:,1:3),'rows')), ...
     'input:NotSubset','局部扫描文件不是参考扫描的同坐标XYZ子集，先核对来源，不自动拼接。');
+wb_input_seconds=toc(wb_input_tick);
 
 %% 第2步：完整扫描单独核对参考区；局部扫描恢复原独立齐平与平滑流程。
+wb_preprocess_tick=tic;
 cfg.figure.show_preprocessing_surface=false; % 此处还是高程，稍后画正向相对深度。
 [Z190,Z190_filled,grid190]=shujuguiyi(file_190,grid_resolution, ...
     cfg.preprocessing.trim_edge_rows,cfg);
@@ -42,8 +46,10 @@ processing=struct('analysis_input','independently aligned local scan', ...
     'y_span_mm',max(Y(:))-min(Y(:)), ...
     'reference_190_diagnostic_mm',uniform_190_diagnostic_mm,'reference_columns_190',columns190);
 F_filled=Z_filled;
+wb_preprocess_seconds=toc(wb_preprocess_tick);
 
 %% 第3步：正向显示D_relative=max(H)-H，零点是腐蚀表面最高点，不是未腐蚀面。
+wb_analysis_tick=tic;
 h_depth=figure('Name','正向相对腐蚀深度');
 surf(X,Y,display_depth_mm,'EdgeColor','none');shading interp;grid off;
 colormap(cfg.figure.processed_surface_colormap);colorbar;
@@ -125,7 +131,9 @@ if numel(shengdu2) >= 2
 end
 
 fprintf('======================================\n');
+wb_analysis_seconds=toc(wb_analysis_tick);
 %% 第6步：结果单独存放，不覆盖原Excel、MAT和图片。
+wb_numeric_tick=tic;
 output_folder=fullfile(cfg.project_root,['正向深度结果_', ...
     char(datetime('now','Format','yyyyMMdd_HHmmss_SSS'))]);
 mkdir(output_folder);
@@ -138,7 +146,9 @@ save(fullfile(output_folder,'正向腐蚀深度与指标.mat'),'Z','Z_filled','Z
     'H_raw','H','display_depth_mm','components','uniform_190_diagnostic_mm','uniform_190_signed_mm', ...
     'avg_total_corrosion_depth_mm','avg_total_corrosion_depth_um', ...
     'Z190','Z190_filled','grid190','grid50','H_corroded');
+wb_numeric_export_seconds=toc(wb_numeric_tick);
 %% ===== 安全导出图片，避免重复导出无效图窗 =====
+wb_plot_export_tick=tic;
 
 figures = setdiff( ...
     findall(groot,'Type','figure'), figures_before);
@@ -181,12 +191,31 @@ for k = 1:numel(figures)
         warning('第%d张图片导出失败：%s',k,ME.message);
     end
 end
+wb_plot_export_seconds=toc(wb_plot_export_tick);
 
 %% 第7步：导出高程、相对深度和原坑样本；参考面未确认时明确禁止完整CA-GA校准。
+wb_target_export_tick=tic;
 sources=struct('point_cloud_190',file_190,'point_cloud_50',cfg.input.point_cloud_50_file, ...
     'processing',processing,'subset_xyz_verified',true,'depth_kind','relative_to_surface_top', ...
     'height_raw_mm',H_raw,'height_smoothed_mm',H,'legacy_combined_total',true);
 [ca_target_path,ca_target_export]=export_original_ca_target( ...
     Z_filled_raw_for_export,display_depth_mm,junyunfushi,shengdu,sjb,zhijin,max_locs,cfg,sources);
+wb_target_export_seconds=toc(wb_target_export_tick);
+wb_total_seconds=toc(wb_total_tick);
+wb_timing=struct('input_seconds',wb_input_seconds,'preprocess_seconds',wb_preprocess_seconds, ...
+    'analysis_seconds',wb_analysis_seconds,'numeric_export_seconds',wb_numeric_export_seconds, ...
+    'plot_export_seconds',wb_plot_export_seconds,'target_export_seconds',wb_target_export_seconds, ...
+    'total_seconds',wb_total_seconds);
+wb_timing_root=getenv('CORROSION_OUTPUT_BASE');
+if isempty(wb_timing_root),wb_timing_root=cfg.project_root;end
+try
+    wb_timing_file=fullfile(wb_timing_root,'matlab_timing.json');
+    wb_timing_fid=fopen(wb_timing_file,'w','n','UTF-8');
+    assert(wb_timing_fid>=0,'timing:FileOpen','无法写入MATLAB计时文件');
+    fwrite(wb_timing_fid,jsonencode(wb_timing),'char');
+    fclose(wb_timing_fid);
+catch wb_timing_error
+    warning('MATLAB分项计时未保存：%s',wb_timing_error.message);
+end
 fprintf('本次结果：%s\n',output_folder);
 

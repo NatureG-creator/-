@@ -2,4 +2,6 @@ numpy
 scipy
 matplotlib
 scikit-image
+openpyxl
+psutil
 # 严格模式不依赖Taichi；高速模式依赖见 requirements-fast.txt。

@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -79,3 +80,35 @@ def json_record(path: Path, default=None):
     if not Path(path).is_file():
         return default
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def current_memory_bytes() -> int | None:
+    """Best-effort peak resident memory for runtime telemetry."""
+    try:
+        import psutil
+        info = psutil.Process().memory_info()
+        return int(getattr(info, "peak_wset", None) or getattr(info, "peak_rss", None) or info.rss)
+    except (ImportError, OSError, ValueError):
+        return None
+
+
+def runtime_provenance() -> dict:
+    """Return reproducibility metadata without changing the scientific path."""
+    versions = {"python": sys.version.split()[0]}
+    for module_name in ("numpy", "scipy", "matplotlib", "taichi"):
+        try:
+            module = __import__(module_name)
+            versions[module_name] = getattr(module, "__version__", "available")
+        except Exception:
+            versions[module_name] = None
+    commit = None
+    try:
+        result = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+                                capture_output=True, text=True, timeout=2,
+                                encoding="utf-8", errors="replace")
+        if result.returncode == 0 and isinstance(result.stdout, str):
+            commit = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return {"versions": versions, "git_commit": commit,
+            "python_path": sys.executable, "platform": sys.platform}

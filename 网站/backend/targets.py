@@ -73,6 +73,39 @@ def _read_text_rows(path: Path) -> list[list[float]]:
     return rows
 
 
+def _read_xlsx_matrix(path: Path) -> np.ndarray:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise ValueError("读取 XLSX 需要安装 openpyxl；请重新安装网站 requirements.txt") from exc
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        rows = []
+        header_skipped = False
+        for row_index, cells in enumerate(workbook.active.iter_rows(values_only=True), 1):
+            values = list(cells)
+            while values and values[-1] is None:
+                values.pop()
+            if not values or all(value is None for value in values):
+                continue
+            try:
+                numeric = [float(value) for value in values]
+            except (TypeError, ValueError) as exc:
+                if not rows and not header_skipped and all(
+                        isinstance(value, str) and value.strip() for value in values):
+                    header_skipped = True
+                    continue
+                raise ValueError(f"XLSX 第{row_index}行含非数值或没有缓存结果的公式") from exc
+            if not all(math.isfinite(value) for value in numeric):
+                raise ValueError(f"XLSX 第{row_index}行含 NaN 或无穷值")
+            rows.append(numeric)
+        if not rows or len({len(row) for row in rows}) != 1:
+            raise ValueError("XLSX 目标矩阵为空或各行列数不一致")
+        return np.asarray(rows, dtype=float)
+    finally:
+        workbook.close()
+
+
 def _mat_variables(path: Path) -> dict:
     try:
         return loadmat(path)
@@ -131,6 +164,7 @@ def inspect_target(path: Path, variable: str | None = None, orientation: str = "
                 result["issues"].append(f"MAT文件不存在可用六指标变量：{selected}")
             else:
                 result["shape"] = list(np.asarray(values[selected]).shape)
+                result["original_shape"] = list(np.asarray(values[selected]).shape)
                 try:
                     data = _orient(np.asarray(values[selected], dtype=float), orientation)
                     result["shape"] = list(data.shape)
@@ -148,6 +182,17 @@ def inspect_target(path: Path, variable: str | None = None, orientation: str = "
                 if not bool(ready[0]):
                     result["issues"].append("MAT 标记 calibration_ready=false：物理参考或统计条件未满足，禁止启动校准。")
                     result["issues"].extend(result["calibration_issues"])
+    elif suffix == ".xlsx":
+        if variable:
+            result["issues"].append("XLSX 目标不支持 MAT 变量选择。")
+        try:
+            original = _read_xlsx_matrix(path)
+            result["original_shape"] = list(original.shape)
+            data = _orient(original, orientation)
+            result["shape"] = list(data.shape)
+            result["targets"] = _rows(data)
+        except ValueError as exc:
+            result["issues"].append(str(exc))
     elif suffix in {".csv", ".txt", ".tsv"}:
         if variable:
             result["issues"].append("文本目标不支持 MAT 变量选择。")
@@ -159,7 +204,7 @@ def inspect_target(path: Path, variable: str | None = None, orientation: str = "
         except ValueError as exc:
             result["issues"].append(str(exc))
     else:
-        raise ValueError("目标文件仅接受 MAT、CSV、TXT、TSV")
+        raise ValueError("目标文件仅接受 MAT、CSV、TXT、TSV、XLSX")
     result["reading_seconds"] = round(time.perf_counter() - started, 6)
     return result
 

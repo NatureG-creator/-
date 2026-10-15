@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import shutil
+import tempfile
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -126,6 +127,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(201, self.server.create_job(self._body()))
         if method == "POST" and path == "/api/batches":
             return self._json(201, self.server.create_batch(self._body()))
+        if method == "GET" and path == "/api/batches":
+            folders = sorted((self.server.runtime / "batches").iterdir(),
+                             key=lambda item: item.stat().st_mtime, reverse=True)
+            statuses = []
+            for folder in folders[:100]:
+                if not folder.is_dir() or len(folder.name) != 16 or any(
+                        char not in "0123456789abcdef" for char in folder.name):
+                    continue
+                status = json_record(folder / "status.json")
+                if status:
+                    statuses.append(status)
+            return self._json(200, statuses)
         if len(parts) == 3 and parts[:2] == ["api", "batches"] and method == "GET":
             self.server.validate_id(parts[2])
             value = json_record(self.server.runtime / "batches" / parts[2] / "status.json")
@@ -133,6 +146,28 @@ class Handler(BaseHTTPRequestHandler):
                 raise FileNotFoundError("批次不存在")
             value["jobs"] = [self.server.get_job(job_id) for job_id in value["job_ids"]]
             return self._json(200, value)
+        if len(parts) == 4 and parts[:2] == ["api", "batches"] and method == "POST":
+            if parts[3] == "stop":
+                from .batch_service import stop_batch
+                return self._json(200, stop_batch(self.server, parts[2]))
+            if parts[3] == "retry-failed":
+                from .batch_service import retry_failed_batch
+                return self._json(200, retry_failed_batch(self.server, parts[2]))
+        if len(parts) == 4 and parts[:2] == ["api", "batches"] and parts[3] == "download" and method == "GET":
+            from .batch_service import write_batch_archive
+            with tempfile.TemporaryFile() as archive:
+                write_batch_archive(self.server, parts[2], archive)
+                length = archive.tell()
+                archive.seek(0)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(length))
+                self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" +
+                                 urllib.parse.quote(f"corrosion-batch-{parts[2]}.zip"))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                shutil.copyfileobj(archive, self.wfile, 1024 * 1024)
+            return
         if len(parts) >= 3 and parts[:2] == ["api", "jobs"]:
             job_id = self.server.validate_id(parts[2])
             folder = self.server.runtime / "jobs" / job_id

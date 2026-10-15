@@ -27,16 +27,23 @@ def _git(*arguments: str, timeout: int = 30):
                             timeout=timeout, creationflags=flags)
     if result.returncode:
         raise ValueError((result.stderr or result.stdout).strip() or "Git命令失败")
-    return result.stdout.strip()
+    return result.stdout.rstrip("\r\n")
 
 
 def sync_status() -> dict:
     try:
         repo = Path(_git("rev-parse", "--show-toplevel"))
         relative = ROOT.relative_to(repo).as_posix()
+        changes = _git("status", "--short", "--", ":(top)" + relative)
+        try:
+            ahead = int(_git("rev-list", "--count", "@{upstream}..HEAD"))
+        except (ValueError, OSError, subprocess.TimeoutExpired):
+            ahead = None
         return {"available": True, "branch": _git("branch", "--show-current"),
                 "remote": _git("remote", "get-url", "origin"),
-                "changes": _git("status", "--short", "--", ":(top)" + relative),
+                "changes": changes, "changed_files": [line[3:] for line in changes.splitlines()],
+                "changed_count": len(changes.splitlines()),
+                "commit": _git("rev-parse", "--short", "HEAD"), "ahead_count": ahead,
                 "directory": relative, "busy": _LOCK.locked()}
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         return {"available": False, "error": str(exc)}
