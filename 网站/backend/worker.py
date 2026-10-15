@@ -21,10 +21,8 @@ def run_job(job_id: str, runtime: Path) -> None:
     status_path = job_dir / "status.json"
 
     def update(changes: dict):
-        state = json.loads(status_path.read_text(encoding="utf-8"))
-        state.update(changes)
-        state["updated_at"] = time.time()
-        _atomic_json(status_path, state)
+        from .job_status import update_job_status
+        update_job_status(status_path,dict(changes,updated_at=time.time()))
 
     lock_path = job_dir / "worker.lock"
     if lock_path.exists():

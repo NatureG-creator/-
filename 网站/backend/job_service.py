@@ -7,7 +7,6 @@ import io
 import json
 import os
 import shutil
-import signal
 import subprocess
 import sys
 import threading
@@ -25,6 +24,20 @@ from .targets import inspect_target, load_targets
 
 UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
+
+
+def _apdl_control_record(path):
+    reason='记录结构无效'
+    try:
+        if not path.exists(): return {}
+        value=json_record(path)
+        if isinstance(value,dict) and ('cleanup' not in value or isinstance(value['cleanup'],dict)):
+            return value
+    except (ValueError,OSError,UnicodeError) as exc:
+        reason=f'{type(exc).__name__}: {exc}'
+    failure=dict(state='failed',verified_empty=False,
+                 error=f'{path.name}控制记录损坏或不可读取：{reason}；需要复核并重试停止。')
+    return dict(failure,control_record_error=True,cleanup=dict(failure))
 
 
 class JobService:
@@ -47,7 +60,9 @@ class JobService:
                 locked_pid = int((folder / "worker.lock").read_text(encoding="ascii"))
             except (OSError, ValueError):
                 continue
-            if (status.get("state") in {"queued", "running"} and
+            pending_stop=(status.get('kind')=='apdl_tension' and
+                          _apdl_control_record(folder/'outputs'/'apdl_stop.json').get('state')=='failed')
+            if ((status.get("state") in {"queued", "running", "stop_failed"} or pending_stop) and
                     status.get("pid") in {None, locked_pid} and process_alive(locked_pid)):
                 inherited[folder.name] = locked_pid
                 inherited_weights[folder.name] = 2 if status.get("kind") in {"benchmark", "diagnostics"} else 1
@@ -406,6 +421,19 @@ class JobService:
             if state is None:
                 raise FileNotFoundError("任务不存在")
             process = self.processes.get(job_id)
+            if state.get('kind')=='apdl_tension':
+                # A separate stop record survives a worker's concurrent final
+                # status write. Pending cleanup must remain reachable by Stop.
+                stop_record=_apdl_control_record(folder/'outputs'/'apdl_stop.json')
+                process_record=_apdl_control_record(folder/'outputs'/'mapdl_process.json')
+                execution=_apdl_control_record(folder/'outputs'/'mapdl_execution.json')
+                cleanup=process_record.get('cleanup') or execution.get('cleanup') or {}
+                if stop_record.get('state')=='stopped' and stop_record.get('verified_empty') is True:
+                    state.update(state='interrupted',error='APDL任务已停止，已有文件保留；不支持网页续算。')
+                    state.pop('stop_error',None)
+                elif stop_record.get('state')=='failed' or cleanup.get('state')=='failed':
+                    error=stop_record.get('error') or cleanup.get('error') or '求解组尚未确认清理完成'
+                    state.update(state='stop_failed',stop_error=error,error=f'停止失败：{error}；可重试停止。')
             if state["state"] in {"queued", "running"}:
                 dead_owned = (process is not None and process.poll() is not None and
                               not (state["state"] == "queued" and job_id in self.pending_jobs))
@@ -413,8 +441,20 @@ class JobService:
                     state["state"] == "running" and not process_alive(state.get("pid")) or
                     state["state"] == "queued" and job_id not in self.pending_jobs)
                 if dead_owned or dead_orphan:
-                    state.update(state="interrupted", error="任务进程已退出，可检查保存的进度后恢复",
-                                 updated_at=time.time())
+                    if state.get('kind')=='apdl_tension':
+                        cleanup=self._stop_apdl_group(folder)
+                        try: _atomic_json(folder/'outputs'/'apdl_stop.json',cleanup)
+                        except Exception as exc: state['stop_persistence_error']=str(exc)
+                        state['solver_cleanup']=cleanup
+                        if cleanup.get('state')=='failed' or cleanup.get('verified_empty') is not True:
+                            state.update(state='stop_failed',stop_error=cleanup.get('error','求解组未确认清空'),
+                                         error='APDL工作进程已退出，但求解组清理尚未确认；请重试停止。',updated_at=time.time())
+                        else:
+                            state.update(state='interrupted',error='APDL工作进程已退出，求解组已清空；已有文件保留，不支持网页续算。',updated_at=time.time())
+                            self._record_apdl_stop(folder,cleanup,reason='APDL工作进程异常退出，已有文件保留；结果未完成验收。')
+                    else:
+                        state.update(state="interrupted", error="任务进程已退出，可检查保存的进度后恢复",
+                                     updated_at=time.time())
                     _atomic_json(folder / "status.json", state)
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
@@ -476,35 +516,102 @@ class JobService:
         with self._job_lock:
             state = self.get_job(job_id)
             process = self.processes.get(job_id)
+            job_dir=self.runtime / "jobs" / job_id
+            excluded={"files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}
+            def persist():
+                from .job_status import update_job_status
+                persisted={key:value for key,value in state.items() if key not in excluded}
+                update_job_status(job_dir/'status.json',persisted,preserve_stop=False)
+                return persisted
+            if state['state'] not in {'queued','running','stop_failed'}:
+                raise ValueError('任务已结束，不能停止；如有清理失败，请查看执行记录。')
             if state["state"] == "queued" and process is None:
                 self._launching_jobs.pop(job_id, None)
                 self.pending_jobs.discard(job_id)
                 state.update(state="interrupted", error="已取消排队", updated_at=time.time())
             else:
-                if process is None:
+                try:
                     from .process_control import verify_worker_process, stop_verified_process
-                    inherited = verify_worker_process(job_id, state, self.runtime / "jobs" / job_id,
-                                                      self.runtime, ROOT)
-                    stop_verified_process(inherited)
-                elif process.poll() is not None:
-                    raise ValueError("任务进程已结束")
-                elif os.name == "nt":
-                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                                   capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                else:
-                    os.killpg(process.pid, signal.SIGTERM)
-                if process is not None:
-                    process.wait(timeout=20)
+                    apdl=state.get('kind')=='apdl_tension'
+                    worker=None
+                    if ((process is None and process_alive(state.get('pid'))) or
+                            (process is not None and process.poll() is None)):
+                        worker=verify_worker_process(job_id,state,job_dir,self.runtime,ROOT)
+                    elif not apdl:
+                        raise ValueError('任务进程已结束')
+                    if apdl:
+                        cleanup=self._stop_apdl_group(job_dir)
+                        if cleanup.get('state')=='failed': raise ValueError(cleanup.get('error','求解组清理失败'))
+                    if worker is not None:
+                        stop_verified_process(worker)
+                    if process is not None:
+                        process.wait(timeout=20)
+                    if apdl:
+                        cleanup=self._stop_apdl_group(job_dir)
+                        if (cleanup.get('state')=='failed' or
+                                (cleanup.get('state')!='not_started' and cleanup.get('verified_empty') is not True)):
+                            raise ValueError(cleanup.get('error','尚未确认求解进程组为空'))
+                        state['solver_cleanup']=cleanup
+                        self._record_apdl_stop(job_dir,cleanup)
+                        _atomic_json(job_dir/'outputs'/'apdl_stop.json',cleanup)
+                except Exception as exc:
+                    state.update(state='stop_failed',stop_error=str(exc),
+                                 error=f'停止失败：{exc}；尚未确认全部进程退出，可重试停止。',updated_at=time.time())
+                    if state.get('kind')=='apdl_tension':
+                        try:
+                            _atomic_json(job_dir/'outputs'/'apdl_stop.json',dict(state='failed',verified_empty=False,error=str(exc)))
+                        except Exception as write_error:
+                            state['stop_persistence_error']=str(write_error)
+                            exc.add_note(f'停止记录保存失败：{write_error}')
+                    try: persist()
+                    except Exception as write_error:
+                        state['error']+=f'；任务停止状态未能持久化：{write_error}'
+                        exc.add_note(f'任务停止状态保存失败：{write_error}')
+                    raise ValueError(state['error']) from exc
                 state.update(state="interrupted", error="用户停止任务，完整个体进度已保留",
                              updated_at=time.time())
+                state.pop('stop_error',None)
+                if state.get('kind')=='apdl_tension':
+                    state['error']='APDL任务已停止，已有输入、日志与部分输出已保留；未完成结果不可当作完整求解，不支持网页续算。'
                 if state.get("kind") == "benchmark":
                     from .benchmark_service import cancel_report
                     cancel_report(self.runtime / "jobs" / job_id, state.get("benchmark_mode"))
                     state["error"] = "测速已停止，已完成方案及报告已保留；未完成方案不支持恢复"
-            persisted = {key: value for key, value in state.items() if key not in {
-                "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}}
-            _atomic_json(self.runtime / "jobs" / job_id / "status.json", persisted)
-            return persisted
+            return persist()
+
+    @staticmethod
+    def _stop_apdl_group(job_dir):
+        output=job_dir/'outputs'
+        execution=_apdl_control_record(output/'mapdl_execution.json')
+        if execution.get('control_record_error'):
+            return execution['cleanup']
+        if not (output/'mapdl_process.json').exists() and execution.get('pid'):
+            return dict(state='failed',verified_empty=False,
+                        error='旧版任务缺少受控求解组记录，无法核验残留求解进程；请在ANSYS中人工确认。')
+        from .apdl_process import stop_owned_execution
+        return stop_owned_execution(output)
+
+    @staticmethod
+    def _record_apdl_stop(job_dir,cleanup,reason='用户停止APDL任务，已有文件保留；结果未完成验收。'):
+        output=job_dir/'outputs'
+        summary=json_record(output/'summary.json',{})
+        if not summary: return
+        now=time.time(); timing=summary.setdefault('timing',{})
+        keys={'reading':'reading_seconds','geometry':'geometry_seconds','build':'build_export_seconds',
+              'solver':'solver_seconds','postprocess':'postprocess_seconds'}
+        for stage,state in summary.get('stage_states',{}).items():
+            if state=='running':
+                summary['stage_states'][stage]='interrupted'
+                started=summary.get('stage_started_at',{}).get(stage)
+                if isinstance(started,(int,float)):
+                    timing[keys[stage]]=max(0,now-started)
+        started=summary.get('started_at')
+        if isinstance(started,(int,float)): timing['total_seconds']=max(0,now-started)
+        summary.update(solve_state='stopped',solver_cleanup=cleanup,error=reason)
+        execution=json_record(output/'mapdl_execution.json')
+        if execution: summary.update(solver=execution,execution_record='mapdl_execution.json')
+        _atomic_json(output/'timing.json',timing)
+        _atomic_json(output/'summary.json',summary)
 
     def transfer(self, job_id):
         state = self.get_job(job_id)

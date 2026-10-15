@@ -21,7 +21,69 @@ class ApdlSourceTests(unittest.TestCase):
             summary=json.loads((job/'outputs'/'summary.json').read_text(encoding='utf-8'))
             self.assertEqual(summary['solve_state'],'failed')
             self.assertIn('license',summary['error'])
+            self.assertGreaterEqual(summary['timing']['solver_seconds'],0)
+            self.assertEqual(summary['stage_states']['solver'],'failed')
+            self.assertEqual(summary['failure_stage'],'solver')
             self.assertTrue((job/'outputs'/'main.inp').is_file())
+
+    def test_postprocess_failure_keeps_execution_record_and_all_elapsed_stages(self):
+        from backend.apdl_service import run_apdl_job
+        from backend.apdl_geometry import normalise_options
+        from unittest.mock import patch
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            job=Path(folder)
+            spec={'faces':{},'options':normalise_options({'corrosion_mode':'flat'}),'run_mode':'solve'}
+            execution={'state':'completed','exit_code':0,'elapsed_seconds':1.5}
+            def solver(output,options,progress=None):
+                (output/'mapdl_execution.json').write_text(json.dumps(execution),encoding='utf-8')
+                return execution
+            with patch('backend.apdl_solver.run_mapdl',side_effect=solver), patch(
+                    'backend.apdl_solver.read_tension_results',side_effect=ValueError('节点坐标不一致')) as reader:
+                with self.assertRaisesRegex(ValueError,'节点'):
+                    run_apdl_job(spec,job)
+            summary=json.loads((job/'outputs'/'summary.json').read_text(encoding='utf-8'))
+            self.assertEqual(summary['failure_stage'],'postprocess')
+            self.assertEqual(summary['stage_states']['solver'],'completed')
+            self.assertEqual(summary['stage_states']['postprocess'],'failed')
+            self.assertGreaterEqual(summary['timing']['postprocess_seconds'],0)
+            self.assertEqual(summary['solver'],execution)
+            self.assertEqual(summary['execution_record'],'mapdl_execution.json')
+            self.assertEqual(reader.call_args.kwargs['expected_nodes'].shape[1],4)
+
+    def test_geometry_failure_preserves_elapsed_time_without_claiming_solver_failed(self):
+        from backend.apdl_service import run_apdl_job
+        from unittest.mock import patch
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            job=Path(folder)
+            with patch('backend.apdl_geometry.build_geometry',side_effect=ValueError('几何无效')):
+                with self.assertRaisesRegex(ValueError,'几何'):
+                    run_apdl_job({'faces':{},'options':{},'run_mode':'solve'},job)
+            summary=json.loads((job/'outputs'/'summary.json').read_text(encoding='utf-8'))
+            self.assertEqual(summary['build_state'],'failed')
+            self.assertEqual(summary['solve_state'],'not_started')
+            self.assertEqual(summary['failure_stage'],'geometry')
+            self.assertGreaterEqual(summary['timing']['geometry_seconds'],0)
+            self.assertNotIn('solver_seconds',summary['timing'])
+
+    def test_failure_persistence_does_not_hide_original_postprocess_error(self):
+        from backend.apdl_service import run_apdl_job
+        from backend.apdl_geometry import normalise_options
+        from backend.runner import _atomic_json
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            spec={'faces':{},'options':normalise_options({'corrosion_mode':'flat'}),'run_mode':'solve'}
+            def write(path,value):
+                if value.get('stage_states',{}).get('postprocess')=='failed':
+                    raise PermissionError('test summary write denied')
+                return _atomic_json(path,value)
+            with patch('backend.apdl_service._atomic_json',side_effect=write), patch(
+                    'backend.apdl_solver.run_mapdl',return_value={'state':'process_finished'}), patch(
+                    'backend.apdl_solver.read_tension_results',side_effect=ValueError('original node failure')):
+                with self.assertRaisesRegex(ValueError,'original node failure') as caught:
+                    run_apdl_job(spec,Path(folder))
+            self.assertTrue(any('write denied' in note for note in caught.exception.__notes__))
 
     def test_original_preset_keeps_all_49_plastic_points(self):
         from backend.apdl_presets import get_presets

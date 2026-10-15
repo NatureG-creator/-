@@ -15,9 +15,9 @@ import subprocess
 import time
 
 import numpy as np
-import psutil
 
 from .apdl_geometry import normalise_options
+from .apdl_process import launch_owned
 
 
 def mapdl_capabilities() -> dict:
@@ -56,32 +56,9 @@ def mapdl_capabilities() -> dict:
             'candidates': found, 'license_state': 'unchecked', 'warnings': warnings}
 
 
-def _stop_process_tree(process: subprocess.Popen) -> None:
-    if process.poll() is not None:
-        return
-    try:
-        parent = psutil.Process(process.pid)
-        targets = list(reversed(parent.children(recursive=True)))+[parent]
-        stopped = []
-        for target in targets:
-            try:
-                target.kill()
-                stopped.append(target)
-            except psutil.NoSuchProcess:
-                pass
-        if stopped:
-            _, alive = psutil.wait_procs(stopped, timeout=5)
-            if alive:
-                raise RuntimeError('MAPDL部分子进程未能停止，请查看任务日志。')
-    except psutil.NoSuchProcess:
-        pass
-    finally:
-        try:
-            if process.poll() is None:
-                process.kill()
-            process.wait(timeout=5)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+def _stop_process_tree(process) -> dict:
+    """Stop a controlled group, including grandchildren after launcher exit."""
+    return process.close()
 
 
 def _solver_errors(output: Path) -> list[str]:
@@ -104,7 +81,7 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     old_names = [name for name in ('force_displacement.csv', 'nodal_results.csv', 'mapdl.out',
-                                  'mapdl_launcher.log', 'mapdl_execution.json') if (output/name).exists()]
+                                  'mapdl_launcher.log', 'mapdl_execution.json', 'mapdl_process.json') if (output/name).exists()]
     old_names += [path.name for path in output.glob('corrosion.*') if path.is_file()]
     if old_names:
         raise ValueError('输出目录已有旧求解文件，拒绝覆盖或复用；请创建新任务：'+', '.join(old_names[:10]))
@@ -113,6 +90,7 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
               'warnings': [], 'command': None, 'exit_code': None,
               'log_file': 'mapdl.out', 'launcher_log_file': 'mapdl_launcher.log'}
     process = None
+    primary_error = None
     def persist():
         temporary = output/'mapdl_execution.json.tmp'
         temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -133,10 +111,9 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
                    '-i', 'main.inp', '-o', 'mapdl.out']
         record['command'] = command
         with (output/'mapdl_launcher.log').open('wb') as stream:
-            process = subprocess.Popen(command, cwd=str(output), stdout=stream,
-                                       stderr=subprocess.STDOUT, shell=False,
-                                       start_new_session=os.name != 'nt',
-                                       creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
+            process = launch_owned(command, output, stream)
+            record['supervision'] = dict(process.record)
+            record['process_record_file'] = 'mapdl_process.json'
             record['pid'] = process.pid
             record['state'] = 'running'
             persist()
@@ -146,9 +123,7 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
                 record['exit_code'] = process.wait(timeout=o['timeout_seconds'])
             except subprocess.TimeoutExpired as exc:
                 record['state'] = 'timeout'
-                _stop_process_tree(process)
-                process = None
-                raise RuntimeError(f'MAPDL求解超时（超过 {o["timeout_seconds"]} 秒），已停止本任务进程树。') from exc
+                raise RuntimeError(f'MAPDL求解超时（超过 {o["timeout_seconds"]} 秒）；监管组清理状态见执行记录。') from exc
         if record['exit_code'] != 0:
             raise RuntimeError(f'MAPDL进程退出码为 {record["exit_code"]}，请检查求解与许可证日志。')
         errors = _solver_errors(output)
@@ -161,16 +136,45 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
         record['message'] = 'MAPDL批处理退出且日志未发现明确错误；仍须验收RST和目标加载步结果。'
         return record
     except BaseException as exc:
-        if process is not None:
-            _stop_process_tree(process)
+        primary_error = exc
         if record['state'] not in {'unavailable', 'timeout'}:
             record['state'] = 'failed'
         record['error'] = f'{type(exc).__name__}: {exc}'
         raise
     finally:
+        cleanup_failure = None
+        if process is not None:
+            try:
+                record['cleanup'] = _stop_process_tree(process)
+            except BaseException as exc:
+                record['cleanup'] = {'state': 'failed', 'verified_empty': False,
+                                     'error': f'{type(exc).__name__}: {exc}'}
+            if not record['cleanup'].get('verified_empty'):
+                cleanup_failure = RuntimeError('MAPDL监管组清理失败：'+record['cleanup'].get('error', '未确认全部进程退出'))
+                record.setdefault('error_notes', []).append(str(cleanup_failure))
+                if primary_error is None:
+                    record['state'] = 'failed'
+                    record['error'] = str(cleanup_failure)
+                else:
+                    primary_error.add_note(str(cleanup_failure))
         record['elapsed_seconds'] = time.perf_counter()-start
         record['finished_at'] = datetime.now(timezone.utc).isoformat()
-        persist()
+        try:
+            persist()
+        except BaseException as persistence_error:
+            note = f'最终执行记录未持久化（{output / "mapdl_execution.json"}）：{type(persistence_error).__name__}: {persistence_error}'
+            record.setdefault('error_notes', []).append(note)
+            record['persistence'] = {'state': 'failed', 'error': str(persistence_error)}
+            pending_error = primary_error if primary_error is not None else cleanup_failure
+            if pending_error is not None:
+                pending_error.add_note(note)
+            else:
+                record['state'] = 'failed'
+                record['error'] = str(persistence_error)
+                persistence_error.add_note(note)
+                raise
+        if cleanup_failure is not None and primary_error is None:
+            raise cleanup_failure
 
 
 def _read_csv(path: Path, columns: int) -> np.ndarray:
@@ -200,7 +204,52 @@ def _write_curve_plot(path: Path, curve: np.ndarray) -> None:
         plt.close(fig)
 
 
-def read_tension_results(output: Path, stats: dict, options: dict | None = None) -> dict:
+def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: list) -> np.ndarray | None:
+    """Read the actual bundle's N,id,x,y,z commands, never infer a replacement mesh."""
+    supplied = expected_nodes is not None
+    try:
+        if not supplied:
+            rows = []
+            for line in (output/'nodes.dat').read_text(encoding='ascii').splitlines():
+                fields = line.strip().split(',')
+                if len(fields) != 5 or fields[0].upper() != 'N':
+                    raise ValueError('nodes.dat 不是 N,id,x,y,z 节点命令格式')
+                rows.append([float(value) for value in fields[1:]])
+            expected_nodes = rows
+        nodes = np.asarray(expected_nodes, dtype=float)
+        if nodes.shape != (count, 4) or not np.isfinite(nodes).all():
+            raise ValueError('预期节点必须是与网格节点数一致的有限 N×4 ID/XYZ 数组')
+        ids = nodes[:, 0]
+        if np.any(ids < 1) or np.any(ids != np.floor(ids)) or len(np.unique(ids)) != count:
+            raise ValueError('预期网格节点编号必须是唯一正整数')
+        if np.ptp(nodes[:, 1]) <= 0:
+            raise ValueError('预期网格的加载方向长度必须为正')
+        return nodes[np.argsort(ids)]
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        if supplied:
+            raise ValueError(f'无法核验指定的预期网格节点：{exc}。') from exc
+        warnings.append(f'缺少可核验的原始网格节点，节点坐标与边界位移未核验：{exc}。')
+        return None
+
+
+def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement: float) -> None:
+    ordered = nodal[np.argsort(nodal[:, 0])]
+    if not np.array_equal(ordered[:, 0], expected[:, 0]):
+        raise ValueError('节点结果编号与实际输入网格不一致。')
+    # Without 1P, Fortran E13.5 writes 0.xxxxxE+nn: five significant digits,
+    # with maximum relative rounding of 5e-5 (unlike Python's %13.5E).
+    if not np.allclose(ordered[:, 1:4], expected[:, 1:4], rtol=5.1e-5, atol=1e-10):
+        raise ValueError('节点结果初始坐标与实际输入网格不一致，超出E13.5五有效位导出精度容差。')
+    x = expected[:, 1]
+    fixed = x == x.min()
+    loaded = x == x.max()
+    if not np.allclose(ordered[fixed, 4], 0., rtol=0., atol=1e-10):
+        raise ValueError('固定端节点UX位移与零位移边界不一致。')
+    if not np.allclose(ordered[loaded, 4], displacement, rtol=5.1e-5, atol=1e-10):
+        raise ValueError('加载端节点UX位移与末步曲线及目标加载位移不一致，超出E13.5五有效位导出精度容差。')
+
+
+def read_tension_results(output: Path, stats: dict, options: dict | None = None, *, expected_nodes=None) -> dict:
     output = Path(output)
     if options is None and (output/'manifest.json').is_file():
         try:
@@ -237,14 +286,23 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None)
         raise ValueError('工程应变与位移/原始标距不一致。')
     if not np.allclose(stress, loaded/area, rtol=1e-6, atol=1e-8):
         raise ValueError('名义应力与加载端反力/原始面积不一致。')
-    warnings = []
+    rst_validation = {'state': 'unverified',
+                      'reason': '仅确认corrosion.rst非空；尚未读取RST结果集并与CSV交叉核验，不能据此证明真实数值结果完整或一致。'}
+    warnings = [rst_validation['reason']]
+    reference_nodes = _result_reference_nodes(output, expected_nodes, int(stats['node_count']), warnings)
+    nodal_coordinates = None
+    nodal_displacements = None
     nodal_summary = None
     files = ['force_displacement.csv', 'corrosion.rst']
     if (output/'nodal_results.csv').exists():
         nodal = _read_csv(output/'nodal_results.csv', 9)
         ids = nodal[:, 0]
-        if len(ids) != int(stats['node_count']) or not np.array_equal(np.sort(ids), np.arange(1, int(stats['node_count'])+1)):
+        expected_ids = reference_nodes[:, 0] if reference_nodes is not None else np.arange(1, int(stats['node_count'])+1)
+        if len(ids) != int(stats['node_count']) or not np.array_equal(np.sort(ids), expected_ids):
             raise ValueError('节点结果的编号、唯一性或节点数量与输入网格不一致。')
+        if reference_nodes is not None:
+            _check_nodal_geometry(nodal, reference_nodes, float(displacement[-1]))
+            nodal_coordinates = nodal_displacements = True
         if np.any(nodal[:, 7:] < -1e-8):
             raise ValueError('等效应力或等效塑性应变不应为负。')
         if o['material_model'] == 'elastic' and np.any(np.abs(nodal[:, 8]) > 1e-8):
@@ -253,17 +311,29 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None)
                          'max_displacement_mm': float(np.linalg.norm(nodal[:, 4:7], axis=1).max()),
                          'max_equivalent_stress_mpa': float(nodal[:, 7].max()),
                          'max_equivalent_plastic_strain': float(nodal[:, 8].max()),
-                         'note': 'SEQV/EPPL为平均节点值，不代表积分点峰值；节点CSV采用E13.5导出。'}
+                         'note': 'SEQV/EPPL为平均节点值，不代表积分点峰值；节点CSV采用无1P的E13.5格式，以五有效位导出。'}
         files.append('nodal_results.csv')
     elif o['export_full_field']:
         raise ValueError('已请求完整节点场，但未找到 nodal_results.csv，不能将部分输出认定为完整成功。')
+    else:
+        warnings.append('未导出节点场，节点坐标与边界位移未核验。')
+    # A balanced pair of zero forces still satisfies equilibrium. Treat forces
+    # below the existing absolute equilibrium tolerance as unresolved response.
+    nonzero_response = bool(abs(loaded[-1]) > 1e-4)
+    if not nonzero_response:
+        warnings.append('末步承载反力为零或不超过1e-4 N，无法确认有效拉伸响应，请复核约束、载荷和结果来源。')
+    significant = loaded[np.abs(loaded) > 1e-4]
+    if np.any(significant > 0) and np.any(significant < 0):
+        nonzero_response = False
+        warnings.append('单调拉伸的显著反力发生符号反转，响应异常，需要复核；未预设加载端反力的正负号。')
     stiffness = float(loaded[-1]/displacement[-1])
     analytic = None
     if o['corrosion_mode'] == 'flat' and o['material_model'] == 'elastic' and o['boundary_mode'] == 'poisson_free' and not o['large_deflection']:
         reference = o['E_MPa']*area/length
         analytic = {'stiffness_n_per_mm': reference,
                     'force_n': reference*o['target_displacement_mm'],
-                    'stiffness_relative_error': abs(stiffness-reference)/reference,
+                    'stiffness_relative_error': abs(abs(stiffness)-reference)/reference,
+                    'comparison': '比较刚度幅值；CSV与汇总反力保留求解器原始符号。',
                     'scope': '小变形弹性、无腐蚀、自由泊松伸缩的EA/L与EAδ/L参考。'}
         if analytic['stiffness_relative_error'] > .05:
             warnings.append('平板结果相对EA/L误差超过5%，应检查材料、约束及网格后再用于研究。')
@@ -273,7 +343,7 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None)
     except Exception as exc:
         warnings.append(f'曲线预览失败但数值结果已保留：{type(exc).__name__}: {exc}')
     return {'solve_state': 'solved', 'point_count': len(curve), 'curve': curve.tolist(),
-            'validation_state': 'needs_review' if analytic and analytic['stiffness_relative_error'] > .05 else 'passed',
+            'validation_state': 'needs_review',
             'curve_columns': ['time', 'displacement_mm', 'loaded_reaction_n', 'fixed_reaction_n',
                               'engineering_strain', 'nominal_stress_mpa'],
             'final_displacement_mm': float(displacement[-1]), 'final_load_n': float(loaded[-1]),
@@ -282,8 +352,10 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None)
             'checks': {'target_time': True, 'target_displacement': True, 'reaction_balance': True,
                        'engineering_strain': True, 'nominal_stress': True, 'nonempty_rst': True,
                        'ramped_displacement': True,
+                       'nodal_coordinates': nodal_coordinates, 'nodal_displacements': nodal_displacements,
+                       'nonzero_response': nonzero_response, 'rst_consistency': None,
                        'analytic_reference': analytic['stiffness_relative_error'] <= .05 if analytic else None,
                        'max_reaction_residual_n': float(residual.max()),
                        'reaction_relative_tolerance': .01, 'reaction_absolute_tolerance_n': 1e-4},
-            'nodal_summary': nodal_summary, 'analytic_reference': analytic,
+            'nodal_summary': nodal_summary, 'analytic_reference': analytic, 'rst_validation': rst_validation,
             'warnings': warnings, 'files': files}

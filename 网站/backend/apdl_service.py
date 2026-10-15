@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
+import hashlib
+import hmac
+import json
 import math
 import shutil
 import time
@@ -189,7 +193,8 @@ def _resolve_source(service, descriptor, label):
             if spacing is not None: inherited.update(dx_mm=spacing,dy_mm=spacing)
         else: raise ValueError('表面来源类型无效')
         if not path.is_file(): raise ValueError('源任务缺少所选表面或阶段文件')
-        metadata=dict(source_job_id=job_id,source_stage=stage,name=path.name,sha256=sha256(path))
+        metadata=dict(source_job_id=job_id,source_stage=stage,source_file=path.relative_to(root).as_posix(),
+                      name=path.name,sha256=sha256(path))
     if sha256(path)!=metadata['sha256']: raise ValueError('来源文件已变化，请重新上传或选择')
     depth,converted=read_face(path,kind,mapping,inherited)
     if sha256(path)!=metadata['sha256']: raise ValueError('读取期间来源文件变化，拒绝冻结')
@@ -229,8 +234,14 @@ def _prepare(service,payload):
         preset=next((p for p in get_presets() if p['id']==preset_id),None)
         if preset is None: raise ValueError('未知APDL预设')
         preset_provenance=preset.get('provenance')
+    registration_signature=None
+    if mode=='double_independent':
+        identity={label:dict(metadata=face['metadata'],mapping=face['mapping']) for label,face in faces.items()}
+        registration_signature=hashlib.sha256(json.dumps(identity,ensure_ascii=True,sort_keys=True,
+                                                        allow_nan=False,separators=(',',':')).encode('utf-8')).hexdigest()
     spec=dict(kind='apdl_tension',run_mode=run_mode,options=geometry['options'],faces=faces,preset_id=preset_id,preset_provenance=preset_provenance,
               registration_confirmed=payload.get('registration_confirmed') is True,
+              registration_signature=registration_signature,
               precheck=geometry['stats'],reading_seconds=time.perf_counter()-started,
               case_name=str(payload.get('case_name',''))[:100])
     return spec,list(records.values()),geometry
@@ -238,6 +249,10 @@ def _prepare(service,payload):
 
 def prepare_apdl(service,payload):
     spec,records,_=_prepare(service,payload)
+    if spec['registration_signature']:
+        supplied=payload.get('registration_signature')
+        if not isinstance(supplied,str) or not hmac.compare_digest(supplied,spec['registration_signature']):
+            raise ValueError('双面来源或映射尚未完成当前配准预检；请重新预检并确认配准后再创建任务')
     if spec['run_mode']=='solve':
         from .apdl_solver import mapdl_capabilities
         if not mapdl_capabilities().get('available'):
@@ -254,6 +269,7 @@ def precheck_apdl(service,payload):
     return dict(options=spec['options'],stats=geometry['stats'],warnings=geometry.get('warnings',[]),
                 faces={key:face['metadata'] for key,face in spec['faces'].items()},preview=preview,
                 units='N-mm-MPa',run_mode=spec['run_mode'],registration_confirmed=spec['registration_confirmed'],
+                registration_signature=spec['registration_signature'],
                 reading_seconds=spec['reading_seconds'])
 
 
@@ -269,47 +285,76 @@ def run_apdl_job(spec,job_dir,progress=None):
     from .apdl_geometry import build_geometry
     from .apdl_deck import create_tension_bundle
     job_dir=Path(job_dir); output=job_dir/'outputs'; output.mkdir(exist_ok=True)
-    total=time.perf_counter(); tick=time.perf_counter()
-    if progress: progress({'phase':'apdl_read'})
-    depths={}
-    for label,face in spec['faces'].items():
-        path=(job_dir/face['input_path']).resolve()
-        if not path.is_relative_to((job_dir/'inputs').resolve()) or sha256(path)!=face['metadata']['sha256']:
-            raise ValueError('APDL冻结来源已变化或路径越界')
-        depths[label],_=read_face(path,face['source_kind'],face['mapping'],face['inherited_geometry'])
-    timing=dict(reading_seconds=time.perf_counter()-tick)
-    tick=time.perf_counter()
-    geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'])
-    timing['geometry_seconds']=time.perf_counter()-tick
-    if progress: progress({'phase':'apdl_build'})
-    tick=time.perf_counter()
-    provenance=dict(faces={key:face['metadata'] for key,face in spec['faces'].items()},runtime=runtime_provenance(),
-                    preset_id=spec.get('preset_id'),preset=spec.get('preset_provenance'))
-    result=create_tension_bundle(geometry,output,provenance)
-    timing['build_export_seconds']=time.perf_counter()-tick
-    result.update(kind='apdl_tension',run_mode=spec['run_mode'],build_state='built',solve_state='not_requested',timing=timing)
-    _atomic_json(output/'summary.json',result)
-    if spec['run_mode']=='solve':
-        from .apdl_solver import run_mapdl,read_tension_results
+    total=time.perf_counter()
+    timing={}; states={}; current_stage=None
+    result=dict(kind='apdl_tension',run_mode=spec['run_mode'],build_state='pending',
+                solve_state='not_started' if spec['run_mode']=='solve' else 'not_requested',
+                timing=timing,stage_states=states,started_at=time.time(),stage_started_at={})
+
+    def persist(primary=None):
+        timing['total_seconds']=time.perf_counter()-total
+        errors=[]
+        for path,value in ((output/'timing.json',timing),(output/'summary.json',result)):
+            try: _atomic_json(path,value)
+            except Exception as exc: errors.append(exc)
+        if errors:
+            if primary is None: raise errors[0]
+            for exc in errors: primary.add_note(f'阶段记录保存失败：{type(exc).__name__}: {exc}')
+
+    @contextmanager
+    def stage(name,key,phase):
+        nonlocal current_stage
+        current_stage=name; states[name]='running'; tick=time.perf_counter()
+        result['stage_started_at'][name]=time.time()
+        stage_error=None
         try:
-            if progress: progress({'phase':'apdl_solve'})
-            tick=time.perf_counter()
-            execution=run_mapdl(output,spec['options'],progress=progress)
-            timing['solver_seconds']=time.perf_counter()-tick
-            result.update(solver=execution,solve_state='postprocessing')
-            _atomic_json(output/'summary.json',result)
-            if progress: progress({'phase':'apdl_post'})
-            tick=time.perf_counter()
-            result['results']=read_tension_results(output,geometry['stats'],spec['options'])
-            timing['postprocess_seconds']=time.perf_counter()-tick
-            result['solve_state']='solved'
-        except Exception as exc:
-            timing['total_seconds']=time.perf_counter()-total
-            result.update(solve_state='failed',error=str(exc))
-            _atomic_json(output/'timing.json',timing)
-            _atomic_json(output/'summary.json',result)
+            persist()
+            if progress: progress({'phase':phase})
+            yield
+        except BaseException as exc:
+            stage_error=exc
+            states[name]='failed'
             raise
-    timing['total_seconds']=time.perf_counter()-total
-    _atomic_json(output/'timing.json',timing)
-    _atomic_json(output/'summary.json',result)
+        else:
+            states[name]='completed'
+        finally:
+            timing[key]=time.perf_counter()-tick
+            persist(stage_error)
+
+    try:
+        with stage('reading','reading_seconds','apdl_read'):
+            depths={}
+            for label,face in spec['faces'].items():
+                path=(job_dir/face['input_path']).resolve()
+                if not path.is_relative_to((job_dir/'inputs').resolve()) or sha256(path)!=face['metadata']['sha256']:
+                    raise ValueError('APDL冻结来源已变化或路径越界')
+                depths[label],_=read_face(path,face['source_kind'],face['mapping'],face['inherited_geometry'])
+        with stage('geometry','geometry_seconds','apdl_build'):
+            geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'])
+        with stage('build','build_export_seconds','apdl_build'):
+            provenance=dict(faces={key:face['metadata'] for key,face in spec['faces'].items()},runtime=runtime_provenance(),
+                            preset_id=spec.get('preset_id'),preset=spec.get('preset_provenance'))
+            result.update(create_tension_bundle(geometry,output,provenance))
+            result.update(build_state='built',timing=timing,stage_states=states)
+        if spec['run_mode']=='solve':
+            from .apdl_solver import run_mapdl,read_tension_results
+            result['solve_state']='running'
+            with stage('solver','solver_seconds','apdl_solve'):
+                result['solver']=run_mapdl(output,spec['options'],progress=progress)
+            result['solve_state']='postprocessing'
+            with stage('postprocess','postprocess_seconds','apdl_post'):
+                result['results']=read_tension_results(output,geometry['stats'],spec['options'],expected_nodes=geometry['nodes'])
+            result['solve_state']='solved'
+    except Exception as exc:
+        result.update(error=str(exc),failure_stage=current_stage)
+        if result['build_state']!='built': result['build_state']='failed'
+        if result['solve_state'] in ('running','postprocessing'): result['solve_state']='failed'
+        execution=output/'mapdl_execution.json'
+        if execution.is_file():
+            result['execution_record']='mapdl_execution.json'
+            try: result['solver']=json.loads(execution.read_text(encoding='utf-8'))
+            except (ValueError,OSError): result['execution_record_error']='无法读取求解器执行记录'
+        persist(exc)
+        raise
+    persist()
     return result

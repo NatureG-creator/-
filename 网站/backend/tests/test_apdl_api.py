@@ -14,6 +14,32 @@ class ApdlApiTests(unittest.TestCase):
     setUp=fe_api.FiniteElementApiTests.setUp
     tearDown=fe_api.FiniteElementApiTests.tearDown
     request=fe_api.FiniteElementApiTests.request
+    def test_double_registration_signature_is_bound_to_sources_and_mapping(self):
+        buf=io.BytesIO(b'0,0.1,0.2\n0.3,0.4,0.5\n')
+        uploaded=self.server.upload('registration.csv',buf,len(buf.getvalue()))
+        face={'upload_id':uploaded['id'],'mapping':{'dx_mm':.3,'dy_mm':.3}}
+        payload={'options':{'corrosion_mode':'double_independent'},'top_source':face,
+                 'bottom_source':face,'registration_confirmed':True}
+        with patch.object(self.server,'launch'):
+            code,error=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,400,'a boolean for an earlier pair is not a source-bound confirmation')
+        self.assertIn('预检',error['error'])
+        code,preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200)
+        signature=preview['registration_signature']
+        self.assertEqual(len(signature),64)
+        payload['registration_signature']=signature
+        payload['options']['E_MPa']=190000
+        code,new_preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(new_preview['registration_signature'],signature,'material does not change XY registration')
+        with patch.object(self.server,'launch'):
+            self.assertEqual(self.request('/api/apdl/jobs',payload)[0],201)
+        payload['top_source']={**face,'mapping':{**face['mapping'],'flip_x':True}}
+        with patch.object(self.server,'launch'):
+            code,error=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,400)
+        self.assertIn('配准',error['error'])
+
     def test_apdl_flat_precheck_and_real_worker_build(self):
         payload={'options':{'corrosion_mode':'flat'}}
         code,preview=self.request('/api/apdl/precheck',payload)
@@ -43,6 +69,7 @@ class ApdlApiTests(unittest.TestCase):
         code,preview=self.request('/api/apdl/precheck',payload)
         self.assertEqual(code,200)
         self.assertAlmostEqual(preview['stats']['min_remaining_thickness_mm'],5)
+        payload['registration_signature']=preview['registration_signature']
         with patch.object(self.server,'launch'):
             code,job=self.request('/api/apdl/jobs',payload)
         self.assertEqual(code,201)
