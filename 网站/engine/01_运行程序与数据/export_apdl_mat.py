@@ -106,18 +106,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="simulation 的 Z 向元胞尺寸，单位 μm，默认 25")
     parser.add_argument("--input-variable", default=None,
                         help="measured 模式下强制读取的源变量名")
-    # 插入在第109行上方，和下面的代码保持相同缩进
-    argv = [
-        '--mode', 'simulation',
-        '--input',
-        r'E:\CODEX文件\python腐蚀代码\腐蚀代码7_高速版_MATLAB实测接口\01_运行程序与数据\结果文件\step2_stage_moni_result9.npz',
-        '--output',
-        r'E:\CODEX文件\python腐蚀代码\腐蚀代码7_高速版_MATLAB实测接口\01_运行程序与数据\结果文件\模拟APDL\step2_stage_moni_result9.mat',
-        '--variable', 'Z_filled'
-    ]
-
-    args = parser.parse_args(argv)  # 这是原来的第109行，不要改动
-
     args = parser.parse_args(argv)
 
     if args.mode == "simulation":

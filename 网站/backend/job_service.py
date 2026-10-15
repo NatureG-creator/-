@@ -114,8 +114,8 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud"}:
-            raise ValueError("任务类型必须为 simulation 或 pointcloud")
+        if kind not in {"simulation", "pointcloud", "finite_element"}:
+            raise ValueError("任务类型必须为 simulation、pointcloud 或 finite_element")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
@@ -153,7 +153,7 @@ class JobService:
                     "target_source": source_info,
                     "resource_estimate": estimate_resources(config, len(targets), run_mode),
                     "case_name": str(payload.get("case_name", ""))[:100]}
-        else:
+        elif kind == "pointcloud":
             reference, ref_path = self.get_upload(payload["reference_id"])
             detail, detail_path = self.get_upload(payload["detail_id"])
             if reference["extension"] not in POINT_EXTENSIONS or detail["extension"] not in POINT_EXTENSIONS:
@@ -166,6 +166,55 @@ class JobService:
                     "pointcloud_config": validate_pointcloud_config(payload.get("pointcloud_config", {})),
                     "reference_preview": inspect_xyz(ref_path), "detail_preview": inspect_xyz(detail_path),
                     "input_hashes": {"reference": sha256(ref_path), "detail": sha256(detail_path)}}
+        else:
+            source_job_id = self.validate_id(payload.get("source_job_id"))
+            source_state = self.get_job(source_job_id)
+            if source_state.get("state") != "completed":
+                raise ValueError("有限元导出的源任务必须已完成")
+            source_kind = payload.get("source_kind")
+            if source_kind not in {"simulation", "measured"}:
+                raise ValueError("source_kind 必须是 simulation 或 measured")
+            source_root = self.runtime / "jobs" / source_job_id / "outputs"
+            if source_kind == "simulation":
+                if source_state.get("kind") != "simulation":
+                    raise ValueError("simulation 来源必须选择已完成的模拟任务")
+                source_path = source_root / "simulation.npz"
+                if not source_path.is_file():
+                    raise ValueError("模拟任务缺少 simulation.npz，不能导出有限元表面")
+            else:
+                if source_state.get("kind") not in {"pointcloud", "finite_element"}:
+                    raise ValueError("measured 来源必须选择点云或已有有限元导出任务")
+                requested = str(payload.get("source_file", ""))
+                candidates = [source_root / requested] if requested else []
+                candidates.extend(path for path in sorted(source_root.rglob("*.mat")) if path not in candidates)
+                source_path = None
+                from .finite_element_export import _read_measured
+                for candidate in candidates:
+                    if candidate.is_file():
+                        try:
+                            _read_measured(candidate, payload.get("input_variable"))
+                            source_path = candidate
+                            break
+                        except (KeyError, ValueError, OSError):
+                            continue
+                if source_path is None:
+                    raise ValueError("点云任务结果中没有可用的 Z_filled/F_filled 表面 MAT")
+            options = dict(payload.get("options") or {})
+            try:
+                options["space_z_um"] = float(options.get("space_z_um", 25.0))
+                options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
+                options["origin_x_mm"] = float(options.get("origin_x_mm", 0.0))
+                options["origin_y_mm"] = float(options.get("origin_y_mm", 0.0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("有限元导出尺寸参数必须是数值") from exc
+            if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
+                raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
+            if options.get("output_variable") not in {None, "", "Z_filled", "F_filled"}:
+                raise ValueError("output_variable 只能是 Z_filled 或 F_filled")
+            spec = {"kind": kind, "source_job_id": source_job_id, "source_kind": source_kind,
+                    "source_path": str(source_path), "source_hash": sha256(source_path),
+                    "source_file": source_path.name, "input_variable": payload.get("input_variable"),
+                    "options": options, "reading_seconds": time.perf_counter() - started}
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
@@ -177,6 +226,12 @@ class JobService:
             if kind == "pointcloud":
                 for label, source in (("reference", ref_path), ("detail", detail_path)):
                     shutil.copy2(source, job_dir / "inputs" / f"{label}{source.suffix}")
+            if kind == "finite_element":
+                frozen = job_dir / "inputs" / f"source{Path(spec['source_path']).suffix}"
+                shutil.copy2(spec["source_path"], frozen)
+                spec["frozen_source_path"] = f"inputs/{frozen.name}"
+                if sha256(frozen) != spec["source_hash"]:
+                    raise ValueError("有限元导出源文件冻结失败")
             _atomic_json(job_dir / "spec.json", spec)
             status = {"id": job_id, "kind": kind, "state": "queued", "created_at": time.time(),
                       "updated_at": time.time(), "pid": None, "phase": "queued",

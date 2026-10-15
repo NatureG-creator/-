@@ -10,6 +10,7 @@ import traceback
 from pathlib import Path
 
 from .pointcloud_runner import run_pointcloud
+from .finite_element_export import create_surface_bundle
 from .runner import _atomic_json, run_simulation
 from .system_info import process_alive
 
@@ -42,7 +43,7 @@ def run_job(job_id: str, runtime: Path) -> None:
     try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
-        else:
+        elif spec["kind"] == "pointcloud":
             reference = job_dir / "inputs" / ("reference" + spec["reference_extension"])
             detail = job_dir / "inputs" / ("detail" + spec["detail_extension"])
             if not reference.exists():
@@ -51,6 +52,11 @@ def run_job(job_id: str, runtime: Path) -> None:
                 detail = (runtime / "uploads" / spec["detail_id"] / "input").with_suffix(spec["detail_extension"])
             update({"phase": "matlab"})
             result = run_pointcloud(job_dir, reference, detail, spec["pointcloud_config"])
+        else:
+            update({"phase": "finite_element_export"})
+            source = job_dir / spec["frozen_source_path"]
+            result = create_surface_bundle(spec["source_kind"], source,
+                                           job_dir / "outputs", spec["options"])
         update({"state": "completed", "phase": "completed", "result": result,
                 "elapsed_seconds": round(time.perf_counter() - started, 3)})
     except Exception as exc:

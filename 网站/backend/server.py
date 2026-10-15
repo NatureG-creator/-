@@ -112,6 +112,24 @@ class Handler(BaseHTTPRequestHandler):
             folders = [item for item in folders if item.is_dir() and (item / "status.json").is_file()
                        and len(item.name) == 16 and all(char in "0123456789abcdef" for char in item.name)]
             return self._json(200, [self.server.get_job(item.name) for item in folders[:100]])
+        if method == "POST" and path == "/api/finite-element/exports":
+            body = self._body()
+            body["kind"] = "finite_element"
+            return self._json(201, self.server.create_job(body))
+        if method == "GET" and path == "/api/finite-element/exports":
+            folders = sorted((self.server.runtime / "jobs").iterdir(),
+                             key=lambda item: item.stat().st_mtime, reverse=True)
+            values = []
+            for item in folders:
+                if item.is_dir() and (item / "status.json").is_file() and len(item.name) == 16:
+                    state = self.server.get_job(item.name)
+                    if state.get("kind") == "finite_element":
+                        values.append(state)
+            return self._json(200, values[:100])
+        if len(parts) == 5 and parts[:3] == ["api", "finite-element", "exports"] and parts[4] == "stop" and method == "POST":
+            return self._json(200, self.server.stop(parts[3]))
+        if len(parts) == 4 and parts[:3] == ["api", "finite-element", "exports"] and method == "GET":
+            return self._json(200, self.server.get_job(parts[3]))
         if method == "POST" and path == "/api/uploads":
             return self._json(201, self.server.upload(query.get("name", [""])[0], self.rfile,
                                                     int(self.headers.get("Content-Length", "0"))))

@@ -115,4 +115,19 @@ export function resetSimulation(state, defaults) {
   state.parallelEnabled=multi?.parallel_enabled??fresh.parallelEnabled;
 }
 
+export function finiteElementDefaults() {
+  return {sourceJobId:'',sourceKind:'simulation',sourceFile:'',inputVariable:'',outputVariable:'F_filled',spaceZUm:25,gridSpacingMm:0.05,originXmm:0,originYmm:0,precision:'%.6f'};
+}
+
+export function finiteElementPayload(draft) {
+  const value={...finiteElementDefaults(),...(draft||{})};
+  if(!/^[0-9a-f]{16}$/.test(String(value.sourceJobId))) throw new Error('请选择已完成的源任务');
+  if(!['simulation','measured'].includes(value.sourceKind)) throw new Error('源数据类型无效');
+  for(const [key,label] of [['spaceZUm','Z向元胞尺寸'],['gridSpacingMm','XY网格间距']]) { const number=Number(value[key]); if(!Number.isFinite(number)||number<=0) throw new Error(`${label}必须是正数`); value[key]=number; }
+  for(const [key,label] of [['originXmm','X坐标原点'],['originYmm','Y坐标原点']]) { const number=Number(value[key]); if(!Number.isFinite(number)) throw new Error(`${label}必须是有限数值`); value[key]=number; }
+  if(!['Z_filled','F_filled'].includes(value.outputVariable)) throw new Error('输出变量只能是 Z_filled 或 F_filled');
+  if(!/^%\.\d{1,2}[feg]$/.test(value.precision)) throw new Error('输出精度应为 %.6f 这类格式');
+  return {source_job_id:value.sourceJobId,source_kind:value.sourceKind,source_file:value.sourceFile||undefined,input_variable:value.inputVariable||undefined,options:{output_variable:value.outputVariable,space_z_um:value.spaceZUm,grid_spacing_mm:value.gridSpacingMm,origin_x_mm:value.originXmm,origin_y_mm:value.originYmm,precision:value.precision}};
+}
+
 
