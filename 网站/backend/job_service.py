@@ -50,7 +50,7 @@ class JobService:
             if (status.get("state") in {"queued", "running"} and
                     status.get("pid") in {None, locked_pid} and process_alive(locked_pid)):
                 inherited[folder.name] = locked_pid
-                inherited_weights[folder.name] = 2 if status.get("kind") == "benchmark" else 1
+                inherited_weights[folder.name] = 2 if status.get("kind") in {"benchmark", "diagnostics"} else 1
         self.inherited_processes = inherited
         reserved = min(2, sum(inherited_weights.values()))
         for _ in range(reserved):
@@ -114,18 +114,90 @@ class JobService:
             raise FileNotFoundError("上传文件不存在")
         return record, folder / f"input{record['extension']}"
 
-    def create_job(self, payload: dict, *, launch=True):
+    def benchmark_spec(self, payload, *, retry_snapshot=None):
+        from .benchmark import prepare_benchmark
+        import numpy as np
+        value = copy.deepcopy(payload)
+        value.pop("initial_state_info", None)
+        value.pop("stage_number", None)
+        source = None
+        if retry_snapshot:
+            source = retry_snapshot["path"]
+            value["initial_state_info"] = retry_snapshot["info"]
+            value["stage_number"] = retry_snapshot["stage_number"]
+        elif value.get("source_job_id"):
+            source_id = self.validate_id(value["source_job_id"])
+            state = self.get_job(source_id)
+            stage = value.get("source_stage")
+            if isinstance(stage, bool) or not isinstance(stage, int) or not 1 <= stage <= 100000:
+                raise ValueError("source_stage 必须是有效阶段号")
+            if state.get("kind") != "simulation" or state.get("state") != "completed":
+                raise ValueError("初始表面必须来自已完成的模拟任务")
+            source = self.runtime / "jobs" / source_id / "outputs" / f"stage_{stage:03d}.npz"
+            if not source.is_file():
+                raise ValueError("源任务缺少所选阶段数值文件")
+            geometry = state.get("spec", {}).get("config", {}).get("GEOMETRY_CONFIG", {})
+            keys = ("grid_w", "grid_l", "grid_n", "space_xy_um", "space_z_um")
+            if any(key not in geometry for key in keys):
+                raise ValueError("源任务缺少完整几何配置，无法核对物理间距")
+            value["initial_state_info"] = {"source_job_id": source_id, "source_stage": stage,
+                                          "sha256": sha256(source),
+                                          "geometry": {key: geometry[key] for key in keys}}
+            value["stage_number"] = stage + 1
+        spec = prepare_benchmark(value)
+        if source:
+            geometry = spec["initial_state_info"].get("geometry", {})
+            current = spec["config"]["GEOMETRY_CONFIG"]
+            if any(geometry.get(key) != current.get(key) for key in ("space_xy_um", "space_z_um")):
+                raise ValueError("源阶段物理间距与本次配置不一致，请采用源网格与物理间距；不进行隐式重采样")
+            with np.load(source, allow_pickle=False) as data:
+                options = spec["options"]
+                expected = (options["grid_w"], options["grid_l"], options["grid_n"] + 1)
+                for key, shape in (("perfect_a", expected), ("perfect_d", expected), ("perfect_cl", expected[:2])):
+                    if key not in data or data[key].shape != shape or not np.issubdtype(data[key].dtype, np.number) or not np.isfinite(data[key]).all():
+                        raise ValueError(f"源阶段{key}形状/数值不匹配，请采用源网格；不进行隐式重采样")
+            if sha256(source) != spec["initial_state_info"]["sha256"]:
+                raise ValueError("源阶段文件已变化，请重新选择来源")
+            spec["initial_state_path"] = "inputs/initial_state.npz"
+            spec["scope_note"] = spec["scope_note"].replace("从初始状态开始", "从所选阶段的冻结状态开始")
+            spec["scope_note"] += f" 本次从源阶段{spec['stage_number'] - 1}的已冻结状态开始，按阶段{spec['stage_number']}规则评估。"
+        return spec, source
+
+    def retry_benchmark(self, job_id, payload):
+        previous = self.get_job(job_id)
+        if previous.get("kind") != "benchmark" or previous["state"] in {"running", "queued"}:
+            raise ValueError("只能对已结束的性能对比新建重试")
+        spec = previous["spec"]
+        failed = [row["mode"] for row in (previous.get("summary") or {}).get("rows", [])
+                  if row["state"] in {"failed", "unavailable", "timeout"}]
+        modes = payload.get("modes") or failed or spec["options"]["modes"]
+        value = {"kind": "benchmark", "config": copy.deepcopy(spec["config"]),
+                 "targets": [spec["target"]], "options": copy.deepcopy(spec["options"])}
+        value["options"].update(modes=modes, target_index=0)
+        snapshot = None
+        if spec.get("initial_state_path"):
+            snapshot = {"path": self.runtime / "jobs" / job_id / spec["initial_state_path"],
+                        "info": spec["initial_state_info"], "stage_number": spec["stage_number"]}
+        return self.create_job(value, benchmark_snapshot=snapshot, retry_of=job_id)
+
+    def create_job(self, payload: dict, *, launch=True, benchmark_snapshot=None, retry_of=None):
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark"}:
-            raise ValueError("任务类型必须为 simulation、pointcloud、finite_element 或 benchmark")
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics"}:
+            raise ValueError("任务类型无效")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
         if kind == "benchmark":
-            from .benchmark import prepare_benchmark
-            spec = prepare_benchmark(payload)
+            spec, benchmark_source = self.benchmark_spec(payload, retry_snapshot=benchmark_snapshot)
+            if retry_of:
+                spec["retry_of"] = retry_of
+        elif kind == "diagnostics":
+            timeout = payload.get("timeout_seconds", 30)
+            if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 30:
+                raise ValueError("诊断超时必须为1到30秒")
+            spec = {"kind": "diagnostics", "timeout_seconds": timeout}
         elif kind == "simulation":
             config = validate_simulation_config(copy.deepcopy(payload["config"]))
             run_mode = payload.get("run_mode", "staged")
@@ -225,6 +297,10 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "benchmark" and benchmark_source:
+                shutil.copy2(benchmark_source, job_dir / spec["initial_state_path"])
+                if sha256(job_dir / spec["initial_state_path"]) != spec["initial_state_info"]["sha256"]:
+                    raise ValueError("初始阶段快照冻结失败")
             if kind == "simulation" and source_info:
                 shutil.copy2(source, job_dir / "inputs" / f"target{source.suffix}")
                 spec["frozen_target_path"] = f"inputs/target{source.suffix}"
@@ -268,7 +344,7 @@ class JobService:
 
         def scheduled():
             try:
-                benchmark = current.get("kind") == "benchmark"
+                benchmark = current.get("kind") in {"benchmark", "diagnostics"}
                 # Benchmarks reserve both server slots; two concurrent benchmarks
                 # must not each hold one slot and wait forever for the other.
                 with self.benchmark_gate if benchmark else nullcontext():
@@ -359,9 +435,13 @@ class JobService:
         root = self.runtime / "jobs" / job_id / "outputs"
         if not root.is_dir():
             return []
-        return [{"name": path.relative_to(root).as_posix(), "bytes": path.stat().st_size}
+        files = [{"name": path.relative_to(root).as_posix(), "bytes": path.stat().st_size}
                 for path in sorted(root.rglob("*")) if path.is_file() and
                 path.resolve().is_relative_to(root.resolve()) and path.suffix != ".tmp"]
+        status = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+        if status.get("kind") == "benchmark" and (root / "summary.json").is_file() and not any(f["name"] == "benchmark_bundle.zip" for f in files):
+            files.append({"name": "benchmark_bundle.zip", "on_demand": True})
+        return files
 
     def resume(self, job_id):
         with self._job_lock:
@@ -395,14 +475,20 @@ class JobService:
                 self.pending_jobs.discard(job_id)
                 state.update(state="interrupted", error="已取消排队", updated_at=time.time())
             else:
-                if process is None or process.poll() is not None:
-                    raise ValueError("当前服务没有可停止的活动进程，请从原服务停止")
-                if os.name == "nt":
+                if process is None:
+                    from .process_control import verify_worker_process, stop_verified_process
+                    inherited = verify_worker_process(job_id, state, self.runtime / "jobs" / job_id,
+                                                      self.runtime, ROOT)
+                    stop_verified_process(inherited)
+                elif process.poll() is not None:
+                    raise ValueError("任务进程已结束")
+                elif os.name == "nt":
                     subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
                                    capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
                 else:
                     os.killpg(process.pid, signal.SIGTERM)
-                process.wait(timeout=20)
+                if process is not None:
+                    process.wait(timeout=20)
                 state.update(state="interrupted", error="用户停止任务，完整个体进度已保留",
                              updated_at=time.time())
                 if state.get("kind") == "benchmark":

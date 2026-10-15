@@ -41,11 +41,21 @@ def run_job(job_id: str, runtime: Path) -> None:
             "started_at": time.time(), "error": None})
     started = time.perf_counter()
     try:
+        import psutil
+        update({"process_created_at": psutil.Process().create_time()})
+    except (ImportError, OSError):
+        pass
+    try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
         elif spec["kind"] == "benchmark":
             from .benchmark_service import run_benchmark
             result = run_benchmark(spec, job_dir, progress=update)
+        elif spec["kind"] == "diagnostics":
+            from .benchmark_diagnostics import run_diagnostics
+            update({"phase": "diagnostics"})
+            result = run_diagnostics(job_dir / "outputs", spec.get("timeout_seconds", 30))
+            _atomic_json(job_dir / "outputs" / "summary.json", result)
         elif spec["kind"] == "pointcloud":
             reference = job_dir / "inputs" / ("reference" + spec["reference_extension"])
             detail = job_dir / "inputs" / ("detail" + spec["detail_extension"])

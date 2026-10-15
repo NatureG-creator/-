@@ -56,7 +56,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("请求数据必须是JSON对象")
         return value
 
-    def _file(self, path, *, download=False):
+    def _file(self, path, *, download=False, download_name=None):
         if not path.is_file():
             raise FileNotFoundError("文件不存在")
         with path.open("rb") as stream:
@@ -68,7 +68,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Content-Type-Options", "nosniff")
             if download:
                 self.send_header("Content-Disposition",
-                                 "attachment; filename*=UTF-8''" + urllib.parse.quote(path.name))
+                                 "attachment; filename*=UTF-8''" + urllib.parse.quote(download_name or path.name))
             self.end_headers()
             shutil.copyfileobj(stream, self.wfile, 1024 * 1024)
 
@@ -100,6 +100,19 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
             body["kind"] = "benchmark"
             return self._json(201, self.server.create_job(body))
+        if method == "POST" and path == "/api/benchmark-diagnostics":
+            body = self._body()
+            body["kind"] = "diagnostics"
+            return self._json(201, self.server.create_job(body))
+        if method == "POST" and path == "/api/benchmarks/precheck":
+            from .benchmark import build_variants
+            spec, _ = self.server.benchmark_spec(self._body())
+            return self._json(200, {"options": spec["options"], "variants": build_variants(spec),
+                "estimated_host_array_bytes": spec["estimated_host_array_bytes"], "estimated_work": spec["estimated_work"],
+                "stage_number": spec.get("stage_number", 1), "initial_state_info": spec.get("initial_state_info"),
+                "scope_note": spec["scope_note"], "issues": []})
+        if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "benchmarks"] and parts[3] == "retry":
+            return self._json(201, self.server.retry_benchmark(parts[2], self._body()))
         if path == "/api/sync":
             return self._json(200, sync_status() if method == "GET" else sync_website())
         if method == "POST" and path == "/api/config/validate":
@@ -208,7 +221,11 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 4 and parts[3] == "log" and method == "GET":
                 return self._json(200, {"text": self.server.log_tail(job_id)})
             if len(parts) >= 5 and parts[3] in {"download", "view"} and method == "GET":
-                self.server.get_job(job_id)
+                state = self.server.get_job(job_id)
+                if len(parts) == 5 and parts[4] == "benchmark_bundle.zip" and state.get("kind") == "benchmark":
+                    from .benchmark_archive import ensure_benchmark_bundle
+                    bundle = ensure_benchmark_bundle(folder)
+                    return self._file(bundle, download=True, download_name="benchmark_bundle.zip")
                 root = (folder / "outputs").resolve()
                 destination = (root / Path(*parts[4:])).resolve()
                 if not destination.is_relative_to(root):

@@ -103,7 +103,11 @@ class BenchmarkTests(unittest.TestCase):
             self.assertTrue(result["rows"][1]["comparison"]["exact"])
             self.assertEqual(result["rows"][0]["speedup"], 1.0)
             self.assertTrue((root / "outputs" / "benchmark_results.csv").is_file())
-            self.assertTrue((root / "outputs" / "benchmark_bundle.zip").is_file())
+            self.assertFalse((root / "outputs" / "benchmark_bundle.zip").exists())
+            from backend.benchmark_archive import ensure_benchmark_bundle
+            bundle = ensure_benchmark_bundle(root)
+            self.assertEqual(bundle.parent, root / "archives")
+            self.assertTrue(bundle.is_file())
             saved = json.loads((root / "outputs" / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["input_hash"], spec["input_hash"])
 
@@ -158,7 +162,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(state["state"], "completed", state.get("error"))
             self.assertEqual(state["summary"]["rows"][0]["state"], "completed")
 
-    def test_partial_report_has_downloadable_zip_before_final_mode(self):
+    def test_launch_failures_keep_partial_report_and_allow_on_demand_bundle(self):
         import zipfile
         from unittest.mock import patch
         from backend.benchmark_service import run_benchmark
@@ -166,9 +170,12 @@ class BenchmarkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             with patch("backend.benchmark_service.runtime_provenance", return_value={}), patch("backend.benchmark_service.subprocess.Popen", side_effect=RuntimeError("模拟关闭")):
-                with self.assertRaises(RuntimeError):
-                    run_benchmark(spec, root)
-            with zipfile.ZipFile(root / "outputs" / "benchmark_bundle.zip") as archive:
+                report = run_benchmark(spec, root)
+            self.assertEqual([row["state"] for row in report["rows"]], ["failed", "failed"])
+            self.assertTrue(all("模拟关闭" in row["reason"] for row in report["rows"]))
+            self.assertFalse((root / "archives").exists())
+            from backend.benchmark_archive import ensure_benchmark_bundle
+            with zipfile.ZipFile(ensure_benchmark_bundle(root)) as archive:
                 self.assertIn("summary.json", archive.namelist())
                 self.assertIn("benchmark_inputs.json", archive.namelist())
 
@@ -247,6 +254,74 @@ class BenchmarkTests(unittest.TestCase):
             handler._file(path)
             self.assertEqual(int(headers["Content-Length"]), len(handler.wfile.getvalue()))
             self.assertEqual(handler.wfile.getvalue(), b"old")
+
+
+class PhysicalFailureIsolationTests(unittest.TestCase):
+    def test_cleanup_lock_timeout_preserves_completed_report(self):
+        from unittest.mock import patch
+        from backend.benchmark import prepare_benchmark
+        from backend.benchmark_service import run_benchmark
+        value=request(['numpy_serial']); value['options']['retain_detail']=False
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('backend.benchmark_service.runtime_provenance',return_value={}), patch('backend.benchmark_service.subprocess.Popen',side_effect=OSError('trial failed')), patch('backend.benchmark_archive.benchmark_artifact_lock',side_effect=TimeoutError('archive busy')):
+                result=run_benchmark(prepare_benchmark(value),Path(folder))
+            self.assertIn('archive busy',result['detail_note'])
+            self.assertTrue((Path(folder)/'outputs'/'summary.json').is_file())
+
+    def test_physical_failure_preserves_numeric_comparison_and_speedup(self):
+        from unittest.mock import patch
+        from backend.benchmark import prepare_benchmark
+        from backend.benchmark_service import run_benchmark
+        from backend.runner import _atomic_json
+        class Finished:
+            returncode=0
+            pid=0
+            def poll(self): return 0
+        def launch(command, **kwargs):
+            mode,destination=command[-2:]
+            destination=Path(destination)
+            _atomic_json(destination/'trial.json',dict(mode=mode,state='completed',median_seconds=2. if mode=='numpy_serial' else 1.,samples_seconds=[1.]))
+            np.savez(destination/'arrays.npz',objv=np.zeros((2,6)),a=np.ones((2,5,6,5)),d=np.zeros((2,5,6,5)),cl=np.zeros((2,5,6)))
+            return Finished()
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('backend.benchmark_service.runtime_provenance',return_value={}), patch('backend.benchmark_service.subprocess.Popen',side_effect=launch), patch('backend.benchmark_analysis.physical_comparison',side_effect=RuntimeError('plot unavailable')):
+                result=run_benchmark(prepare_benchmark(request()),Path(folder))
+            parallel=next(row for row in result['rows'] if row['mode']=='numpy_parallel')
+            self.assertTrue(parallel['comparison']['exact'])
+            self.assertEqual(parallel['speedup'],2.)
+            self.assertIn('plot unavailable',parallel['physical_comparison_warning'])
+
+    def test_retain_detail_controls_arrays_after_successful_pairing(self):
+        from unittest.mock import patch
+        from backend.benchmark import prepare_benchmark
+        from backend.benchmark_service import run_benchmark
+        from backend.runner import _atomic_json
+        class Finished:
+            returncode=0
+            pid=0
+            def poll(self): return 0
+        def launch(command,**kwargs):
+            mode,destination=command[-2:]
+            destination=Path(destination)
+            _atomic_json(destination/'trial.json',dict(mode=mode,state='completed',median_seconds=1.,samples_seconds=[1.]))
+            arrays=dict(objv=np.zeros((2,6)),a=np.ones((2,5,6,5)),d=np.zeros((2,5,6,5)),cl=np.zeros((2,5,6)))
+            np.savez(destination/'arrays.npz',**arrays)
+            np.savez(destination/'first_arrays.npz',**arrays)
+            return Finished()
+        for retain in (False,True):
+            with self.subTest(retain=retain), tempfile.TemporaryDirectory() as folder:
+                value=request(); value['options']['retain_detail']=retain
+                with patch('backend.benchmark_service.runtime_provenance',return_value={}), patch('backend.benchmark_service.subprocess.Popen',side_effect=launch), patch('backend.benchmark_analysis.physical_comparison',return_value={'surface_depth':{'rmse_um':0.}}):
+                    result=run_benchmark(prepare_benchmark(value),Path(folder))
+                self.assertTrue(all(row['comparison']['exact'] for row in result['rows']))
+                self.assertTrue(all('speedup' in row and 'physical_comparison' in row for row in result['rows']))
+                for row in result['rows']:
+                    trial=Path(folder)/'outputs'/'trials'/row['variant_id']
+                    self.assertEqual((trial/'arrays.npz').exists(),retain)
+                    self.assertEqual((trial/'first_arrays.npz').exists(),retain)
+                    self.assertTrue((trial/'trial.json').is_file())
+                    self.assertTrue((trial/'trial_request.json').is_file())
+                self.assertIn('detail_note',result)
 
 
 if __name__ == "__main__":
