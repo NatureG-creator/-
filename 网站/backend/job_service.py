@@ -23,7 +23,7 @@ from .runner import _atomic_json
 from .system_info import ROOT, find_matlab, json_record, process_alive, sha256
 from .targets import inspect_target, load_targets
 
-UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx"}
+UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
@@ -184,12 +184,15 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension"}:
             raise ValueError("任务类型无效")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "benchmark":
+        if kind == "apdl_tension":
+            from .apdl_service import prepare_apdl
+            spec, apdl_sources = prepare_apdl(self,payload)
+        elif kind == "benchmark":
             spec, benchmark_source = self.benchmark_spec(payload, retry_snapshot=benchmark_snapshot)
             if retry_of:
                 spec["retry_of"] = retry_of
@@ -297,6 +300,9 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "apdl_tension":
+                from .apdl_service import freeze_apdl_sources
+                freeze_apdl_sources(apdl_sources,job_dir)
             if kind == "benchmark" and benchmark_source:
                 shutil.copy2(benchmark_source, job_dir / spec["initial_state_path"])
                 if sha256(job_dir / spec["initial_state_path"]) != spec["initial_state_info"]["sha256"]:

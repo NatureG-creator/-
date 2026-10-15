@@ -96,6 +96,19 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/health":
             return self._json(200, {"service": "corrosion-research-workbench", "version": VERSION,
                                    "site_root": str(ROOT), "capabilities": capabilities()})
+        if method == "GET" and path == "/api/apdl/presets":
+            from .apdl_presets import get_presets
+            return self._json(200,get_presets())
+        if method == "GET" and path == "/api/apdl/capabilities":
+            from .apdl_solver import mapdl_capabilities
+            return self._json(200,mapdl_capabilities())
+        if method == "POST" and path == "/api/apdl/precheck":
+            from .apdl_service import precheck_apdl
+            return self._json(200,precheck_apdl(self.server,self._body()))
+        if method == "POST" and path == "/api/apdl/jobs":
+            body=self._body()
+            body['kind']='apdl_tension'
+            return self._json(201,self.server.create_job(body))
         if method == "POST" and path == "/api/benchmarks":
             body = self._body()
             body["kind"] = "benchmark"

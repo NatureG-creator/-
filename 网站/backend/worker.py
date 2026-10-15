@@ -48,6 +48,9 @@ def run_job(job_id: str, runtime: Path) -> None:
     try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
+        elif spec["kind"] == "apdl_tension":
+            from .apdl_service import run_apdl_job
+            result=run_apdl_job(spec,job_dir,progress=update)
         elif spec["kind"] == "benchmark":
             from .benchmark_service import run_benchmark
             result = run_benchmark(spec, job_dir, progress=update)
