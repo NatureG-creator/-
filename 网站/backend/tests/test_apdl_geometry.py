@@ -6,6 +6,17 @@ from backend.apdl_geometry import build_geometry, normalise_options
 
 
 class APDLGeometryTests(unittest.TestCase):
+    def test_output_policy_survives_geometry_option_normalisation(self):
+        options = {'corrosion_mode': 'flat', 'result_save_mode': 'selected',
+                   'field_output_times': [.2, .8, 1]}
+        normalised = normalise_options(options)
+        self.assertEqual(normalised['result_save_mode'], 'selected')
+        self.assertEqual(normalised['field_output_times'], [.2, .8, 1])
+        g = build_geometry(None, None, options)
+        self.assertEqual(g['options']['field_output_times'], [.2, .8, 1])
+        with self.assertRaises(ValueError):
+            normalise_options({'result_save_mode': 'selected', 'field_output_times': [.8, .2, 1]})
+
     def test_double_face_remaining_and_non_square_axes(self):
         g = build_geometry(np.full((2, 3), .8), np.full((2, 3), .5), {
             'corrosion_mode': 'double_independent', 'dx_mm': 2, 'dy_mm': 3,

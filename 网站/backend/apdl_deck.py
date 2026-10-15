@@ -8,6 +8,10 @@ import zipfile
 
 import numpy as np
 
+from .apdl_diagnostics import diagnostics_for_geometry
+from .apdl_macros import (DIAGNOSTICS_SCHEMA_VERSION, diagnostic_macros,
+                          material_coverage_commands, output_commands)
+
 
 def _number(value: float) -> str:
     return format(float(value), '.17g')
@@ -70,6 +74,8 @@ def _post(geometry: dict) -> str:
         "(E19.11,5(',',E19.11))",
         '*ENDDO', '*CFCLOS', 'ALLSEL,ALL',
     ]
+    if o['material_model'] == 'multilinear_iso':
+        lines += material_coverage_commands()
     if o['export_full_field']:
         lines += [
             'SET,LAST', '*CFOPEN,nodal_results,csv',
@@ -148,8 +154,9 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
         '/SOLU', 'ANTYPE,STATIC,NEW', 'SOLCONTROL,ON', 'LNSRCH,1',
         'NLGEOM,'+('ON' if o['large_deflection'] else 'OFF'),
         'TIME,1', f"NSUBST,{o['substeps']},{o['max_substeps']},{o['min_substeps']}",
-        'AUTOTS,ON', 'KBC,0', 'OUTRES,ALL,ALL',
+        'AUTOTS,ON', 'KBC,0',
     ]
+    solve += output_commands(o)
     if o['restart_frequency']:
         solve += [f"RESCONTROL,DEFINE,ALL,{o['restart_frequency']}"]
     else:
@@ -157,11 +164,16 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
     solve += ['SOLVE', 'FINISH', 'SAVE']
     _ascii(output_dir/'solve.mac', '\n'.join(solve))
     _ascii(output_dir/'post.mac', _post(geometry))
+    for name, text in diagnostic_macros(geometry).items():
+        _ascii(output_dir/name, text)
+        files.append(name)
     _ascii(output_dir/'main.inp', '\n'.join([
         '! Generated geometry: N-mm-MPa. Inspect settings before research use.',
         '/CLEAR,START', '/FILNAME,corrosion', '/PREP7', 'ET,1,SOLID185',
-        '/INPUT,materials,mac', 'TYPE,1', 'MAT,1', '/INPUT,nodes,dat', '/INPUT,elements,dat',
-        'ALLSEL,ALL', 'CHECK', '/INPUT,boundary,mac', 'FINISH', 'SAVE',
+        '/INPUT,materials,mac', 'TYPE,1', 'MAT,1', 'SHPP,ON',
+        '/INPUT,nodes,dat', '/INPUT,elements,dat', 'ALLSEL,ALL',
+        '/INPUT,mesh_quality,mac', '/INPUT,mesh_self_check,mac',
+        '/INPUT,boundary,mac', '/INPUT,boundary_self_check,mac', 'FINISH', 'SAVE',
         '/INPUT,solve,mac', '/INPUT,post,mac', '/EXIT,NOSAVE',
     ]))
     _ascii(output_dir/'run_apdl.cmd', '\n'.join([
@@ -173,6 +185,10 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
         'set "MAPDL_CODE=%ERRORLEVEL%"', 'popd', 'exit /b %MAPDL_CODE%',
     ]))
     files += ['main.inp', 'materials.mac', 'boundary.mac', 'solve.mac', 'post.mac', 'run_apdl.cmd']
+    diagnostics = diagnostics_for_geometry(geometry)
+    (output_dir/'diagnostics_precheck.json').write_text(
+        json.dumps(diagnostics, ensure_ascii=False, indent=2), encoding='utf-8')
+    files.append('diagnostics_precheck.json')
     warnings = list(geometry['warnings'])
     try:
         _write_preview(output_dir/'geometry_preview.png', geometry)
@@ -196,11 +212,26 @@ legacy_recommended 模板保留原GitHub主宏的角点约束：固定端y最大
 多线性曲线要求首应变0、应变严格递增；负斜率需要明确允许并输出TBEO,NEGSLOPE,1，不擅自平滑原曲线。
 初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。
 
+diagnostics_precheck.json 仅包含输入推导的材料覆盖估算、Python网格几何预警和保存策略。
+diagnostics_schema_version=2；三个诊断宏及预检报告的SHA256记录于manifest.json。
+导入前SHPP,ON启用原默认单元形状检查；mesh_quality.mac保留CHECK并输出SHPP,STATUS/SUMMARY。
+mesh_self_check.mac验证实际节点/单元数量和连续编号范围，boundary_self_check.mac验证两端组件数量、端面位置及互不重叠。
+失败输出APDL_SELF_CHECK_FAILED并退出，不继续SOLVE；两阶段原始记录不等于科研结果验收。
+
+RST保存模式result_save_mode：all（默认）保留原OUTRES,ALL,ALL；last仅末子步保存完整元素场；selected按field_output_times保存。
+last/selected仍逐子步保存NSOL/RSOL以保留完整曲线，MISO的NLDAT也逐子步保存供材料筛查。
+TIME=1中的field_output_times是无量纲加载比例，不是物理秒；保存目标时刻或其后的首个收敛子步，不改变时间步。
+RST保存策略与export_full_field末步节点CSV导出独立；稀疏元素场不代表所有RST数据均只保存指定步。
+
 真实求解后才生成以下CSV（无表头）：
 force_displacement.csv：6列 time, displacement_mm, loaded_reaction_N, fixed_reaction_N, engineering_strain, nominal_stress_MPa。
 名义应力分母为原始 width*thickness，反力按约束节点求和保留符号；平衡检查看两端反力之和。
 nodal_results.csv（可选）：9列 id,x_mm,y_mm,z_mm,ux_mm,uy_mm,uz_mm,seqv_MPa,eqpl。
 SEQV/EPPL为平均节点值，不代表积分点峰值；弹性模型eqpl固定为0。
+apdl_self_check.csv：6列stage,node_count,element_count,fixed_count,loaded_count,passed；阶段1为网格，固定/加载数量均为-1；阶段2为边界实际数量。
+material_coverage_history.csv（仅MISO）：6列time,max_element_nodal_epeq,element_id,centroid_x,centroid_y,centroid_z。
+筛查逐结果集用ETABLE的NL,EPEQ,MAX元素节点代理；不是已核验积分点极值，未提示超表不能证明全部积分点覆盖。
+mesh_quality_report.txt是实际运行产生的MAPDL原始报告；文件存在不自动表示质量通过。生成输入包时不制造这些运行文件。
 MAPDL *VWRITE输出行上限128字符；曲线采用E19.11，节点编号F12.0及其余E13.5，避免9列被截断。
 完整原始输入保存在surface_inputs.npz和CSV，节点命令使用17位有效数字以保留双精度坐标。
 
@@ -213,6 +244,8 @@ SAVE模型及RESCONTROL重启动文件不代表任意断电点可自动恢复；
     files.append('README_zh.md')
     summary = dict(analysis='tension', build_state='built', options=o,
                    stats=geometry['stats'], provenance=provenance, warnings=warnings,
+                   diagnostics_schema_version=DIAGNOSTICS_SCHEMA_VERSION,
+                   diagnostics=diagnostics, output_policy=diagnostics['output_policy'],
                    files=files+['manifest.json', 'apdl_tension_input_bundle.zip'])
     manifest = dict(schema_version=1, **summary)
     manifest['files'] = {name: hashlib.sha256((output_dir/name).read_bytes()).hexdigest() for name in files}

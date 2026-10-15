@@ -9,6 +9,8 @@ import numbers
 
 import numpy as np
 
+from .apdl_diagnostics import normalise_output_options
+
 
 DEFAULTS = {
     'corrosion_mode': 'single_top', 'thickness_mm': 6., 'length_mm': 100.,
@@ -83,6 +85,7 @@ def normalise_options(options: dict) -> dict:
         if cleaned[0][0] != 0:
             raise ValueError('plastic_curve 首点塑性应变必须为 0。')
         result['plastic_curve'] = cleaned
+    result.update(normalise_output_options(options))
     return result
 
 

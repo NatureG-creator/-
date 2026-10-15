@@ -45,6 +45,9 @@ class ApdlApiTests(unittest.TestCase):
         code,preview=self.request('/api/apdl/precheck',payload)
         self.assertEqual(code,200)
         self.assertEqual(preview['stats']['node_count'],220)
+        self.assertEqual(preview['diagnostics']['mesh_quality']['status'],'precheck_only')
+        self.assertEqual(preview['diagnostics']['output_policy']['result_save_mode'],'all')
+        self.assertEqual(preview['diagnostics']['material_coverage']['status'],'not_applicable')
         with patch.object(self.server,'launch'):
             code,job=self.request('/api/apdl/jobs',payload)
         self.assertEqual(code,201)
@@ -54,8 +57,13 @@ class ApdlApiTests(unittest.TestCase):
         root=self.server.runtime/'jobs'/job['id']/'outputs'
         result=json.loads((root/'summary.json').read_text(encoding='utf-8'))
         self.assertEqual(result['solve_state'],'not_requested')
+        self.assertEqual(result['diagnostics_schema_version'],2)
+        self.assertEqual(result['diagnostics']['mesh_quality']['status'],'precheck_only')
+        self.assertEqual(result['diagnostics']['output_policy']['result_save_mode'],'all')
         self.assertTrue((root/'main.inp').is_file())
         self.assertFalse((root/'force_displacement.csv').exists())
+        for filename in ('apdl_self_check.csv','mesh_quality_report.txt','material_coverage_history.csv'):
+            self.assertFalse((root/filename).exists(),filename+' must only come from actual MAPDL')
 
     def test_double_faces_need_registration_and_match_and_freeze(self):
         buf=io.BytesIO(b'0,0.1,0.2\n0.3,0.4,0.5\n')

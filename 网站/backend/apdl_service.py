@@ -261,12 +261,17 @@ def prepare_apdl(service,payload):
 
 
 def precheck_apdl(service,payload):
+    from .apdl_diagnostics import diagnostics_for_geometry
     spec,_,geometry=_prepare(service,payload)
+    diagnostics=diagnostics_for_geometry(geometry)
+    warnings=list(geometry.get('warnings',[]))
+    for diagnostic in diagnostics.values():
+        warnings.extend(diagnostic.get('warnings',[]))
     preview={}
     for name in ('top_depth','bottom_depth','remaining'):
         array=geometry[name]
         preview[name]=array[::max(1,math.ceil(array.shape[0]/80)),::max(1,math.ceil(array.shape[1]/80))].tolist()
-    return dict(options=spec['options'],stats=geometry['stats'],warnings=geometry.get('warnings',[]),
+    return dict(options=spec['options'],stats=geometry['stats'],warnings=warnings,diagnostics=diagnostics,
                 faces={key:face['metadata'] for key,face in spec['faces'].items()},preview=preview,
                 units='N-mm-MPa',run_mode=spec['run_mode'],registration_confirmed=spec['registration_confirmed'],
                 registration_signature=spec['registration_signature'],

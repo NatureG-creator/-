@@ -18,6 +18,7 @@ import numpy as np
 
 from .apdl_geometry import normalise_options
 from .apdl_process import launch_owned
+from .apdl_reports import read_diagnostics_reports
 
 
 def mapdl_capabilities() -> dict:
@@ -63,8 +64,8 @@ def _stop_process_tree(process) -> dict:
 
 def _solver_errors(output: Path) -> list[str]:
     errors = []
-    pattern = re.compile(r'\*{3}\s*ERROR\s*\*{3}|SOLUTION\s+(?:DID\s+NOT\s+CONVERGE|NOT\s+CONVERGED)|UNCONVERGED\s+SOLUTION', re.I)
-    for name in ('mapdl.out', 'mapdl_launcher.log', 'corrosion.err'):
+    pattern = re.compile(r'\*{3}\s*ERROR\s*\*{3}|SOLUTION\s+(?:DID\s+NOT\s+CONVERGE|NOT\s+CONVERGED)|UNCONVERGED\s+SOLUTION|^\s*APDL_SELF_CHECK_FAILED(?:\b|,)', re.I)
+    for name in ('mapdl.out', 'mapdl_launcher.log', 'corrosion.err', 'mesh_quality_report.txt'):
         path = output/name
         if not path.is_file():
             continue
@@ -81,7 +82,9 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     old_names = [name for name in ('force_displacement.csv', 'nodal_results.csv', 'mapdl.out',
-                                  'mapdl_launcher.log', 'mapdl_execution.json', 'mapdl_process.json') if (output/name).exists()]
+                                  'mapdl_launcher.log', 'mapdl_execution.json', 'mapdl_process.json',
+                                  'apdl_self_check.csv', 'mesh_quality_report.txt',
+                                  'material_coverage_history.csv') if (output/name).exists()]
     old_names += [path.name for path in output.glob('corrosion.*') if path.is_file()]
     if old_names:
         raise ValueError('输出目录已有旧求解文件，拒绝覆盖或复用；请创建新任务：'+', '.join(old_names[:10]))
@@ -294,6 +297,10 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
     nodal_displacements = None
     nodal_summary = None
     files = ['force_displacement.csv', 'corrosion.rst']
+    reports = read_diagnostics_reports(output, stats, o, time_values, reference_nodes)
+    if reports is not None:
+        warnings.extend(reports['warnings'])
+        files.extend(reports['files'])
     if (output/'nodal_results.csv').exists():
         nodal = _read_csv(output/'nodal_results.csv', 9)
         ids = nodal[:, 0]
@@ -342,7 +349,8 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
         files.append('load_displacement.png')
     except Exception as exc:
         warnings.append(f'曲线预览失败但数值结果已保留：{type(exc).__name__}: {exc}')
-    return {'solve_state': 'solved', 'point_count': len(curve), 'curve': curve.tolist(),
+    return {**({'diagnostics': reports['diagnostics']} if reports is not None else {}),
+            'solve_state': 'solved', 'point_count': len(curve), 'curve': curve.tolist(),
             'validation_state': 'needs_review',
             'curve_columns': ['time', 'displacement_mm', 'loaded_reaction_n', 'fixed_reaction_n',
                               'engineering_strain', 'nominal_stress_mpa'],

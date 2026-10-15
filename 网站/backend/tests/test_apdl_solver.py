@@ -10,10 +10,32 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from backend.apdl_geometry import build_geometry
-from backend.apdl_solver import mapdl_capabilities, read_tension_results, run_mapdl
+from backend.apdl_solver import mapdl_capabilities, read_tension_results, run_mapdl, _solver_errors
 
 
 class APDLSolverTests(unittest.TestCase):
+    def test_custom_self_check_and_native_quality_errors_are_recognised(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            (folder/'mapdl.out').write_text('APDL_SELF_CHECK_FAILED,BOUNDARY_COUNT\n')
+            self.assertTrue(_solver_errors(folder))
+            (folder/'mapdl.out').write_text('normal solver log\n')
+            (folder/'mesh_quality_report.txt').write_text('*** ERROR *** invalid shape\n')
+            self.assertTrue(_solver_errors(folder))
+            (folder/'mesh_quality_report.txt').write_text('*** WARNING *** shape warning\n')
+            self.assertFalse(_solver_errors(folder))
+            (folder/'mapdl.out').write_text('/COM,APDL_SELF_CHECK_FAILED,MESH\n! APDL_SELF_CHECK_FAILED is only an input echo\n')
+            self.assertFalse(_solver_errors(folder),'input command echoes are not executed failure markers')
+
+    def test_old_diagnostics_are_never_reused_for_new_solver_launch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for name in ('apdl_self_check.csv','mesh_quality_report.txt','material_coverage_history.csv'):
+                path=Path(temp)/name
+                path.write_text('previous output')
+                with self.assertRaisesRegex(ValueError,'旧求解文件'):
+                    run_mapdl(Path(temp),{})
+                path.unlink()
+
     def fixture(self, folder, **options):
         setup = dict(corrosion_mode='flat', nx=2, ny=2, layers=1, export_full_field=False)
         setup.update(options)
@@ -219,6 +241,13 @@ class APDLSolverTests(unittest.TestCase):
             g, _ = self.fixture(out)
             create_tension_bundle(g, out, {})
             self.write_nodal_fixture(out, g)
+            # Synthetic software-contract fixture; this is not MAPDL evidence.
+            s, o = g['stats'], g['options']
+            grip = o['ny']*(o['layers']+1)
+            np.savetxt(out/'apdl_self_check.csv',
+                       [[1, s['node_count'], s['element_count'], -1, -1, 1],
+                        [2, s['node_count'], s['element_count'], grip, grip, 1]], delimiter=',')
+            (out/'mesh_quality_report.txt').write_text('Synthetic CHECK/SHPP report fixture\n')
             self.assertTrue((out/'nodes.dat').read_text().startswith('N,1,'))
             result = read_tension_results(out, g['stats'], g['options'])
             self.assertTrue(result['checks']['nodal_coordinates'])
