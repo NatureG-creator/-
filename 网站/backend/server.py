@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import shutil
 import tempfile
 import urllib.parse
@@ -58,15 +59,17 @@ class Handler(BaseHTTPRequestHandler):
     def _file(self, path, *, download=False):
         if not path.is_file():
             raise FileNotFoundError("文件不存在")
-        self.send_response(200)
-        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
-        self.send_header("Content-Length", str(path.stat().st_size))
-        self.send_header("X-Content-Type-Options", "nosniff")
-        if download:
-            self.send_header("Content-Disposition",
-                             "attachment; filename*=UTF-8''" + urllib.parse.quote(path.name))
-        self.end_headers()
         with path.open("rb") as stream:
+            # Reports are atomically replaced while jobs run. Bind both length
+            # and body to one open snapshot, rather than stat/open by pathname.
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(os.fstat(stream.fileno()).st_size))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if download:
+                self.send_header("Content-Disposition",
+                                 "attachment; filename*=UTF-8''" + urllib.parse.quote(path.name))
+            self.end_headers()
             shutil.copyfileobj(stream, self.wfile, 1024 * 1024)
 
     def _origin_allowed(self):
@@ -93,6 +96,10 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/health":
             return self._json(200, {"service": "corrosion-research-workbench", "version": VERSION,
                                    "site_root": str(ROOT), "capabilities": capabilities()})
+        if method == "POST" and path == "/api/benchmarks":
+            body = self._body()
+            body["kind"] = "benchmark"
+            return self._json(201, self.server.create_job(body))
         if path == "/api/sync":
             return self._json(200, sync_status() if method == "GET" else sync_website())
         if method == "POST" and path == "/api/config/validate":

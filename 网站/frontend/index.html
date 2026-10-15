@@ -9,6 +9,7 @@
   <nav class="tabs" aria-label="工作区导航">
     <button class="tab active" data-panel="pointcloud-panel" aria-current="page"><span class="nav-icon">◈</span><span>实测点云<small>预处理与六指标</small></span><span class="nav-number">01</span></button>
     <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
+    <button class="tab" data-panel="benchmark-panel"><span class="nav-icon">▥</span><span>性能对比<small>固定种群 · 后端验证</small></span><span class="nav-number">02+</span></button>
     <button class="tab" data-panel="finite-element-panel"><span class="nav-icon">△</span><span>有限元耦合<small>形貌 → APDL 输入包</small></span><span class="nav-number">03</span></button>
     <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">04</span></button>
     <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">05</span><span class="count" id="job-count">0</span></button>
@@ -48,6 +49,7 @@
     <div class="card precheck-card"><div class="card-heading"><div><h3>资源与依赖预检</h3><p>预估只代表资源需求；实际后端与耗时以任务结果为准。</p></div><button id="validate-config" class="button secondary">检查当前配置</button></div><div id="resource-preview" class="preview">尚未检查。提交前会自动重新验证参数与依赖。</div></div>
     <div class="action-bar"><div><strong id="run-label">准备运行腐蚀演化</strong><small id="submit-help">严格模式：两个 GA 配置均为单进程，Taichi 关闭</small></div><button id="run-simulation" class="button primary" disabled>运行腐蚀模拟 <span aria-hidden="true">→</span></button></div><div id="sim-message" class="message" role="status" aria-live="polite" hidden></div>
   </section>
+  <section id="benchmark-panel" class="panel" aria-label="性能对比"></section>
   <section id="finite-element-panel" class="panel" aria-labelledby="finite-element-heading">
     <div class="section-heading"><div><div class="section-overline">03 / FINITE ELEMENT COUPLING</div><h2 id="finite-element-heading">腐蚀形貌 → APDL 输入包</h2><p>选择已完成的 CA–GA 或实测表面任务，生成可追溯的 MAT、CSV、坐标和 ZIP 输入包。</p></div><span class="badge" id="fe-capability">本地导出器</span></div>
     <div class="card settings-card"><div class="grid four"><div class="field"><label for="fe-source-job">已完成源任务</label><select id="fe-source-job"><option value="">正在读取运行记录…</option></select></div><div class="field"><label for="fe-source-kind">来源类型</label><select id="fe-source-kind"><option value="simulation">CA–GA 模拟形貌</option><option value="measured">实测表面 MAT</option></select></div><div class="field"><label for="fe-input-variable">输入变量（实测）</label><select id="fe-input-variable"><option value="">自动识别 Z_filled / F_filled</option><option value="Z_filled">Z_filled</option><option value="F_filled">F_filled</option></select></div><div class="field"><label for="fe-source-file">实测文件名（可选）</label><input id="fe-source-file" type="text" placeholder="默认扫描源任务 outputs/*.mat"></div></div><p id="fe-source-help" class="help-line">simulation 使用最终 perfect_a 的第一层金属提取规则；measured 保留原二维矩阵，不做隐式重采样。</p></div>
@@ -60,4 +62,3 @@
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
 </main></div><script type="module" src="/app.js"></script>
 </body></html>
-

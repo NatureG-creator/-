@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import uuid
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
 
 from .config import validate_simulation_config, validate_targets
@@ -34,10 +35,12 @@ class JobService:
         self.processes: dict[str, subprocess.Popen] = {}
         self._job_lock = threading.RLock()
         self.compute_slots = threading.BoundedSemaphore(2)
+        self.benchmark_gate = threading.Lock()
         self.pending_jobs = set()
         self._launching_jobs = {}
         # 服务退出不等于独立计算进程退出；接管现存任务的并发占用。
         inherited = {}
+        inherited_weights = {}
         for folder in (self.runtime / "jobs").iterdir():
             status = json_record(folder / "status.json", {})
             try:
@@ -47,8 +50,9 @@ class JobService:
             if (status.get("state") in {"queued", "running"} and
                     status.get("pid") in {None, locked_pid} and process_alive(locked_pid)):
                 inherited[folder.name] = locked_pid
+                inherited_weights[folder.name] = 2 if status.get("kind") == "benchmark" else 1
         self.inherited_processes = inherited
-        reserved = min(2, len(inherited))
+        reserved = min(2, sum(inherited_weights.values()))
         for _ in range(reserved):
             self.compute_slots.acquire(blocking=False)
         if inherited:
@@ -58,7 +62,7 @@ class JobService:
                     for job_id, pid in list(inherited.items()):
                         if not process_alive(pid):
                             inherited.pop(job_id, None)
-                    required = min(2, len(inherited))
+                    required = min(2, sum(inherited_weights[job_id] for job_id in inherited))
                     while remaining_reserved > required:
                         self.compute_slots.release()
                         remaining_reserved -= 1
@@ -114,12 +118,15 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element"}:
-            raise ValueError("任务类型必须为 simulation、pointcloud 或 finite_element")
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark"}:
+            raise ValueError("任务类型必须为 simulation、pointcloud、finite_element 或 benchmark")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "simulation":
+        if kind == "benchmark":
+            from .benchmark import prepare_benchmark
+            spec = prepare_benchmark(payload)
+        elif kind == "simulation":
             config = validate_simulation_config(copy.deepcopy(payload["config"]))
             run_mode = payload.get("run_mode", "staged")
             source_info = None
@@ -261,19 +268,25 @@ class JobService:
 
         def scheduled():
             try:
-                with self.compute_slots:
-                    with self._job_lock:
-                        if self._launching_jobs.get(job_id) != token:
-                            return
-                        process = self._start_process(job_id)
-                    if process is not None:
-                        process.wait()
+                benchmark = current.get("kind") == "benchmark"
+                # Benchmarks reserve both server slots; two concurrent benchmarks
+                # must not each hold one slot and wait forever for the other.
+                with self.benchmark_gate if benchmark else nullcontext():
+                    with ExitStack() as slots:
+                        for _ in range(2 if benchmark else 1):
+                            slots.enter_context(self.compute_slots)
+                        with self._job_lock:
+                            if self._launching_jobs.get(job_id) != token:
+                                return
+                            process = self._start_process(job_id)
+                        if process is not None:
+                            process.wait()
             except Exception as exc:
                 with self._job_lock:
                     if self._launching_jobs.get(job_id) == token:
-                        current = json_record(self.runtime / "jobs" / job_id / "status.json", {})
-                        current.update(state="failed", error=str(exc), updated_at=time.time())
-                        _atomic_json(self.runtime / "jobs" / job_id / "status.json", current)
+                        failed_state = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+                        failed_state.update(state="failed", error=str(exc), updated_at=time.time())
+                        _atomic_json(self.runtime / "jobs" / job_id / "status.json", failed_state)
             finally:
                 with self._job_lock:
                     if self._launching_jobs.get(job_id) == token:
@@ -335,7 +348,8 @@ class JobService:
                 "validated": False}
             state["progress"] = {key: state.get(key) for key in (
                 "stage", "generation", "completed_individuals", "total_individuals", "phase",
-                "stages_completed", "total_stages")}
+                "stages_completed", "total_stages", "benchmark_mode", "label",
+                "completed_modes", "total_modes")}
             if state["state"] == "running":
                 state["elapsed_seconds"] = round(time.time() - state.get("started_at", state["created_at"]), 2)
             return state
@@ -391,6 +405,10 @@ class JobService:
                 process.wait(timeout=20)
                 state.update(state="interrupted", error="用户停止任务，完整个体进度已保留",
                              updated_at=time.time())
+                if state.get("kind") == "benchmark":
+                    from .benchmark_service import cancel_report
+                    cancel_report(self.runtime / "jobs" / job_id, state.get("benchmark_mode"))
+                    state["error"] = "测速已停止，已完成方案及报告已保留；未完成方案不支持恢复"
             persisted = {key: value for key, value in state.items() if key not in {
                 "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}}
             _atomic_json(self.runtime / "jobs" / job_id / "status.json", persisted)
