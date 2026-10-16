@@ -27,8 +27,10 @@ METRIC_HELP=[
 def fitting_catalog():
     from .fitting_engine import model_catalog, normalise_fit_options
     from .fitting_outputs import normalise_plot_options
-    return dict(models=model_catalog(),metrics=[dict(id=i,label=l,help=h) for i,l,h in METRIC_HELP],
+    from .fitting_multivariate import multivariate_model_catalog, normalise_multivariate_options
+    return dict(models=model_catalog(), multivariate_models=multivariate_model_catalog(), metrics=[dict(id=i,label=l,help=h) for i,l,h in METRIC_HELP],
                 defaults=normalise_fit_options({}),plot_defaults=normalise_plot_options({}),
+                multivariate_defaults=normalise_multivariate_options({}),
                 limits=dict(rows=5000,columns=64,groups=10,bytes=MAX_BYTES),
                 origin=dict(state='export_only',note='提供Origin数据包与外部originpro导入脚本；本机Origin联动尚未验证。'))
 
@@ -84,7 +86,32 @@ def _prepare(service,payload):
     return spec,table,dataset,path
 
 
+def _prepare_multivariate(service, payload):
+    from .fitting_data import prepare_multivariate_dataset
+    from .fitting_multivariate import normalise_multivariate_options
+    from .fitting_outputs import normalise_plot_options
+    started = time.perf_counter()
+    table, info, path = _source_table(service, payload.get('source', {}))
+    selection = payload.get('selection', {})
+    dataset = prepare_multivariate_dataset(table, selection)
+    options = normalise_multivariate_options(payload.get('options', {}))
+    plot = normalise_plot_options(payload.get('plot', {}))
+    warnings = ['双自变量图形默认展示三维响应面、切片和残差；外推区域不代表物理规律。']
+    spec = dict(kind='fitting', fitting_mode='multivariate2', selection=selection, options=options, plot=plot, source=info,
+                reading_seconds=time.perf_counter() - started, warnings=warnings)
+    return spec, table, dataset, path
+
+
 def precheck_fitting(service,payload):
+    if payload.get('mode') == 'multivariate2' or payload.get('selection', {}).get('mode') == 'multivariate2':
+        spec, _, dataset, _ = _prepare_multivariate(service, payload)
+        from .fitting_multivariate import profile_multivariate_data
+        profile = profile_multivariate_data(dataset, [dataset['x1_label'], dataset['x2_label'], dataset['y_label']])
+        return dict(mode='multivariate2', dataset=dict(row_count=len(dataset['y']), group_count=len(set(dataset['groups'])),
+                    x1_range=[min(dataset['x1']), max(dataset['x1'])], x2_range=[min(dataset['x2']), max(dataset['x2'])],
+                    y_range=[min(dataset['y']), max(dataset['y'])], audit=dataset['audit'], x1_label=dataset['x1_label'], x2_label=dataset['x2_label'], y_label=dataset['y_label']),
+                    options=spec['options'], plot=spec['plot'], source=spec['source'], warnings=spec['warnings'], reading_seconds=spec['reading_seconds'],
+                    recommendation=dict(metric='cv_rmse', reason='双自变量默认使用原Y单位交叉验证RMSE，并优先比较交互项和二次响应面。'), profile=profile)
     spec,_,dataset,_=_prepare(service,payload)
     options=spec['options']
     recommendation=dict(metric='cv_mae' if options['loss']=='soft_l1' else 'cv_rmse',validation=options['validation'],
@@ -100,6 +127,9 @@ def precheck_fitting(service,payload):
 
 
 def prepare_fitting(service,payload):
+    if payload.get('mode') == 'multivariate2' or payload.get('selection', {}).get('mode') == 'multivariate2':
+        spec, table, _, path = _prepare_multivariate(service, payload)
+        return spec, table, path, payload.get('source', {}).get('text')
     spec,table,_,path=_prepare(service,payload)
     return spec,table,path,payload.get('source',{}).get('text')
 
@@ -116,6 +146,8 @@ def freeze_fitting(spec,table,path,text,job_dir):
 
 
 def run_fitting(spec,job_dir,progress=None):
+    if spec.get('fitting_mode') == 'multivariate2':
+        return run_multivariate_fitting(spec, job_dir, progress=progress)
     from .fitting_engine import fit_dataset
     from .fitting_outputs import write_fitting_outputs
     started=time.perf_counter();timing=dict(reading_seconds=spec['reading_seconds'])
@@ -155,4 +187,36 @@ def run_fitting(spec,job_dir,progress=None):
             if p.is_file() and p.name!='fitting_bundle.zip':bundle.write(p,p.name)
         for p in sorted((job_dir/'inputs').iterdir()):
             if p.is_file():bundle.write(p,'inputs/'+p.name)
+    return result
+
+
+def run_multivariate_fitting(spec, job_dir, progress=None):
+    import platform
+    from .fitting_data import prepare_multivariate_dataset
+    from .fitting_multivariate import fit_multivariate_dataset
+    from .fitting_multivariate_outputs import write_multivariate_outputs
+    started = time.perf_counter()
+    table_path = job_dir / spec['table_path']
+    if sha256(table_path) != spec['table_sha256'] or sha256(job_dir / spec['source_path']) != spec['source']['sha256']:
+        raise ValueError('冻结数据校验失败，拒绝计算')
+    dataset = prepare_multivariate_dataset(json.loads(table_path.read_text(encoding='utf-8')), spec['selection'])
+    output = job_dir / 'outputs'; output.mkdir(exist_ok=True)
+    _atomic_json(output / 'input_audit.json', dataset['audit'])
+    _atomic_json(output / 'fitting_config.json', dict(mode='multivariate2', selection=spec['selection'], options=spec['options'], plot=spec['plot'], source=spec['source']))
+    def update(changes):
+        if progress: progress(dict(changes, progress=100 * changes.get('progress', 0)))
+    result = fit_multivariate_dataset(dataset, spec['options'], progress=update)
+    outputs = write_multivariate_outputs(result, dataset, output, spec['plot'])
+    timing = dict(reading_seconds=spec['reading_seconds'], fitting_seconds=time.perf_counter() - started)
+    result.update(outputs)
+    result.update(kind='fitting', fitting_mode='multivariate2', job_id=job_dir.name, selection=spec['selection'], options=spec['options'], plot=spec['plot'], source=spec['source'], input_audit=dataset['audit'], timing=timing,
+                  warnings=spec['warnings'] + result.get('warnings', []), versions=dict(python=platform.python_version()), scope_note='双自变量 Y=f(X1,X2)；支持二元线性、交互项和二次响应面，结果不替代物理模型。')
+    _atomic_json(output / 'summary.json', result)
+    files = [dict(name=p.name, sha256=sha256(p)) for p in sorted(output.iterdir()) if p.is_file() and p.name not in {'manifest.json', 'fitting_bundle.zip'}]
+    _atomic_json(output / 'manifest.json', dict(schema_version=1, kind='fitting', fitting_mode='multivariate2', files=files))
+    with zipfile.ZipFile(output / 'fitting_bundle.zip', 'w', zipfile.ZIP_DEFLATED) as bundle:
+        for p in sorted(output.iterdir()):
+            if p.is_file() and p.name != 'fitting_bundle.zip': bundle.write(p, p.name)
+        for p in sorted((job_dir / 'inputs').iterdir()):
+            if p.is_file(): bundle.write(p, 'inputs/' + p.name)
     return result

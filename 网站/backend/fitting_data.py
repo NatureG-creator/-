@@ -172,3 +172,50 @@ def prepare_dataset(table,selection):
         if not isinstance(value,str) or len(value)>120:raise ValueError('坐标名称和单位必须是120字以内文本')
         data[key]=value
     return data
+
+
+def prepare_multivariate_dataset(table, selection):
+    """Prepare ``X1, X2, Y`` without changing the established X/Y contract."""
+    if not isinstance(selection, dict):
+        raise ValueError('selection必须是对象')
+    count = len(table['columns'])
+    x1i = _index(selection, 'x1_column', count, True)
+    x2i = _index(selection, 'x2_column', count, True)
+    yi = _index(selection, 'y_column', count, True)
+    if len({x1i, x2i, yi}) != 3:
+        raise ValueError('X1、X2和Y必须选择三个不同列')
+    gi = _index(selection, 'group_column', count)
+    policy = selection.get('missing_policy', 'reject')
+    if policy not in {'reject', 'drop'}:
+        raise ValueError('缺失值策略无效')
+    excluded = selection.get('exclude_rows', [])
+    if not isinstance(excluded, list) or any(type(v) is not int or not 1 <= v <= len(table['rows']) for v in excluded):
+        raise ValueError('排除行必须是有效的1起始数据行号（不含表头）')
+    data = dict(x1=[], x2=[], y=[], groups=[], row_ids=[])
+    audit = dict(original_rows=len(table['rows']), excluded_rows=sorted(set(excluded)), invalid_rows=[])
+    categories = table.get('category_rows', table['rows'])
+    for i, row in enumerate(table['rows'], 1):
+        if i in excluded:
+            continue
+        invalid = not _finite(row[x1i]) or not _finite(row[x2i]) or not _finite(row[yi]) or (gi is not None and categories[i - 1][gi] is None)
+        if invalid:
+            audit['invalid_rows'].append(i)
+            if policy == 'reject':
+                raise ValueError(f'第{i}行X1/X2/Y不是有限数或分类缺失；可选择显式剔除并记录')
+            continue
+        data['x1'].append(row[x1i]); data['x2'].append(row[x2i]); data['y'].append(row[yi]); data['row_ids'].append(i)
+        data['groups'].append(str(categories[i - 1][gi]) if gi is not None else '全部数据')
+    if len(data['y']) < 3:
+        raise ValueError('清理后至少需要3个有效数据点')
+    if len(set(data['groups'])) > 10:
+        raise ValueError('每次最多10个分类组')
+    data['audit'] = audit
+    audit['retained_rows'] = len(data['y'])
+    audit['duplicate_x_count'] = len(data['y']) - len(set(zip(data['groups'], data['x1'], data['x2'])))
+    data['x1_label'] = selection.get('x1_label') or table['columns'][x1i]
+    data['x2_label'] = selection.get('x2_label') or table['columns'][x2i]
+    data['y_label'] = selection.get('y_label') or table['columns'][yi]
+    for key in ('x1_label', 'x2_label', 'y_label'):
+        if not isinstance(data[key], str) or len(data[key]) > 120:
+            raise ValueError('坐标名称必须是120字以内文本')
+    return data
