@@ -218,9 +218,9 @@ diagnostics_schema_version=2；三个诊断宏及预检报告的SHA256记录于m
 mesh_self_check.mac验证实际节点/单元数量和连续编号范围，boundary_self_check.mac验证两端组件数量、端面位置及互不重叠。
 失败输出APDL_SELF_CHECK_FAILED并退出，不继续SOLVE；两阶段原始记录不等于科研结果验收。
 
-RST保存模式result_save_mode：all（默认）保留原OUTRES,ALL,ALL；last仅末子步保存完整元素场；selected按field_output_times保存。
+RST保存模式result_save_mode：all（默认）保留原OUTRES,ALL,ALL；last仅末子步保存完整元素场；selected目前兼容回退完整保存。
 last/selected仍逐子步保存NSOL/RSOL以保留完整曲线，MISO的NLDAT也逐子步保存供材料筛查。
-TIME=1中的field_output_times是无量纲加载比例，不是物理秒；保存目标时刻或其后的首个收敛子步，不改变时间步。
+TIME=1中的field_output_times是无量纲加载比例，不是物理秒；selected比例只记录请求，不减少RST体积。MAPDL不允许关键时刻数组与逐子步频率混用，因此优先保留完整曲线，不改变时间步。
 RST保存策略与export_full_field末步节点CSV导出独立；稀疏元素场不代表所有RST数据均只保存指定步。
 
 真实求解后才生成以下CSV（无表头）：

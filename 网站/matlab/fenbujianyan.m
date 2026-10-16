@@ -2,6 +2,12 @@ function fenbujianyan(data, cfg)
 if nargin < 2 || isempty(cfg)
     cfg = step00_corrosion_config();
 end
+% 无法估计分布时保留形貌和数值导出，不构造不存在的拟合。
+if numel(data)<2 || any(~isfinite(data(:))) || max(data(:))==min(data(:))
+    warning('distribution:InsufficientSamples', ...
+        '有效且非恒定的样本不足，跳过分布拟合；原始样本及不可校准原因仍保存。');
+    return;
+end
 % 导入数据
 % 可视化数据分布
 

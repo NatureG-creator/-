@@ -78,18 +78,16 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
 
 
 def output_commands(options: dict) -> list[str]:
-    """Save each curve substep while allowing sparse element field records."""
+    """Keep curve history; selected-time requests safely use full output."""
     policy = normalise_output_options(options)
     if policy['result_save_mode'] == 'all':
         return ['OUTRES,ALL,ALL']
+    if policy['result_save_mode'] == 'selected':
+        # MAPDL 2025 R2 rejects mixing key-time arrays with ALL frequency.
+        # Preserve every curve/material sample without changing solver stepping.
+        return ['OUTRES,ALL,ALL']
     lines = ['OUTRES,ALL,NONE', 'OUTRES,NSOL,ALL', 'OUTRES,RSOL,ALL']
-    if policy['result_save_mode'] == 'last':
-        lines.append('OUTRES,ESOL,LAST')
-    else:
-        times = policy['field_output_times']
-        lines.append(f'*DIM,field_times,ARRAY,{len(times)}')
-        lines += [f'field_times({i})={_number(value)}' for i, value in enumerate(times, 1)]
-        lines.append('OUTRES,ESOL,%field_times%')
+    lines.append('OUTRES,ESOL,LAST')
     # ESOL includes NLDAT: override it afterwards so material screening has every set.
     if options['material_model'] == 'multilinear_iso':
         lines.append('OUTRES,NLDAT,ALL')

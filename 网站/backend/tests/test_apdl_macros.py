@@ -104,19 +104,17 @@ class APDLMacroTests(unittest.TestCase):
                             material_model='multilinear_iso', plastic_curve=ORIGINAL_CURVE,
                             allow_negative_slope=True)
                 solve = (out/'solve.mac').read_text()
+                if mode == 'selected':
+                    self.assertIn('OUTRES,ALL,ALL', solve)
+                    self.assertNotIn('OUTRES,ESOL,%field_times%', solve)
+                    self.assertNotIn('*DIM,field_times', solve)
+                    continue
                 for command in ('OUTRES,ALL,NONE', 'OUTRES,NSOL,ALL', 'OUTRES,RSOL,ALL',
                                 'OUTRES,NLDAT,ALL'):
                     self.assertIn(command, solve)
                 self.assertNotIn('OUTRES,ALL,ALL', solve)
                 self.assertLess(solve.index('OUTRES,ESOL,'), solve.index('OUTRES,NLDAT,ALL'))
-                if mode == 'last':
-                    self.assertIn('OUTRES,ESOL,LAST', solve)
-                else:
-                    self.assertIn('*DIM,field_times,ARRAY,3', solve)
-                    self.assertIn('field_times(1)=0.20000000000000001', solve)
-                    self.assertIn('field_times(2)=0.59999999999999998', solve)
-                    self.assertIn('field_times(3)=1', solve)
-                    self.assertIn('OUTRES,ESOL,%field_times%', solve)
+                self.assertIn('OUTRES,ESOL,LAST', solve)
 
     def test_miso_history_is_element_nodal_proxy_with_all_sets_and_own_six_column_csv(self):
         with tempfile.TemporaryDirectory() as directory:

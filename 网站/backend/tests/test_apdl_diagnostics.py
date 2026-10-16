@@ -18,12 +18,14 @@ class APDLDiagnosticsTests(unittest.TestCase):
     def test_output_defaults_and_each_save_mode(self):
         self.assertEqual(diagnostics.normalise_output_options({}), {
             'result_save_mode': 'all', 'field_output_times': [.25, .5, .75, 1.]})
-        for mode, active in [('all', []), ('last', [1.]), ('selected', [.25, .5, .75, 1.])]:
+        for mode, active in [('all', []), ('last', [1.]), ('selected', [])]:
             summary = diagnostics.output_policy_summary({'result_save_mode': mode})
             self.assertEqual(summary['result_save_mode'], mode)
             self.assertEqual(summary['active_field_output_times'], active)
             self.assertEqual(summary['curve_output'], 'all_substeps')
             self.assertEqual(summary['time_basis'], 'load_fraction')
+            self.assertEqual(summary['effective_result_save_mode'], 'all' if mode == 'selected' else mode)
+            self.assertEqual(summary['compatibility_fallback'], mode == 'selected')
         summary = diagnostics.output_policy_summary({'material_model': 'multilinear_iso'})
         self.assertEqual(summary['nldat_output'], 'all_substeps')
 

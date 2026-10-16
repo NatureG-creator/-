@@ -67,17 +67,19 @@ def output_policy_summary(options: dict) -> dict:
     mode = normalized['result_save_mode']
     return dict(
         **normalized,
-        active_field_output_times=(list(normalized['field_output_times']) if mode == 'selected'
-                                   else [1.] if mode == 'last' else []),
+        active_field_output_times=([1.] if mode == 'last' else []),
         curve_output='all_substeps',
         nldat_output=('all_substeps' if options.get('material_model') == 'multilinear_iso'
                       else 'not_applicable'),
-        field_output='all_substeps' if mode == 'all' else mode,
+        field_output='all_substeps' if mode in {'all','selected'} else mode,
+        effective_result_save_mode='all' if mode=='selected' else mode,
+        compatibility_fallback=(mode=='selected'),
         time_basis='load_fraction',
         export_full_field=options.get('export_full_field', True),
         warnings=[
             'TIME=1 静力加载步中的比例是无量纲加载比例，不是物理秒。',
-            '指定比例保存目标时刻或其后的首个收敛子步，不强迫求解器改变时间步。',
+            ('MAPDL不支持关键时刻数组与逐子步输出混用；指定比例模式当前回退完整保存，比例仅保留为请求记录，不减少RST体积。'
+             if mode=='selected' else '结果保存不改变加载与求解子步设置。'),
             'RST 场保存策略与末步 nodal_results.csv 导出是独立选项；曲线保留全部子步。',
         ],
     )
