@@ -26,6 +26,14 @@ test('模拟继承真实间距，阶段使用整数',()=>{
  const d=apdlDefaults();d.options.corrosion_mode='single_top';d.top={source_kind:'simulation',source_job_id:'abc',source_stage:'2',mapping:{dx_mm:'0.3',dy_mm:'0.3',layout:'auto'}};
  const p=buildApdlPayload(d,'build');assert.equal(p.top_source.source_stage,2);assert.equal(p.top_source.mapping.dx_mm,undefined);assert.equal(p.top_source.mapping.dy_mm,undefined);assert.equal(p.top_source.mapping.origin_x_mm,undefined);assert.equal(p.top_source.mapping.origin_y_mm,undefined);
 });
+test('MATLAB XYZ 坐标来源要求三个文件并提交方向',()=>{
+ const d=apdlDefaults();d.options.corrosion_mode='single_top';d.top.origin='coordinates';d.top.source_kind='coordinates';d.top.coordinate_uploads={x:'ux',y:'uy',z:'uz'};d.top.coordinate_direction='front';
+ const p=buildApdlPayload(d,'build');assert.deepEqual(p.top_source.coordinate_uploads,{x:'ux',y:'uy',z:'uz'});assert.equal(p.top_source.coordinate_direction,'front');assert.equal(p.top_source.mapping && Object.keys(p.top_source.mapping).length,0);
+ d.top.coordinate_uploads={x:'ux',y:'uy'};assert.throws(()=>buildApdlPayload(d,'build'),/完整上传/);
+});
+test('坐标来源切回任务时清除坐标上传并恢复普通来源',()=>{
+ const state=apdl.createApdlDraftState(),d=state.draft;state.update('source','origin','coordinates','top');d.top.coordinate_uploads={x:'x',y:'y',z:'z'};state.update('source','origin','task','top');assert.equal(d.top.source_kind,'simulation');assert.equal(d.top.coordinate_uploads,undefined);
+});
 test('独立双面要求配准并保留实测映射与文件',()=>{
  const d=apdlDefaults();d.options.corrosion_mode='double_independent';d.top={source_kind:'measured',upload_id:'u',mapping:{dx_mm:'0.3',dy_mm:'0.4',height_sign:'-1',transpose:true}};d.bottom={source_kind:'measured',source_job_id:'b',source_file:'surface.mat',mapping:{dx_mm:'0.3',dy_mm:'0.4'}};
  assert.throws(()=>buildApdlPayload(d,'solve'),/配准/);d.registration_confirmed=true;const p=buildApdlPayload(d,'solve');assert.equal(p.bottom_source.source_file,'surface.mat');assert.equal(p.top_source.mapping.height_sign,-1);assert.equal(p.top_source.mapping.transpose,true);

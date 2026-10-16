@@ -93,6 +93,7 @@ python start_server.py --port 8523
 - NPZ 可包含 `space_xy_um` 与 `space_z_um` 单值正数元胞尺寸；文件提供的尺寸会锁定，缺失尺寸必须按原模拟配置补填，不能覆盖文件已有尺寸，也不会猜测 60 mm/190 mm 等板面尺寸。状态轴固定解释为 `[X,Y,Z]`，状态值 1 表示金属，沿 Z 使用原有“第一层金属”规则。
 - 旧模拟若只有 `dtype=object` 的历史 `a_sd`，网页不会执行 pickle；请在可信环境将所需阶段另存为数值三维数组。包含数值 `perfect_a` 的同包文件仍可直接读取最终状态。普通 ZIP、二维深度矩阵或仅参数的 NPZ 不能作为三维腐蚀状态。
 - 可调输出变量、Z 向元胞尺寸、XY 网格间距、坐标原点和坐标精度。单位在表单中明确显示：输入 Z 向元胞为 μm，APDL 表面深度和坐标为 mm。
+- APDL 也支持直接上传 MATLAB 坐标导出的 `DIANYUN_FRONT_X/Y/Z.txt` 或 `DIANYUN_BACK_X/Y/Z.txt`（也支持 CSV/TSV）。单面只需一组 X/Y/Z，双面需要两组；网页自动读取真实 `dx/dy`、恢复完整 XY 网格并拒绝重复点、缺点、不规则间距和双面错位，不进行插值。正面深度按 `max(Z)-Z`，反面按 `Z-min(Z)`，可在每面选择方向规则。
 - 每次导出生成 `Z_filled.mat` 或 `F_filled.mat`、`surface.csv`、`coordinates.csv`、可用的 `surface_preview.png`、`finite_element_manifest.json` 和 `finite_element_input_bundle.zip`。manifest 保存源任务、输入哈希、尺寸、范围、规则和每个文件的 SHA-256。
 - 保留原表面导出入口；完整拉伸在独立 APDL 运行区选择无腐蚀、单面、独立双面或对称双面，配置材料、厚度分层、约束与加载。可仅生成模型，配置本机 MAPDL 后可批量求解；GitHub 脚本不能代替本机 ANSYS 与许可证。
 - 来源切换清除旧阶段/文件；输入即时保存，刷新不丢草稿。双面配准确认绑定来源文件 SHA、来源身份及坐标映射，变更后需重新确认与预检；服务器拒绝过期签名。

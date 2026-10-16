@@ -14,6 +14,42 @@ class ApdlApiTests(unittest.TestCase):
     setUp=fe_api.FiniteElementApiTests.setUp
     tearDown=fe_api.FiniteElementApiTests.tearDown
     request=fe_api.FiniteElementApiTests.request
+    def _upload_coordinate_triplet(self, prefix='face', x_shift=0.0):
+        x,y=np.meshgrid([0.0+x_shift,.3+x_shift],[0.0,.3])
+        z=np.array([[5.0,4.8],[4.9,5.0]])
+        ids={}
+        for axis,values in (('x',x),('y',y),('z',z)):
+            stream=io.BytesIO();np.savetxt(stream,np.asarray(values).reshape(-1),fmt='%.9g');data=stream.getvalue()
+            ids[axis]=self.server.upload(f'{prefix}_{axis}.txt',io.BytesIO(data),len(data))['id']
+        return ids
+
+    def test_coordinate_files_precheck_and_freeze(self):
+        uploads=self._upload_coordinate_triplet()
+        payload={'options':{'corrosion_mode':'single_top'},'top_source':{
+            'source_kind':'coordinates','origin':'coordinates','coordinate_uploads':uploads,
+            'coordinate_direction':'front'}}
+        code,preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200)
+        self.assertEqual(preview['faces']['top']['shape'],[2,2])
+        self.assertEqual(preview['faces']['top']['xy_grid_sha256'].__class__,str)
+        self.assertAlmostEqual(preview['faces']['top']['max_depth_mm'],.2)
+        with patch.object(self.server,'launch'):
+            code,job=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,201)
+        inputs=self.server.runtime/'jobs'/job['id']/'inputs'
+        self.assertTrue((inputs/'top_x.txt').is_file())
+        self.assertTrue((inputs/'top_y.txt').is_file())
+        self.assertTrue((inputs/'top_z.txt').is_file())
+
+    def test_double_coordinate_files_reject_xy_mismatch(self):
+        top=self._upload_coordinate_triplet('top')
+        bottom=self._upload_coordinate_triplet('bottom',x_shift=.01)
+        payload={'options':{'corrosion_mode':'double_independent'},'registration_confirmed':True,
+                 'top_source':{'source_kind':'coordinates','coordinate_uploads':top,'coordinate_direction':'front'},
+                 'bottom_source':{'source_kind':'coordinates','coordinate_uploads':bottom,'coordinate_direction':'back'}}
+        code,error=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,400)
+        self.assertRegex(error['error'],'不一致|配准|原点')
     def test_double_registration_signature_is_bound_to_sources_and_mapping(self):
         buf=io.BytesIO(b'0,0.1,0.2\n0.3,0.4,0.5\n')
         uploaded=self.server.upload('registration.csv',buf,len(buf.getvalue()))

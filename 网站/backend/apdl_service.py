@@ -17,6 +17,7 @@ from scipy.io import loadmat
 from .finite_element_export import _state_from_npz, surface_from_ca_state
 from .runner import _atomic_json
 from .system_info import sha256, runtime_provenance
+from .apdl_coordinates import parse_coordinate_triplet, surface_depth, validate_coordinate_pair
 
 MATRIX_EXTENSIONS = {'.mat', '.csv', '.txt', '.tsv'}
 
@@ -150,6 +151,18 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
     return depth,metadata
 
 
+def read_coordinate_face(paths: dict, direction: str):
+    parsed=parse_coordinate_triplet(paths['x'],paths['y'],paths['z'])
+    depth=surface_depth(parsed,direction)
+    return depth,dict(shape=list(depth.shape),original_shape=list(depth.shape),dx_mm=parsed['dx_mm'],
+                      dy_mm=parsed['dy_mm'],origin_x_mm=parsed['origin_x_mm'],origin_y_mm=parsed['origin_y_mm'],
+                      x_range_mm=parsed['x_range_mm'],y_range_mm=parsed['y_range_mm'],point_count=parsed['point_count'],
+                      xy_grid_sha256=parsed['xy_grid_sha256'],
+                      min_depth_mm=float(depth.min()),max_depth_mm=float(depth.max()),
+                      input_unit='mm',value_mode='absolute_coordinate',coordinate_direction=direction,
+                      coordinate_note='由MATLAB X/Y/Z坐标文件恢复规则网格；未插值或重采样。')
+
+
 def _resolve_source(service, descriptor, label):
     if not isinstance(descriptor,dict):
         raise ValueError(label+'面需要选择来源')
@@ -157,6 +170,30 @@ def _resolve_source(service, descriptor, label):
     mapping=descriptor.get('mapping') or {}
     if not isinstance(mapping,dict): raise ValueError('mapping必须是对象')
     kind=descriptor.get('source_kind','measured')
+    if kind=='coordinates':
+        uploads=descriptor.get('coordinate_uploads')
+        if not isinstance(uploads,dict) or set(uploads)!={'x','y','z'} or any(not isinstance(v,str) for v in uploads.values()):
+            raise ValueError(label+'面的坐标来源必须提供X、Y、Z三个已上传文件')
+        paths={}; records=[]; hashes={}; names={}
+        for axis in ('x','y','z'):
+            record,path=service.get_upload(uploads[axis])
+            if path.suffix.lower() not in {'.txt','.csv','.tsv'}:
+                raise ValueError(f'{label}面{axis.upper()}坐标仅支持TXT/CSV/TSV')
+            digest=record['sha256']
+            if sha256(path)!=digest: raise ValueError('坐标来源文件已变化，请重新上传')
+            paths[axis]=path; hashes[axis]=digest; names[axis]=record['name']
+            input_path=f"inputs/{label}_{axis}.txt"
+            records.append(dict(label=f'{label}_{axis}',path=path,sha256=digest,input_path=input_path))
+        direction=descriptor.get('coordinate_direction') or ('front' if label=='top' else 'back')
+        depth,coordinate_metadata=read_coordinate_face(paths,direction)
+        metadata=dict(source_kind='coordinates',name=', '.join(names.values()),
+                      coordinate_files=names,coordinate_sha256=hashes,
+                      sha256=hashlib.sha256(''.join(hashes[a] for a in ('x','y','z')).encode('ascii')).hexdigest(),
+                      **coordinate_metadata)
+        face=dict(source_kind=kind,mapping={},inherited_geometry={},coordinate_input_paths={
+            axis:f'inputs/{label}_{axis}.txt' for axis in ('x','y','z')},coordinate_sha256=hashes,
+            coordinate_direction=direction,metadata=metadata)
+        return face,records,depth
     inherited={}
     job_id=descriptor.get('source_job_id')
     upload_id=descriptor.get('upload_id')
@@ -240,6 +277,14 @@ def _prepare(service,payload):
         a,b=faces['top']['metadata'],faces['bottom']['metadata']
         if a['shape']!=b['shape'] or any(not math.isclose(a[key],b[key],rel_tol=0,abs_tol=1e-10) for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')):
             raise ValueError('双面行列、间距或原点不匹配；不进行隐式重采样')
+        if a.get('source_kind')=='coordinates' and b.get('source_kind')=='coordinates':
+            validate_coordinate_pair(
+                {'shape': a['shape'], 'dx_mm': a['dx_mm'], 'dy_mm': a['dy_mm'],
+                 'origin_x_mm': a['origin_x_mm'], 'origin_y_mm': a['origin_y_mm'],
+                 'xy_grid_sha256': a['xy_grid_sha256']},
+                {'shape': b['shape'], 'dx_mm': b['dx_mm'], 'dy_mm': b['dy_mm'],
+                 'origin_x_mm': b['origin_x_mm'], 'origin_y_mm': b['origin_y_mm'],
+                 'xy_grid_sha256': b['xy_grid_sha256']})
     if faces:
         first=next(iter(faces.values()))['metadata']
         options.update({key:first[key] for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')})
@@ -261,7 +306,10 @@ def _prepare(service,payload):
               registration_signature=registration_signature,
               precheck=geometry['stats'],reading_seconds=time.perf_counter()-started,
               case_name=str(payload.get('case_name',''))[:100])
-    return spec,list(records.values()),geometry
+    frozen_records=[]
+    for value in records.values():
+        frozen_records.extend(value if isinstance(value,list) else [value])
+    return spec,frozen_records,geometry
 
 
 def prepare_apdl(service,payload):
@@ -347,10 +395,17 @@ def run_apdl_job(spec,job_dir,progress=None):
         with stage('reading','reading_seconds','apdl_read'):
             depths={}
             for label,face in spec['faces'].items():
-                path=(job_dir/face['input_path']).resolve()
-                if not path.is_relative_to((job_dir/'inputs').resolve()) or sha256(path)!=face['metadata']['sha256']:
-                    raise ValueError('APDL冻结来源已变化或路径越界')
-                depths[label],_=read_face(path,face['source_kind'],face['mapping'],face['inherited_geometry'])
+                if face['source_kind']=='coordinates':
+                    paths={axis:(job_dir/relative).resolve() for axis,relative in face['coordinate_input_paths'].items()}
+                    for axis,path in paths.items():
+                        if not path.is_relative_to((job_dir/'inputs').resolve()) or sha256(path)!=face['coordinate_sha256'][axis]:
+                            raise ValueError('APDL冻结坐标来源已变化或路径越界')
+                    depths[label],_=read_coordinate_face(paths,face['coordinate_direction'])
+                else:
+                    path=(job_dir/face['input_path']).resolve()
+                    if not path.is_relative_to((job_dir/'inputs').resolve()) or sha256(path)!=face['metadata']['sha256']:
+                        raise ValueError('APDL冻结来源已变化或路径越界')
+                    depths[label],_=read_face(path,face['source_kind'],face['mapping'],face['inherited_geometry'])
         with stage('geometry','geometry_seconds','apdl_build'):
             geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'])
         with stage('build','build_export_seconds','apdl_build'):
