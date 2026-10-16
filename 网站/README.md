@@ -89,6 +89,9 @@ python start_server.py --port 8523
 
 - 在“有限元耦合”运行区选择已完成的 CA–GA 模拟任务或实测表面 MAT 任务。
 - simulation 来源读取最终 `perfect_a`（或兼容的 `a_sd` 最后一阶段），沿 Z 方向寻找第一层未腐蚀金属并转换为正腐蚀深度；measured 来源保留 `Z_filled/F_filled` 的二维尺寸和数值，不默认重采样。
+- 有外部 CA 状态时，可在每个正/反面来源选择“上传外部 NPZ”。文件必须包含数值实数 `perfect_a[X,Y,Z]`，或数值 `a_sd[X,Y,Z]` / `a_sd[stage,X,Y,Z]`；网页会列出变量、原始形状、可选阶段和读取耗时。四维阶段按文件存储顺序从 1 编号，默认最后阶段，序号不等于腐蚀天数。
+- NPZ 可包含 `space_xy_um` 与 `space_z_um` 单值正数元胞尺寸；文件提供的尺寸会锁定，缺失尺寸必须按原模拟配置补填，不能覆盖文件已有尺寸，也不会猜测 60 mm/190 mm 等板面尺寸。状态轴固定解释为 `[X,Y,Z]`，状态值 1 表示金属，沿 Z 使用原有“第一层金属”规则。
+- 旧模拟若只有 `dtype=object` 的历史 `a_sd`，网页不会执行 pickle；请在可信环境将所需阶段另存为数值三维数组。包含数值 `perfect_a` 的同包文件仍可直接读取最终状态。普通 ZIP、二维深度矩阵或仅参数的 NPZ 不能作为三维腐蚀状态。
 - 可调输出变量、Z 向元胞尺寸、XY 网格间距、坐标原点和坐标精度。单位在表单中明确显示：输入 Z 向元胞为 μm，APDL 表面深度和坐标为 mm。
 - 每次导出生成 `Z_filled.mat` 或 `F_filled.mat`、`surface.csv`、`coordinates.csv`、可用的 `surface_preview.png`、`finite_element_manifest.json` 和 `finite_element_input_bundle.zip`。manifest 保存源任务、输入哈希、尺寸、范围、规则和每个文件的 SHA-256。
 - 保留原表面导出入口；完整拉伸在独立 APDL 运行区选择无腐蚀、单面、独立双面或对称双面，配置材料、厚度分层、约束与加载。可仅生成模型，配置本机 MAPDL 后可批量求解；GitHub 脚本不能代替本机 ANSYS 与许可证。

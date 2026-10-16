@@ -22,7 +22,7 @@ from .runner import _atomic_json
 from .system_info import ROOT, find_matlab, json_record, process_alive, sha256
 from .targets import inspect_target, load_targets
 
-UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv"}
+UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv", ".npz"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
 
 
@@ -96,7 +96,7 @@ class JobService:
     def upload(self, name, stream, length):
         extension = Path(name).suffix.lower()
         if extension not in UPLOAD_EXTENSIONS:
-            raise ValueError("文件类型仅支持 TXT、CSV、TSV、XYZ、MAT、XLSX")
+            raise ValueError("文件类型仅支持 TXT、CSV、TSV、XYZ、MAT、XLSX、NPZ")
         if not isinstance(length, int) or not 0 < length <= MAX_UPLOAD_BYTES:
             raise ValueError("文件必须非空且不超过1GB")
         upload_id = uuid.uuid4().hex

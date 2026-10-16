@@ -43,10 +43,16 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
     mapping=dict(mapping or {})
     inherited=dict(inherited_geometry or {})
     variable=mapping.get('variable') or None
+    state_metadata={}
     if source_kind=='simulation':
         if 'space_z_um' not in inherited or 'space_xy_um' not in inherited:
             raise ValueError('模拟来源缺少真实元胞尺寸，不能猜测物理间距')
-        raw=surface_from_ca_state(_state_from_npz(path), _number(inherited['space_z_um'],'源Z向尺寸',positive=True))
+        if inherited.get('external_npz'):
+            from .apdl_npz import read_npz_state
+            state,state_metadata=read_npz_state(path,mapping.get('npz_variable'),mapping.get('npz_stage'))
+        else:
+            state=_state_from_npz(path)
+        raw=surface_from_ca_state(state, _number(inherited['space_z_um'],'源Z向尺寸',positive=True))
         default_layout='xy'
         unit='mm'
         value_mode='depth'
@@ -138,6 +144,9 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
                   height_sign=sign,transpose=transposed,flip_x=flipped_x,flip_y=flipped_y,
                   min_depth_mm=float(depth.min()),max_depth_mm=float(depth.max()),
                   coordinate_note='局部表面坐标；双面独立数据仍需确认同一XY位置配准。')
+    metadata.update(state_metadata)
+    if state_metadata:
+        metadata.update(space_xy_um=inherited['space_xy_um'],space_z_um=inherited['space_z_um'])
     return depth,metadata
 
 
@@ -154,10 +163,18 @@ def _resolve_source(service, descriptor, label):
     if bool(job_id)==bool(upload_id):
         raise ValueError(label+'面必须在源任务与上传文件中选一种')
     if upload_id:
-        if kind!='measured': raise ValueError('上传只接受实测二维矩阵，模拟NPZ请选择已完成任务')
         record,path=service.get_upload(upload_id)
         metadata=dict(upload_id=upload_id,name=record['name'],sha256=record['sha256'])
-        if path.suffix.lower() not in MATRIX_EXTENSIONS: raise ValueError('APDL上传表面仅支持MAT/CSV/TXT/TSV矩阵')
+        if kind=='simulation':
+            from .apdl_npz import inspect_uploaded_npz, resolve_geometry
+            info=inspect_uploaded_npz(service,upload_id)
+            inherited=resolve_geometry(info,descriptor.get('cell_geometry'))
+            inherited['external_npz']=True
+            metadata.update(geometry_from_file=info['geometry'],npz_warnings=info['warnings'])
+        elif kind=='measured':
+            if path.suffix.lower() not in MATRIX_EXTENSIONS: raise ValueError('APDL上传实测表面仅支持MAT/CSV/TXT/TSV矩阵')
+        else:
+            raise ValueError('表面来源类型无效')
     else:
         service.validate_id(job_id)
         state=service.get_job(job_id)

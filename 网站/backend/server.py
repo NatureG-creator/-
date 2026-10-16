@@ -180,6 +180,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(201, self.server.upload(query.get("name", [""])[0], self.rfile,
                                                     int(self.headers.get("Content-Length", "0"))))
         if len(parts) == 4 and parts[:2] == ["api", "uploads"] and parts[3] == "inspect" and method == "GET":
+            if query.get('kind', ['target'])[0] == 'apdl_npz':
+                from .apdl_npz import inspect_uploaded_npz
+                return self._json(200, inspect_uploaded_npz(self.server, parts[2]))
             _, source = self.server.get_upload(parts[2])
             if query.get("kind", ["target"])[0] == "pointcloud":
                 value = inspect_xyz(source)

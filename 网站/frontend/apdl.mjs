@@ -20,8 +20,9 @@ export function createApdlDraftState(initial=apdlDefaults()){
    if(scope==='source'&&['origin','source_kind','source_job_id'].includes(key)){
     delete target.source_stage;delete target.source_file;
     if(key!=='source_job_id')target.source_job_id='';
-    if(key==='origin'){delete target.upload_id;delete target.upload_name;if(value==='upload')target.source_kind='measured';}
+    if(key==='origin'){for(const field of ['upload_id','upload_name','npz_info','npz_variable','npz_stage','space_xy_um','space_z_um'])delete target[field];if(value==='upload')target.source_kind='measured';if(value==='upload_npz')target.source_kind='simulation';}
    }
+   if(scope==='source'&&key==='npz_variable')delete target.npz_stage;
    if(scope==='source'||scope==='map'||(scope==='option'&&key==='corrosion_mode'))draft.registration_confirmed=false;
    invalidate();return true;
   },
@@ -35,7 +36,7 @@ export function createApdlDraftState(initial=apdlDefaults()){
 }
 export function apdlMappingDisplay(source){
  const mapping={...mappingDefaults,...source.mapping};
- if(source.origin!=='upload'&&source.source_kind==='simulation')Object.assign(mapping,{unit:'mm',value_mode:'depth',variable:'',dx_mm:'',dy_mm:'',origin_x_mm:'',origin_y_mm:'',center_crop_columns:'',reference_mode:'manual',reference_height:0,height_sign:1});
+ if(source.origin==='upload_npz'||(source.origin!=='upload'&&source.source_kind==='simulation'))Object.assign(mapping,{unit:'mm',value_mode:'depth',variable:'',dx_mm:'',dy_mm:'',origin_x_mm:'',origin_y_mm:'',center_crop_columns:'',reference_mode:'manual',reference_height:0,height_sign:1});
  return mapping;
 }
 
@@ -45,7 +46,7 @@ export function applyApdlPreset(draft,preset){
  for(const face of ['top','bottom']){
   const mapping=preset[face+'_mapping'];
   next[face].mapping={...mappingDefaults,...structuredClone(mapping||{})};
-  if(mapping){if(next[face].source_kind!=='measured')next[face].source_job_id='';next[face].source_kind='measured';}
+  if(mapping){if(next[face].source_kind!=='measured')next[face].source_job_id='';next[face].source_kind='measured';if(next[face].origin==='upload_npz'){next[face].origin='task';for(const key of ['upload_id','upload_name','npz_info','npz_variable','npz_stage','space_xy_um','space_z_um'])delete next[face][key];}}
  }
  return next;
 }
@@ -55,23 +56,32 @@ export function createFaceUploadManager(){
  const generations=new Map();let pending=0;
  const invalidate=face=>generations.set(face,(generations.get(face)||0)+1);
  return {invalidate,get pending(){return pending;},async run(face,getSource,recordPromise,name){
-  invalidate(face);const generation=generations.get(face);pending++;
-  const current=()=>generations.get(face)===generation&&getSource()?.origin==='upload';
-  try{const record=await recordPromise;if(!current())return false;const source=getSource();source.upload_id=record.id||record.upload_id;source.upload_name=name;return true;}
+  invalidate(face);const generation=generations.get(face),origin=getSource()?.origin;pending++;
+  const current=()=>generations.get(face)===generation&&getSource()?.origin===origin&&['upload','upload_npz'].includes(origin);
+  try{const record=await recordPromise;if(!current())return false;const source=getSource();source.upload_id=record.id||record.upload_id;source.upload_name=name;
+   if(origin==='upload_npz'){source.npz_info=record.npz_info;source.npz_variable=record.npz_info.default_variable;source.npz_stage=record.npz_info.variables.find(v=>v.name===source.npz_variable).stage_count;delete source.space_xy_um;delete source.space_z_um;}return true;}
   catch(error){if(!current())return false;throw error;}
   finally{pending--;}
  }};
 }
 
 function sourcePayload(source,label){
- const isUpload=source?.origin==='upload'||(!source?.origin&&!!source?.upload_id);
- if(!source||(isUpload?!source.upload_id:!source.source_job_id))throw new Error(`请选择${label}来源任务或上传二维矩阵`);
- const kind=isUpload?'measured':source.source_kind;
+ const external=source?.origin==='upload_npz',isUpload=external||source?.origin==='upload'||(!source?.origin&&!!source?.upload_id);
+ if(!source||(isUpload?!source.upload_id:!source.source_job_id))throw new Error(`请选择${label}来源任务或上传文件`);
+ const kind=external?'simulation':isUpload?'measured':source.source_kind;
  const result={source_kind:kind,mapping:{...mappingDefaults,...source.mapping}};
  if(isUpload)result.upload_id=source.upload_id;else result.source_job_id=source.source_job_id;
  if(kind==='simulation'){
   Object.assign(result.mapping,apdlMappingDisplay(source));
-  if(source.source_stage!==''&&source.source_stage!=null){result.source_stage=positive(source.source_stage,'阶段');if(!Number.isInteger(result.source_stage))throw new Error('阶段必须是整数');}
+  if(external){
+   const info=source.npz_info;if(!info)throw new Error(`${label} NPZ 尚未完成结构检查，请重新上传`);
+   const variable=source.npz_variable||info.default_variable,selected=info.variables.find(v=>v.name===variable&&v.supported);
+   if(!selected)throw new Error('请选择可读取的 NPZ 状态变量');
+   const stage=source.npz_stage==null||source.npz_stage===''?selected.stage_count:positive(source.npz_stage,'NPZ 阶段');
+   if(!Number.isInteger(stage)||stage>selected.stage_count)throw new Error(`NPZ 阶段必须是 1 至 ${selected.stage_count} 的整数`);
+   result.mapping.npz_variable=variable;result.mapping.npz_stage=stage;result.cell_geometry={};
+   for(const key of ['space_xy_um','space_z_um'])if(info.geometry[key]==null)result.cell_geometry[key]=positive(source[key],`${label} ${key} 元胞尺寸 / μm`);
+  }else if(source.source_stage!==''&&source.source_stage!=null){result.source_stage=positive(source.source_stage,'阶段');if(!Number.isInteger(result.source_stage))throw new Error('阶段必须是整数');}
   delete result.mapping.dx_mm;delete result.mapping.dy_mm;delete result.mapping.center_crop_columns;
  }else{
   if(!isUpload&&source.source_file)result.source_file=source.source_file;
@@ -142,6 +152,11 @@ const input=(key,label,help='',scope='option',type='number')=>`<div class="field
 const check=(key,label,scope='option')=>`<label class="check-field"><input type="checkbox" data-${scope}="${key}"> ${label}</label>`;
 const group=(title,body,help='',open=true)=>`<details class="card apdl-group" ${open?'open':''}><summary><strong>${title}</strong>${help?`<small>${help}</small>`:''}</summary><div class="apdl-group-body">${body}</div></details>`;
 
+export function renderExternalNpzSource(source,prefix){
+ const info=source.npz_info,variable=source.npz_variable||info?.default_variable,selected=info?.variables.find(v=>v.name===variable),count=selected?.stage_count||1,stage=source.npz_stage||count;
+ return `<div class="field apdl-source-row"><label for="apdl-${prefix}upload">外部腐蚀状态 NPZ</label><input id="apdl-${prefix}upload" type="file" accept=".npz" data-source="upload"><small>${esc(source.upload_name||'选择其他电脑、原程序或本站导出的模拟结果 .npz；不必重新运行模拟。')}</small></div>${info?`<p class="help-line">已识别 ${info.variables.filter(v=>v.supported).length} 个可读状态变量；结构检查 ${fmt(info.reading_seconds)} 秒。原状态轴顺序 [X,Y,Z]；状态=1 为金属。</p><div class="grid two"><div class="field"><label for="apdl-${prefix}npz-variable">状态变量</label><select id="apdl-${prefix}npz-variable" data-source="npz_variable">${info.variables.map(v=>`<option value="${esc(v.name)}" ${v.name===variable?'selected':''} ${v.supported?'':'disabled'}>${esc(v.name)} · ${v.shape.map(esc).join(' × ')}${v.supported?'':' · 不可直接读取'}</option>`).join('')}</select><small>perfect_a 为最终状态；a_sd 可为单状态或数值阶段序列。</small></div><div class="field"><label for="apdl-${prefix}npz-stage">阶段（按文件存储顺序）</label><input id="apdl-${prefix}npz-stage" data-source="npz_stage" type="number" min="1" max="${count}" step="1" value="${esc(stage)}"><small>共 ${count} 个状态，默认末状态。三维状态仅第 1 项；序号不代表腐蚀天数。</small></div>${['space_xy_um','space_z_um'].map(key=>`<div class="field"><label for="apdl-${prefix}${key}">${key==='space_xy_um'?'XY 平面':'Z 深度'}元胞尺寸 / μm</label><input id="apdl-${prefix}${key}" data-source="${key}" type="number" step="any" min="0" value="${esc(info.geometry[key]??source[key]??'')}" ${info.geometry[key]!=null?'disabled':''}><small>${info.geometry[key]!=null?'已从文件读取，保持原模拟物理尺寸。':'文件未提供，必须按原模拟配置补填，不能猜测。'}</small></div>`).join('')}</div><p class="help-line">所选状态 X × Y × Z：${(selected?.state_shape||[]).map(esc).join(' × ')}。XY 尺寸控制板面采样跨度，Z 尺寸控制腐蚀深度；下方预检可核对实际毫米尺寸和形貌。</p>${warningsHtml(info.warnings)}`:'<p class="help-line">上传后自动检查变量、阶段和元胞尺寸。仅支持数值 CA 状态；普通 ZIP、深度矩阵或仅参数的 NPZ 不能当作三维状态使用。</p>'}`;
+}
+
 export async function mountApdl({get,post,openJob}){
  const root=document.querySelector('#apdl-root');if(!root)return;
  const state=createApdlDraftState();
@@ -175,8 +190,8 @@ export async function mountApdl({get,post,openJob}){
  }
  function setControls(){qa('[data-option]').forEach(el=>{const value=draft.options[el.dataset.option];if(el.type==='checkbox')el.checked=!!value;else if(el.dataset.option==='field_output_times')el.value=Array.isArray(value)?value.join(', '):(value??'');else el.value=typeof value==='object'?(value?JSON.stringify(value,null,2):''):(value??'');});q('[data-control="case_name"]').value=draft.case_name; q('[data-control="registration_confirmed"]').checked=draft.registration_confirmed;q('[data-control="preset"]').value=draft.preset_id;visibility();}
  function visibility(){q('#apdl-field-times').hidden=q('[data-option="result_save_mode"]').value!=='selected';const mode=q('[data-option="corrosion_mode"]').value,material=q('[data-option="material_model"]').value;q('#apdl-registration').hidden=mode!=='double_independent';qa('[data-material]').forEach(el=>el.hidden=el.dataset.material!==material);for(const key of ['length_mm','width_mm','nx','ny'])q(`[data-option="${key}"]`).disabled=mode!=='flat';q('#apdl-mode-help').textContent=mode==='flat'?'无腐蚀平板不需要表面文件；适用于与 EA/L 解析解对照。':mode==='double_symmetric'?'反面明确复用同一正面深度场；不代表两次独立腐蚀样本。':'形貌模式从来源继承真实 XY 尺寸，完整保留采样，不进行自动降采样。';try{const curve=JSON.parse(q('#apdl-plastic-curve').value||'null');q('#apdl-curve-count').textContent=Array.isArray(curve)?`当前 ${curve.length} 个点；首点塑性应变应为 0，随后严格递增。`:'请输入二维 JSON 曲线。';}catch{q('#apdl-curve-count').textContent='JSON 格式尚未有效，请检查逗号与方括号。';}}
- function sourceCard(face){const s=draft[face],label=face==='top'?'正面 · 上表面':'反面 · 下表面',isUpload=s.origin==='upload',isSim=!isUpload&&s.source_kind==='simulation',job=jobs.find(j=>j.id===s.source_job_id),files=availableSurfaceFiles(job),prefix=`${face}-`;
-  return `<div class="apdl-source" data-face="${face}"><h4>${label}</h4><div class="grid two"><div class="field"><label for="apdl-${prefix}origin">读取方式</label><select id="apdl-${prefix}origin" data-source="origin"><option value="task" ${isUpload?'':'selected'}>已完成源任务</option><option value="upload" ${isUpload?'selected':''}>上传二维矩阵</option></select></div><div class="field"><label for="apdl-${prefix}kind">来源类型</label><select id="apdl-${prefix}kind" data-source="source_kind" ${isUpload?'disabled':''}><option value="simulation" ${s.source_kind==='simulation'?'selected':''}>CA–GA 模拟</option><option value="measured" ${s.source_kind==='measured'?'selected':''}>实测 MAT / 矩阵</option></select></div></div>${isUpload?`<div class="field apdl-source-row"><label for="apdl-${prefix}upload">MAT / CSV / TXT / TSV 数值矩阵</label><input id="apdl-${prefix}upload" type="file" accept=".mat,.csv,.txt,.tsv" data-source="upload"><small>${esc(s.upload_name||'上传无表头二维矩阵；XYZ 点云需先在第一模块处理。')}</small></div>`:`<div class="field apdl-source-row"><label for="apdl-${prefix}job">已完成任务</label><select id="apdl-${prefix}job" data-source="source_job_id"><option value="">请选择来源</option>${jobs.filter(j=>isSim?j.kind==='simulation':['pointcloud','finite_element'].includes(j.kind)).map(j=>`<option value="${esc(j.id)}" ${j.id===s.source_job_id?'selected':''}>${esc(j.spec?.case_name||j.case_name||j.id)} · ${esc(j.id)}</option>`).join('')}</select></div><div class="field apdl-source-row"><label for="apdl-${prefix}file">${isSim?'模拟阶段':'可用 MAT 文件'}</label><select id="apdl-${prefix}file" data-source="${isSim?'source_stage':'source_file'}"><option value="">${isSim?'最终 simulation.npz':'自动选择唯一 MAT'}</option>${files.filter(f=>isSim?/stage_\d+\.npz$/i.test(f):true).map(f=>{const value=isSim?String(Number(f.match(/stage_(\d+)\.npz$/i)[1])):f;return `<option value="${esc(value)}" ${String(isSim?s.source_stage:s.source_file)===value?'selected':''}>${esc(f)}</option>`;}).join('')}</select><small>仅列出所选任务实际提供的 ${isSim?'阶段 NPZ':'MAT'} 输出。</small></div>`}
+ function sourceCard(face){const s=draft[face],label=face==='top'?'正面 · 上表面':'反面 · 下表面',external=s.origin==='upload_npz',isUpload=external||s.origin==='upload',isSim=external||(!isUpload&&s.source_kind==='simulation'),job=jobs.find(j=>j.id===s.source_job_id),files=availableSurfaceFiles(job),prefix=`${face}-`;
+  return `<div class="apdl-source" data-face="${face}"><h4>${label}</h4><div class="grid two"><div class="field"><label for="apdl-${prefix}origin">读取方式</label><select id="apdl-${prefix}origin" data-source="origin"><option value="task" ${isUpload?'':'selected'}>已完成源任务</option><option value="upload" ${s.origin==='upload'?'selected':''}>上传二维矩阵</option><option value="upload_npz" ${external?'selected':''}>上传外部 NPZ</option></select></div><div class="field"><label for="apdl-${prefix}kind">来源类型</label><select id="apdl-${prefix}kind" data-source="source_kind" ${isUpload?'disabled':''}><option value="simulation" ${isSim?'selected':''}>CA–GA 模拟</option><option value="measured" ${!isSim?'selected':''}>实测 MAT / 矩阵</option></select></div></div>${external?renderExternalNpzSource(s,prefix):isUpload?`<div class="field apdl-source-row"><label for="apdl-${prefix}upload">MAT / CSV / TXT / TSV 数值矩阵</label><input id="apdl-${prefix}upload" type="file" accept=".mat,.csv,.txt,.tsv" data-source="upload"><small>${esc(s.upload_name||'上传无表头二维矩阵；XYZ 点云需先在第一模块处理。')}</small></div>`:`<div class="field apdl-source-row"><label for="apdl-${prefix}job">已完成任务</label><select id="apdl-${prefix}job" data-source="source_job_id"><option value="">请选择来源</option>${jobs.filter(j=>isSim?j.kind==='simulation':['pointcloud','finite_element'].includes(j.kind)).map(j=>`<option value="${esc(j.id)}" ${j.id===s.source_job_id?'selected':''}>${esc(j.spec?.case_name||j.case_name||j.id)} · ${esc(j.id)}</option>`).join('')}</select></div><div class="field apdl-source-row"><label for="apdl-${prefix}file">${isSim?'模拟阶段':'可用 MAT 文件'}</label><select id="apdl-${prefix}file" data-source="${isSim?'source_stage':'source_file'}"><option value="">${isSim?'最终 simulation.npz':'自动选择唯一 MAT'}</option>${files.filter(f=>isSim?/stage_\d+\.npz$/i.test(f):true).map(f=>{const value=isSim?String(Number(f.match(/stage_(\d+)\.npz$/i)[1])):f;return `<option value="${esc(value)}" ${String(isSim?s.source_stage:s.source_file)===value?'selected':''}>${esc(f)}</option>`;}).join('')}</select><small>仅列出所选任务实际提供的 ${isSim?'阶段 NPZ':'MAT'} 输出。</small></div>`}
   <details class="apdl-mapping" open><summary>坐标与深度映射</summary><div class="grid two">${select(prefix+'variable','表面变量',[['','自动识别唯一变量'],['Z_filled','Z_filled'],['F_filled','F_filled']],isSim?'模拟使用第一层金属规则，不读取 MAT 变量。':'MAT 含多个表面时必须明确指定。','map')}${select(prefix+'layout','输入行列约定',[['auto','自动 · 使用来源约定'],['yx','行=Y，列=X'],['xy','行=X，列=Y']],'统一输出 depth[row_y,column_x]。','map')}${select(prefix+'unit','原矩阵单位',[['mm','mm'],['um','μm']],'内部统一转为 mm。','map')}${select(prefix+'value_mode','数值含义',[['depth','正值向内腐蚀深度'],['height','相对基准的表面高度']],'模拟固定按正深度 mm 读取。','map')}${select(prefix+'reference_mode','高度参考面',[['manual','手动参考高度'],['maximum','当前矩阵最大高度']],'先按显式裁剪，再计算最大高度。','map')}${input(prefix+'reference_height','参考高度 / 原矩阵单位','','map')}${select(prefix+'height_sign','高度方向',[['1','+1 · reference − height'],['-1','−1 · height − reference']],'方向变换不等于 XY 镜像。','map')}${input(prefix+'center_crop_columns','中心裁剪列数（可空）','仅实测：原双面预设为 193 列。','map')}${input(prefix+'dx_mm','X 间距 / mm',isSim?'继承模拟真实间距，不可覆盖。':'上传必填；任务来源可留空继承已知间距。','map')}${input(prefix+'dy_mm','Y 间距 / mm',isSim?'继承模拟真实间距，不可覆盖。':'上传必填；没有来源间距时需填写。','map')}${input(prefix+'origin_x_mm','X 原点 / mm','留空继承源任务，上传默认 0。','map')}${input(prefix+'origin_y_mm','Y 原点 / mm','留空继承源任务，上传默认 0。','map')}</div><div class="actions apdl-checks">${check(prefix+'transpose','额外转置 X/Y','map')}${check(prefix+'flip_x','翻转 X','map')}${check(prefix+'flip_y','翻转 Y','map')}</div></details></div>`;
  }
  function renderSources(){const mode=draft.options.corrosion_mode,faces=mode==='flat'?[]:mode==='single_bottom'?['bottom']:mode==='double_independent'?['top','bottom']:['top'];q('#apdl-sources').innerHTML=faces.map(sourceCard).join('');for(const face of faces){const node=q(`[data-face="${face}"]`),s=draft[face],sim=s.origin!=='upload'&&s.source_kind==='simulation';node.querySelectorAll('[data-map]').forEach(el=>{el.dataset.map=el.dataset.map.replace(`${face}-`,'');const key=el.dataset.map,value=apdlMappingDisplay(s)[key];if(el.type==='checkbox')el.checked=!!value;else el.value=value??'';if(sim&&['dx_mm','dy_mm','origin_x_mm','origin_y_mm','variable','unit','value_mode','center_crop_columns','reference_mode','reference_height','height_sign'].includes(key)){el.disabled=true;if(['dx_mm','dy_mm','origin_x_mm','origin_y_mm'].includes(key))el.placeholder='继承模拟来源；预检后核对实际值';}});}}
@@ -191,9 +206,9 @@ export async function mountApdl({get,post,openJob}){
  });
  root.addEventListener('change',async event=>{const el=event.target;try{if(el.dataset.control==='preset'){for(const face of ['top','bottom'])faceUploads.invalidate(face);read();const preset=presets.find(p=>p.id===el.value);if(!preset)return;state.replace(applyApdlPreset(draft,preset));draft=state.draft;q('#apdl-preset-notes').innerHTML=(preset.notes||[]).map(esc).join('<br>')+(preset.provenance?`<br>来源 GitHub：${esc(preset.provenance.repository)} · APDL blob <code>${esc(preset.provenance.apdl_blob)}</code>`:'');setControls();renderSources();invalidate();}
  else if(el.dataset.option==='corrosion_mode'){for(const face of ['top','bottom'])faceUploads.invalidate(face);read();renderSources();visibility();invalidate();}
- else if(el.dataset.source){read();const face=el.closest('[data-face]').dataset.face,s=draft[face],key=el.dataset.source;if(key==='upload'){const file=el.files[0];if(!file)return;delete s.upload_id;delete s.upload_name;draft.registration_confirmed=false;syncRegistration();invalidate();note('正在上传二维表面矩阵…');
- const recordPromise=(async()=>{const response=await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const record=await response.json();if(!response.ok)throw new Error(record.error||record.message||'上传失败');return record;})();
- const pendingUpload=faceUploads.run(face,()=>draft[face],recordPromise,file.name);buttons();if(!await pendingUpload)return;note(`已上传 ${file.name}；请填写物理间距并核对单位。`);}
+ else if(el.dataset.source){read();const face=el.closest('[data-face]').dataset.face,s=draft[face],key=el.dataset.source;if(key==='upload'){const file=el.files[0];if(!file)return;const external=s.origin==='upload_npz';for(const key of ['upload_id','upload_name','npz_info','npz_variable','npz_stage','space_xy_um','space_z_um'])delete s[key];draft.registration_confirmed=false;syncRegistration();invalidate();note(external?'正在上传并检查 NPZ 状态、阶段与尺寸…':'正在上传二维表面矩阵…');
+ const recordPromise=(async()=>{const response=await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});const record=await response.json();if(!response.ok)throw new Error(record.error||record.message||'上传失败');if(external)record.npz_info=await get(`/api/uploads/${encodeURIComponent(record.id||record.upload_id)}/inspect?kind=apdl_npz`);return record;})();
+ const pendingUpload=faceUploads.run(face,()=>draft[face],recordPromise,file.name);buttons();if(!await pendingUpload)return;note(external?`已读取 ${file.name}；请核对状态、阶段，并补填缺失的元胞尺寸。`:`已上传 ${file.name}；请填写物理间距并核对单位。`);}
  else {faceUploads.invalidate(face);state.update('source',key,el.value,face);syncRegistration();invalidate();if(key==='source_job_id')await loadJob(el.value);}renderSources();invalidate();}
  else {read();visibility();invalidate();}}catch(error){note(error.message,true);}finally{buttons();}});
  q('#apdl-refresh').addEventListener('click',async()=>{busy=true;buttons();try{read();invalidate();await refresh();note('已刷新源任务与可用文件。');}catch(error){note(error.message,true);}finally{busy=false;buttons();}});
