@@ -11,8 +11,9 @@
     <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
     <button class="tab" data-panel="benchmark-panel"><span class="nav-icon">▥</span><span>性能对比<small>固定种群 · 后端验证</small></span><span class="nav-number">02+</span></button>
     <button class="tab" data-panel="finite-element-panel"><span class="nav-icon">△</span><span>有限元耦合<small>建模 · 拉伸 · 结果校核</small></span><span class="nav-number">03</span></button>
-    <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">04</span></button>
-    <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">05</span><span class="count" id="job-count">0</span></button>
+    <button class="tab" data-panel="fitting-panel"><span class="nav-icon">⌁</span><span>通用数据拟合<small>函数比较 · 科研绘图</small></span><span class="nav-number">04</span></button>
+    <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">05</span></button>
+    <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">06</span><span class="count" id="job-count">0</span></button>
   </nav>
   <div class="sidebar-bottom"><span class="sidebar-label">本机环境</span><div class="health"><span id="health-dot" aria-hidden="true"></span><span id="health-text">连接本地服务…</span></div><p id="capability">正在读取后端能力</p><small id="footer-version">本地计算 · 独立任务目录</small></div>
 </aside>
@@ -50,6 +51,7 @@
     <div class="action-bar"><div><strong id="run-label">准备运行腐蚀演化</strong><small id="submit-help">严格模式：两个 GA 配置均为单进程，Taichi 关闭</small></div><button id="run-simulation" class="button primary" disabled>运行腐蚀模拟 <span aria-hidden="true">→</span></button></div><div id="sim-message" class="message" role="status" aria-live="polite" hidden></div>
   </section>
   <section id="benchmark-panel" class="panel" aria-label="性能对比"></section>
+  <section id="fitting-panel" class="panel" aria-label="通用数据拟合"></section>
   <section id="finite-element-panel" class="panel" aria-label="腐蚀钢板与 APDL 单轴拉伸">
     <div id="apdl-root"></div>
     <details class="card apdl-legacy"><summary><strong>兼容：原有限元表面导出</strong><small>保留 MAT / CSV / 坐标输入包工作流</small></summary><div class="apdl-legacy-body">

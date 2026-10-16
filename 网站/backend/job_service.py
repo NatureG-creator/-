@@ -199,12 +199,15 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting"}:
             raise ValueError("任务类型无效")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "apdl_tension":
+        if kind == "fitting":
+            from .fitting_service import prepare_fitting
+            spec, fitting_table, fitting_path, fitting_text = prepare_fitting(self, payload)
+        elif kind == "apdl_tension":
             from .apdl_service import prepare_apdl
             spec, apdl_sources = prepare_apdl(self,payload)
         elif kind == "benchmark":
@@ -315,6 +318,9 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "fitting":
+                from .fitting_service import freeze_fitting
+                freeze_fitting(spec, fitting_table, fitting_path, fitting_text, job_dir)
             if kind == "apdl_tension":
                 from .apdl_service import freeze_apdl_sources
                 freeze_apdl_sources(apdl_sources,job_dir)

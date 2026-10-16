@@ -175,11 +175,12 @@ class BatchOperationsTests(unittest.TestCase):
                     result = retry_failed_batch(server, batch_id)
                 self.assertEqual(result["retried_job_ids"], [job["id"]])
                 deadline = time.time() + 2
+                from backend.system_info import json_record
                 while time.time() < deadline:
-                    if json.loads(batch_status.read_text(encoding="utf-8"))["state"] == "completed":
+                    if json_record(batch_status)["state"] == "completed":
                         break
                     time.sleep(.02)
-                self.assertEqual(json.loads(batch_status.read_text(encoding="utf-8"))["state"], "completed")
+                self.assertEqual(json_record(batch_status)["state"], "completed")
             finally:
                 server.server_close()
 

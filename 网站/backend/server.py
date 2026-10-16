@@ -99,6 +99,19 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/presets":
             from .apdl_presets import get_presets
             return self._json(200,get_presets())
+        if method == "GET" and path == "/api/fitting/catalog":
+            from .fitting_service import fitting_catalog
+            return self._json(200, fitting_catalog())
+        if method == "POST" and path == "/api/fitting/inspect":
+            from .fitting_service import inspect_fitting
+            return self._json(200, inspect_fitting(self.server, self._body()))
+        if method == "POST" and path == "/api/fitting/precheck":
+            from .fitting_service import precheck_fitting
+            return self._json(200, precheck_fitting(self.server, self._body()))
+        if method == "POST" and path == "/api/fitting/jobs":
+            body = self._body()
+            body['kind'] = 'fitting'
+            return self._json(201, self.server.create_job(body))
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())

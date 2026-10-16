@@ -77,9 +77,17 @@ def sha256(path: Path) -> str:
 
 def json_record(path: Path, default=None):
     import json
+    import time
     if not Path(path).is_file():
         return default
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    # Windows may momentarily deny opens while the writer replaces this file.
+    # Do not turn a persistent permission failure or corrupt JSON into success.
+    for attempt in range(5):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except PermissionError:
+            if attempt==4:raise
+            time.sleep(.02)
 
 
 def current_memory_bytes() -> int | None:
