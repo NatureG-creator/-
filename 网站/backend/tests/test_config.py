@@ -1,6 +1,7 @@
 import unittest
 
-from backend.config import default_simulation_config, validate_simulation_config, validate_targets
+from backend.config import (default_simulation_config, validate_simulation_config,
+                            validate_targets, website_default_simulation_config)
 
 
 class ConfigTests(unittest.TestCase):
@@ -20,6 +21,18 @@ class ConfigTests(unittest.TestCase):
         config["mode"] = "strict"
         config["STAGE_GA_CONFIG"]["parallel_workers"] = 2
         with self.assertRaisesRegex(ValueError, "parallel_workers"):
+            validate_simulation_config(config)
+
+    def test_pycharm_mode_defaults_to_numpy_process_pool(self):
+        config = website_default_simulation_config()
+        self.assertEqual(config["mode"], "pycharm")
+        self.assertFalse(config["TAICHI_CONFIG"]["use_taichi"])
+        self.assertEqual(config["STAGE_GA_CONFIG"]["parallel_workers"], 10)
+        self.assertEqual(config["SINGLE_STAGE_GA_CONFIG"]["parallel_workers"], 10)
+        config["mode"] = "pycharm"
+        self.assertIs(validate_simulation_config(config), config)
+        config["TAICHI_CONFIG"]["use_taichi"] = True
+        with self.assertRaisesRegex(ValueError, "use_taichi"):
             validate_simulation_config(config)
 
 

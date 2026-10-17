@@ -223,18 +223,29 @@ FRACTURE_CONFIG = {
 
 
 # ==================== 9. 常用路径 ====================
-PATH_CONFIG = {
-    "inputs": ROOT / "inputs",
-    "outputs": ROOT / "outputs",
-    "auto_plots": ROOT / "outputs" / "腐蚀综合代码_auto_plots",
-    "morphology_outputs": ROOT / "outputs" / "fracture_morphology_parameters",
-    "curve_outputs": ROOT / "outputs" / "curves",
-    "fracture_test_data": ROOT / "inputs" / "fracture_test_data.csv",
-    "material_test_data": ROOT / "inputs" / "material_test_data.csv",
-    "long_term_corrosion_data": ROOT / "inputs" / "long_term_corrosion_data.csv",
-    "curve_metadata": ROOT / "inputs" / "curve_metadata.csv",
-    "curves_dir": ROOT / "inputs" / "curves",
-}
+# 网站默认使用独立的研究数据区，避免把原始输入和生成结果写入源码目录。
+# 目录/文件名保留中文语义，并以“1”作为首个工作区编号；网页可一键切换编号。
+_data_root = Path(r"D:\research\DATA\Corrosion modelling")
+_workspace_id = 1
+
+
+def _workspace_paths(root: Path, workspace_id: int) -> dict[str, Path]:
+    suffix = str(int(workspace_id))
+    return {
+        "inputs": root / f"任务输入目录{suffix}",
+        "outputs": root / f"任务结果目录{suffix}",
+        "auto_plots": root / f"自动图片目录{suffix}",
+        "morphology_outputs": root / f"形貌参数结果目录{suffix}",
+        "curve_outputs": root / f"曲线结果目录{suffix}",
+        "fracture_test_data": root / f"断裂试验输入文件{suffix}.csv",
+        "material_test_data": root / f"材料试验输入文件{suffix}.csv",
+        "long_term_corrosion_data": root / f"长期腐蚀输入文件{suffix}.csv",
+        "curve_metadata": root / f"曲线元信息文件{suffix}.csv",
+        "curves_dir": root / f"曲线输入目录{suffix}",
+    }
+
+
+PATH_CONFIG = _workspace_paths(_data_root, _workspace_id)
 
 
 def geometry_values() -> tuple[int, int, int, float]:

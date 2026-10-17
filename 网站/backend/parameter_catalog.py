@@ -137,13 +137,15 @@ def simulation_catalog() -> list[dict]:
             help_text = HELP.get(path, comments.get(path, f"{GROUP_LABELS.get(group, group)}参数 {key}；值沿用统一配置。"))
             if "本任务未使用" in scope:
                 help_text += " 可编辑保存供独立分析复用；当前网站CA/GA任务不读取该字段。"
-            if group in managed:
-                help_text += " 由上传、工况和独立任务目录管理；修改由对应任务操作完成。"
+            if group == "ROOT":
+                help_text += " 这是网站源码根目录，由服务启动位置管理，不建议修改。"
+            elif group == "PATH_CONFIG":
+                help_text += " 可在网页中直接编辑；建议使用“数据工作区”快捷区统一生成并应用编号路径。"
             if group in deferred:
                 help_text += " 当前 CA/GA 运行链路不消费此字段。"
             entries.append({"path": path, "group": group, "key": key, "label": label,
                             "help": help_text, "type": value_type(value), "value": value,
-                            "scope": scope, "editable": group not in managed})
+                            "scope": scope, "editable": group != "ROOT"})
     return entries
 
 
@@ -187,6 +189,8 @@ def estimate_resources(config: dict, stages: int = 1, run_mode: str = "staged") 
         recommendations.append("估算内存超过4 GiB；建议降低并行数或网格层数。")
     if config["mode"] == "strict":
         recommendations.append("严格模式采用固定种子和单进程 NumPy。")
+    elif config["mode"] == "pycharm":
+        recommendations.append(f"PyCharm模式使用 NumPy ProcessPool，当前配置为 {configured_workers} 个进程；内存不足时优先降低 parallel_workers。")
     return {"estimated": True, "guaranteed_upper_bound": False,
             "run_mode": run_mode, "cells": cells, "workers": workers,
             "configured_workers": configured_workers, "stages": stages,
