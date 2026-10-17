@@ -144,6 +144,28 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())
+        if method == 'POST' and path == '/api/apdl/table-inspect':
+            from .apdl_materials import uploaded_table
+            table, source, _ = uploaded_table(self.server, self._body())
+            return self._json(200, dict(table, rows=table['rows'][:20], source=source))
+        if method == 'POST' and path == '/api/apdl/material-import':
+            from .apdl_materials import import_material
+            return self._json(200, import_material(self.server, self._body()))
+        if method == 'POST' and path == '/api/apdl/commands/check':
+            from .apdl_commands import check_commands
+            return self._json(200, check_commands(self.server, self._body()))
+        if method == 'POST' and path == '/api/apdl/comparisons':
+            from .apdl_analysis import save_comparison
+            return self._json(201, save_comparison(self.server, self._body()))
+        if method == 'GET' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'jobs']:
+            if parts[4] == 'commands':
+                from .apdl_commands import command_snapshot
+                return self._json(200, command_snapshot(self.server, parts[3]))
+            if parts[4] == 'diagnosis':
+                from .apdl_commands import _source
+                from .apdl_analysis import diagnose_output
+                _, output = _source(self.server, parts[3])
+                return self._json(200, diagnose_output(output))
         if method == "POST" and path == "/api/apdl/matlab-convert":
             from .apdl_matlab import convert_uploaded_matrix
             return self._json(200, convert_uploaded_matrix(self.server, self._body()))
