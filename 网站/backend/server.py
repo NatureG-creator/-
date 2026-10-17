@@ -144,6 +144,12 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())
+        if method == 'GET' and path == '/api/apdl/viewer/jobs':
+            from .apdl_viewer import viewer_jobs
+            return self._json(200, viewer_jobs(self.server))
+        if method == 'POST' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'jobs'] and parts[4] == 'viewer':
+            from .apdl_viewer import open_viewer
+            return self._json(200, open_viewer(self.server, parts[3], self._body()))
         if method == 'POST' and path == '/api/apdl/table-inspect':
             from .apdl_materials import uploaded_table
             table, source, _ = uploaded_table(self.server, self._body())

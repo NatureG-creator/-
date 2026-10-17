@@ -1,7 +1,8 @@
 import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} from './task_io.mjs';
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
 import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261017-apdl-contours';
-import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs';
+import {mountApdlViewer} from './apdl_viewer.mjs?v=20261017-apdl-viewer';
+import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261017-apdl-viewer';
 import {mountFitting,renderFittingResult} from './fitting.mjs';
 import {mountOrigin,renderOriginResult} from './origin.mjs';
 import {mountMultivariate,renderMultivariateResult} from './fitting_multivariate.mjs';
@@ -111,7 +112,7 @@ $('#sync-button').addEventListener('click',busy($('#sync-button'),async()=>{mess
 function readBatchControls(){workspace.batchMode=$('#batch-mode').value;workspace.parallelCaseWorkers=parseTyped($('#parallel-case-workers').value,'integer');workspace.sequentialEnabled=$('#sequential-enabled').checked;workspace.parallelEnabled=$('#parallel-enabled').checked;updateBatchAvailability();}
 async function boot(){try{defaults=await request('/api/defaults');workspace=createWorkspace(defaults);simulationCatalog=normaliseCatalog(defaults.simulation_catalog||catalogFromConfig(defaults.simulation));$('#health-text').textContent='本地服务已连接';$('#health-dot').parentElement.classList.add('ok');$('#capability').textContent=defaults.capabilities?.taichi?'NumPy / Taichi 依赖可用':'NumPy · Taichi 依赖不可用';$('#matlab-capability').textContent=defaults.capabilities?.matlab?'MATLAB 可用':'MATLAB 依赖需检查';$('#footer-version').textContent=`${defaults.version||'本地任务服务'} · 独立任务目录`;renderSimulation();renderCatalog('pointcloud');renderCases();bind();updateButtons();await refreshHistory();await refreshSyncStatus();}catch(error){$('#health-text').textContent='本地服务未连接';message('#global-message',`初始化失败：${error.message}。请启动本地服务后刷新页面。`,true);}}
 mountBenchmark({getPayload:()=>{if(!workspace)throw new Error('本地服务尚未初始化，请稍后重试');return collectSimulation(false);},post,openJob,get:request});
-Promise.resolve(mountApdl({get:request,post,openJob})).then(()=>mountMaterialTools({get:request,post})).catch(error=>message('#job-message',error.message,true));
+Promise.resolve(mountApdl({get:request,post,openJob})).then(()=>{mountMaterialTools({get:request,post});return mountApdlViewer($('#apdl-root'),{get:request,post});}).catch(error=>message('#job-message',error.message,true));
 mountFitting({get:request,post,openJob});
 mountMultivariate({get:request,post,openJob});
 mountTaskIO(request);
