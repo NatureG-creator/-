@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from .apdl_diagnostics import material_coverage_hint, output_policy_summary
+from .apdl_geometry import _counts
 from .apdl_macros import DIAGNOSTICS_SCHEMA_VERSION
 
 
@@ -85,8 +86,8 @@ def _precheck(output: Path, stats: dict, options: dict) -> dict | None:
             or diagnostics['output_policy'] != output_policy_summary(options)
             or manifest.get('output_policy') != diagnostics['output_policy']):
         raise ValueError('预检材料覆盖或保存策略与manifest原始参数不一致。')
-    nodes = int(stats['node_count'])
-    elements = int(stats['element_count'])
+    nodes, elements = _counts(options['nx'], options['ny'], options['layers'],
+                             options.get('mesh_type', 'solid185_hex'))
     quality = diagnostics['mesh_quality']
     if (stats['node_count'] != nodes or stats['element_count'] != elements
             or quality.get('node_count') != nodes or quality.get('element_count') != elements
@@ -122,7 +123,7 @@ def _centroids(output: Path, ids: np.ndarray, nodes: np.ndarray, count: int) -> 
         with (output/'elements.dat').open('r', encoding='ascii') as stream:
             for fields in _element_records(stream):
                 if len(fields) not in (6, 10, 12) or fields[0].upper() != 'EN':
-                    raise ValueError('elements.dat 不是 SOLID185/187 的 EN 记录格式')
+                    raise ValueError('elements.dat 不是 SOLID185/187/285 的 EN 记录格式')
                 element_id = int(fields[1])
                 if element_id not in wanted:
                     continue

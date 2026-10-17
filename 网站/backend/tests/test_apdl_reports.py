@@ -14,6 +14,23 @@ from backend.apdl_solver import read_tension_results
 
 
 class APDLReportsTests(unittest.TestCase):
+    def test_precheck_counts_must_follow_mesh_parameters(self):
+        from backend.apdl_reports import _precheck
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            g, _, _ = self.fixture(out)
+            g['stats']['element_count'] += 1
+            path = out/'diagnostics_precheck.json'
+            diagnostics = json.loads(path.read_text(encoding='utf-8'))
+            diagnostics['mesh_quality']['element_count'] += 1
+            path.write_text(json.dumps(diagnostics), encoding='utf-8')
+            self.update_manifest(out, lambda m: m.update(
+                stats=g['stats'], diagnostics=diagnostics,
+                files={**m['files'], 'diagnostics_precheck.json':
+                       hashlib.sha256(path.read_bytes()).hexdigest()}))
+            with self.assertRaisesRegex(ValueError, '网格参数'):
+                _precheck(out, g['stats'], g['options'])
+
     def test_solid187_en_emore_centroid_uses_four_corners(self):
         from backend.apdl_reports import _centroids
         with tempfile.TemporaryDirectory() as directory:
