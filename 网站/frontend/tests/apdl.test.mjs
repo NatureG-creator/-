@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import * as apdl from '../apdl.mjs';
 import {apdlDefaults,buildApdlPayload,availableSurfaceFiles,renderApdlResult,createFaceUploadManager,applyApdlPreset} from '../apdl.mjs';
 
+test('原生云图说明显示单位、真实变形和节点平均含义，出图失败不显示求解失败',()=>{
+ const html=renderApdlResult({solve_state:'solved',results:{contour_plots:{state:'completed',elapsed_seconds:11,plots:[{label:'总位移',unit:'mm'},{label:'节点平均等效应力',unit:'MPa'},{label:'节点平均等效塑性应变',unit:'1'}]}}});
+ for(const text of ['MAPDL 原生云图','真实比例 1 倍','节点平均','积分点峰值','MPa','末步'])assert.ok(html.includes(text),text);
+ const failed=renderApdlResult({solve_state:'solved',results:{contour_plots:{state:'failed',error:'<graphics>'}}});
+ assert.match(failed,/MAPDL 求解完成/);assert.match(failed,/云图导出失败/);assert.match(failed,/&lt;graphics&gt;/);
+ assert.doesNotMatch(failed,/MAPDL 求解失败/);
+});
+
 test('结果卡区分求解后处理和未核验RST，不把未核验显示成不适用',()=>{
  const pending=renderApdlResult({run_mode:'build',build_state:'pending',stage_states:{geometry:'running'}});
  assert.match(pending,/正在生成几何与网格/);assert.doesNotMatch(pending,/APDL 输入包已生成/);

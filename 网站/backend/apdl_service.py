@@ -431,6 +431,15 @@ def run_apdl_job(spec,job_dir,progress=None):
             result['solve_state']='postprocessing'
             with stage('postprocess','postprocess_seconds','apdl_post'):
                 result['results']=read_tension_results(output,geometry['stats'],spec['options'],expected_nodes=geometry['nodes'])
+                from .apdl_plots import render_result_contours
+                try:
+                    plots=render_result_contours(output,spec['options'],progress=progress)
+                except Exception as exc:
+                    plots=dict(state='failed',plots=[],error=f'{type(exc).__name__}: {exc}')
+                result['results']['contour_plots']=plots
+                result['results']['files'].extend(plots.get('files',[]))
+                if plots['state']!='completed':
+                    result['results']['warnings'].append('云图导出失败，已完成的求解与数值结果保留：'+plots.get('error','请检查云图日志。'))
             result['solve_state']='solved'
     except Exception as exc:
         result.update(error=str(exc),failure_stage=current_stage)

@@ -7,6 +7,23 @@ from scipy.io import savemat
 
 
 class ApdlSourceTests(unittest.TestCase):
+    def test_native_plot_failure_does_not_change_successful_solve(self):
+        from backend.apdl_service import run_apdl_job
+        from backend.apdl_geometry import normalise_options
+        from unittest.mock import patch
+        for plot_result in ({'state': 'failed', 'error': 'graphics unavailable', 'plots': []}, OSError('cannot export')):
+            with self.subTest(plot_result=plot_result), tempfile.TemporaryDirectory() as folder:
+                spec = {'faces': {}, 'options': normalise_options({'corrosion_mode': 'flat'}), 'run_mode': 'solve'}
+                kwargs = {'side_effect': plot_result} if isinstance(plot_result, Exception) else {'return_value': plot_result}
+                with patch('backend.apdl_solver.run_mapdl', return_value={'state': 'process_finished'}), \
+                     patch('backend.apdl_solver.read_tension_results', return_value={'solve_state': 'solved', 'warnings': [], 'files': []}), \
+                     patch('backend.apdl_plots.render_result_contours', **kwargs) as plotting:
+                    result = run_apdl_job(spec, Path(folder))
+                self.assertEqual(result['solve_state'], 'solved')
+                self.assertEqual(result['results']['contour_plots']['state'], 'failed')
+                self.assertTrue(result['results']['warnings'])
+                plotting.assert_called_once()
+
     def test_solver_failure_preserves_built_inputs_and_failed_summary(self):
         from backend.apdl_service import run_apdl_job
         from backend.apdl_geometry import normalise_options

@@ -1,6 +1,6 @@
 import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} from './task_io.mjs';
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
-import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261017-conforming-tetra';
+import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261017-apdl-contours';
 import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs';
 import {mountFitting,renderFittingResult} from './fitting.mjs';
 import {mountOrigin,renderOriginResult} from './origin.mjs';

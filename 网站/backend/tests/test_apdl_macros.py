@@ -15,6 +15,19 @@ from backend.apdl_presets import ORIGINAL_CURVE
 
 
 class APDLMacroTests(unittest.TestCase):
+    def test_bundle_includes_native_contour_macro_but_does_not_resolve_for_plots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            self.bundle(out, material_model='multilinear_iso', plastic_curve=ORIGINAL_CURVE,
+                        allow_negative_slope=True)
+            macro = (out/'plots.mac').read_text()
+            self.assertIn('PLNSOL,EPPL,EQV', macro)
+            with zipfile.ZipFile(out/'apdl_tension_input_bundle.zip') as archive:
+                self.assertIn('plots.mac', archive.namelist())
+            manifest = json.loads((out/'manifest.json').read_text(encoding='utf-8'))
+            self.assertEqual(manifest['files']['plots.mac'], hashlib.sha256((out/'plots.mac').read_bytes()).hexdigest())
+            self.assertEqual((out/'solve.mac').read_text().count('\nSOLVE\n'), 1)
+
     def test_nonlinear_nodal_export_does_not_alternate_stress_and_strain_reads(self):
         for model in ('bilinear_iso', 'multilinear_iso'):
             with self.subTest(model=model), tempfile.TemporaryDirectory() as directory:

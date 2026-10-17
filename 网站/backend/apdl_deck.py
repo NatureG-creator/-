@@ -9,6 +9,7 @@ import zipfile
 import numpy as np
 
 from .apdl_diagnostics import diagnostics_for_geometry
+from .apdl_plots import contour_commands
 from .apdl_macros import (DIAGNOSTICS_SCHEMA_VERSION, diagnostic_macros,
                           material_coverage_commands, output_commands)
 
@@ -182,6 +183,8 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
     solve += ['SOLVE', 'FINISH', 'SAVE']
     _ascii(output_dir/'solve.mac', '\n'.join(solve))
     _ascii(output_dir/'post.mac', _post(geometry))
+    _ascii(output_dir/'plots.mac', contour_commands(o['material_model']))
+    files.append('plots.mac')
     for name, text in diagnostic_macros(geometry).items():
         _ascii(output_dir/name, text)
         files.append(name)
@@ -261,6 +264,10 @@ MAPDL *VWRITE输出行上限128字符；曲线采用E19.11，节点编号F12.0�
 flat解析EA/L与EAδ/L只是小变形、弹性、自由泊松伸缩参考；非线性或夹持工况不保证满足此参考。
 SAVE模型及RESCONTROL重启动文件不代表任意断电点可自动恢复；重启需保留MAPDL完整文件集并人工核对。
 输入包生成成功不代表求解已经成功，任何CSV、RST结果均必须由真实MAPDL生成。
+plots.mac 为独立原生云图宏：已有求解结果时，先 RESUME,corrosion,db，再 /POST1、FILE,corrosion,rst、SET,LAST 后 /INPUT,plots,mac。
+网站标准参数求解成功后自动在 contour_plots 子目录恢复已有 DB/RST 出图，不重新求解。独立运行 main.inp 后，可手动执行上述后处理。
+输出末步总位移(mm)、节点平均等效应力(MPa)，弹塑性工况另输出节点平均等效塑性应变(无量纲)；真实变形比例1倍，FULL平均，不能当作积分点峰值。
+云图导出失败与物理解算状态分别记录，不修改材料曲线、几何、边界或加载。
 '''
     (output_dir/'README_zh.md').write_text(readme, encoding='utf-8')
     files.append('README_zh.md')
