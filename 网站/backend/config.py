@@ -21,6 +21,9 @@ CONFIG_NAMES = (
     "MATLAB_CA_COMPARISON_CONFIG", "FIGURE_CONFIG", "FRACTURE_CONFIG",
 )
 
+PATH_DIRECTORY_KEYS = ("inputs", "outputs", "auto_plots", "morphology_outputs", "curve_outputs", "curves_dir")
+PATH_FILE_KEYS = ("fracture_test_data", "material_test_data", "long_term_corrosion_data", "curve_metadata")
+
 
 def _jsonable(value):
     if hasattr(value, "tolist"):
@@ -40,6 +43,16 @@ def default_simulation_config() -> dict:
     config["mode"] = "strict"
     config["TAICHI_CONFIG"]["use_taichi"] = False
     config["STAGE_GA_CONFIG"]["parallel_workers"] = 1
+    return config
+
+
+def website_default_simulation_config() -> dict:
+    """默认网页任务走 PyCharm 对应的 NumPy 进程池路径。"""
+    config = default_simulation_config()
+    config["mode"] = "pycharm"
+    config["TAICHI_CONFIG"]["use_taichi"] = False
+    for group in ("STAGE_GA_CONFIG", "SINGLE_STAGE_GA_CONFIG"):
+        config[group]["parallel_workers"] = 10
     return config
 
 
@@ -70,6 +83,23 @@ def validate_value(value, original, path: str):
         valid = False
     if not valid:
         raise ValueError(f"{path} 的类型、数组长度或数值无效")
+
+
+def validate_path_config(path_config: dict) -> dict:
+    """校验网页提交的研究数据路径；路径本身由用户决定，但不能为空或含 NUL。"""
+    if not isinstance(path_config, dict):
+        raise ValueError("PATH_CONFIG 必须是对象")
+    expected = set(PATH_DIRECTORY_KEYS) | set(PATH_FILE_KEYS)
+    if set(path_config) != expected:
+        raise ValueError("PATH_CONFIG 的字段与统一配置不一致")
+    for key, value in path_config.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"PATH_CONFIG.{key} 必须是非空路径")
+        if "\x00" in value:
+            raise ValueError(f"PATH_CONFIG.{key} 不能包含 NUL 字符")
+        if len(value) > 32760:
+            raise ValueError(f"PATH_CONFIG.{key} 路径过长")
+    return path_config
 
 
 def validate_targets(value, run_mode: str) -> int:
@@ -108,6 +138,9 @@ def validate_simulation_config(config: dict) -> dict:
     for name in ("ROOT", "PATH_CONFIG", "TARGET_SOURCE"):
         if name in config:
             validate_value(config[name], template[name], name)
+    if "PATH_CONFIG" not in config:
+        raise ValueError("缺少 PATH_CONFIG")
+    validate_path_config(config["PATH_CONFIG"])
     if "MULTI_CASE_CONFIG" in config:
         multi = config["MULTI_CASE_CONFIG"]
         original = template["MULTI_CASE_CONFIG"]
@@ -226,13 +259,15 @@ def validate_simulation_config(config: dict) -> dict:
                 raise ValueError(f"FIGURE_CONFIG.{key} 不是有效配色")
     except ImportError:
         pass
-    if config.get("mode") not in {"strict", "fast"}:
-        raise ValueError("mode 必须为 strict 或 fast")
+    if config.get("mode") not in {"strict", "pycharm", "fast"}:
+        raise ValueError("mode 必须为 strict、pycharm 或 fast")
     if config["mode"] == "strict":
         if config["TAICHI_CONFIG"]["use_taichi"]:
             raise ValueError("严格可复现模式要求 use_taichi=false")
         if config["STAGE_GA_CONFIG"]["parallel_workers"] != 1:
             raise ValueError("严格可复现模式要求 parallel_workers=1")
+    if config["mode"] == "pycharm" and config["TAICHI_CONFIG"]["use_taichi"]:
+        raise ValueError("PyCharm模式要求 use_taichi=false")
     seed = config["GA_CONFIG"]["seed"]
     if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**32:
         raise ValueError("GA_CONFIG.seed 必须为0到2^32-1的整数")

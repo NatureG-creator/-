@@ -64,7 +64,7 @@ def capabilities() -> dict:
     return {"matlab": bool(matlab), "matlab_path": matlab,
             "taichi": importlib.util.find_spec("taichi") is not None,
             "python": sys.version.split()[0], "python_path": sys.executable,
-            "local_only": True, "resume_backend": "NumPy", "version": VERSION}
+            "local_only": True, "resume_backend": "NumPy strict / NumPy ProcessPool PyCharm", "version": VERSION}
 
 
 def sha256(path: Path) -> str:

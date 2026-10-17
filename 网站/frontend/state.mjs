@@ -26,9 +26,10 @@ export function catalogFromConfig(config) {
   visit(config);return normaliseCatalog(result);
 }
 export function applyMode(config, mode) {
-  if (!['strict','fast'].includes(mode)) throw new Error('请选择严格或高速模式');
+  if (!['strict','pycharm','fast'].includes(mode)) throw new Error('请选择严格、PyCharm 或 Taichi 高速模式');
   config.mode=mode; config.TAICHI_CONFIG ||= {};config.TAICHI_CONFIG.use_taichi=mode==='fast';
   if(mode==='strict') for(const group of ['STAGE_GA_CONFIG','SINGLE_STAGE_GA_CONFIG']) { config[group] ||= {};config[group].parallel_workers=1; }
+  if(mode==='pycharm') for(const group of ['STAGE_GA_CONFIG','SINGLE_STAGE_GA_CONFIG']) { config[group] ||= {}; if(!Number.isInteger(config[group].parallel_workers)||config[group].parallel_workers<=1) config[group].parallel_workers=10; }
   return config;
 }
 export function createWorkspace(defaults) {

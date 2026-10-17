@@ -11,7 +11,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .config import default_simulation_config, validate_simulation_config, validate_targets
+from .config import (PATH_DIRECTORY_KEYS, PATH_FILE_KEYS, website_default_simulation_config,
+                     validate_path_config, validate_simulation_config, validate_targets)
 from .git_sync import sync_status, sync_website
 from .job_service import JobService
 from .pointcloud_config import catalog
@@ -89,8 +90,24 @@ class Handler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
         if method == "GET" and path == "/api/defaults":
             from .parameter_catalog import simulation_catalog
-            return self._json(200, {"simulation": default_simulation_config(),
-                                   "simulation_catalog": simulation_catalog(),
+            defaults = website_default_simulation_config()
+            path_catalog = None
+            saved_paths = self.server.runtime / "path_config.json"
+            if saved_paths.is_file():
+                try:
+                    saved = json.loads(saved_paths.read_text(encoding="utf-8"))
+                    validate_path_config(saved)
+                    defaults["PATH_CONFIG"] = saved
+                    path_catalog = saved
+                except (OSError, ValueError, json.JSONDecodeError):
+                    pass
+            parameters = simulation_catalog()
+            if path_catalog:
+                for item in parameters:
+                    if item["group"] == "PATH_CONFIG":
+                        item["value"] = path_catalog[item["key"]]
+            return self._json(200, {"simulation": defaults,
+                                   "simulation_catalog": parameters,
                                    "pointcloud": catalog(), "capabilities": capabilities(),
                                    "version": VERSION})
         if method == "GET" and path == "/api/health":
@@ -115,6 +132,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())
+        if method == "POST" and path == "/api/apdl/matlab-convert":
+            from .apdl_matlab import convert_uploaded_matrix
+            return self._json(200, convert_uploaded_matrix(self.server, self._body()))
         if method == "POST" and path == "/api/apdl/precheck":
             from .apdl_service import precheck_apdl
             return self._json(200,precheck_apdl(self.server,self._body()))
@@ -152,6 +172,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"config": config,
                                    "resources": estimate_resources(config, len(targets), body.get("run_mode", "staged")),
                                    "issues": []})
+        if method == "POST" and path == "/api/paths/apply":
+            body = self._body()
+            paths = validate_path_config(body.get("PATH_CONFIG"))
+            created = []
+            for key in PATH_DIRECTORY_KEYS:
+                target = Path(paths[key]).expanduser()
+                target.mkdir(parents=True, exist_ok=True)
+                created.append(str(target.resolve()))
+            for key in PATH_FILE_KEYS:
+                parent = Path(paths[key]).expanduser().parent
+                parent.mkdir(parents=True, exist_ok=True)
+                created.append(str(parent.resolve()))
+            saved = {key: str(Path(value).expanduser().resolve()) for key, value in paths.items()}
+            path_file = self.server.runtime / "path_config.json"
+            path_file.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path_file.with_suffix(".tmp")
+            temporary.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary, path_file)
+            from .config import source_config
+            source_config.PATH_CONFIG.clear()
+            source_config.PATH_CONFIG.update({key: Path(value) for key, value in saved.items()})
+            return self._json(200, {"PATH_CONFIG": saved, "created_directories": sorted(set(created))})
         if method == "GET" and path == "/api/jobs":
             folders = sorted((self.server.runtime / "jobs").iterdir(),
                              key=lambda item: item.stat().st_mtime, reverse=True)

@@ -467,15 +467,17 @@ class JobService:
             state["summary"] = json_record(folder / "outputs" / "summary.json")
             state["effective_config"] = json_record(folder / "outputs" / "effective_config.json")
             state["timing"] = json_record(folder / "outputs" / "timing.json")
+            stage_exports = any((folder / "outputs").glob("stage_*.manifest.json")) if (folder / "outputs").is_dir() else False
+            checkpoint_exists = (any((folder / "checkpoints").rglob("progress.json"))
+                                if (folder / "checkpoints").is_dir() else False)
             state["checkpoint"] = {
-                "exists": any((folder / "checkpoints").rglob("progress.json")) if
-                          (folder / "checkpoints").is_dir() else False,
+                "exists": checkpoint_exists or stage_exports,
                 "available": state.get("kind") == "simulation" and
-                             state["spec"].get("config", {}).get("mode") == "strict" and
-                             state["state"] in {"failed", "interrupted"},
+                             state["spec"].get("config", {}).get("mode") in {"strict", "pycharm"} and
+                             state["state"] in {"failed", "interrupted"} and (checkpoint_exists or stage_exports),
                 "validated": False}
             state["progress"] = {key: state.get(key) for key in (
-                "stage", "generation", "completed_individuals", "total_individuals", "phase",
+                "stage", "generation", "maxgen", "completed_individuals", "total_individuals", "phase",
                 "stages_completed", "total_stages", "benchmark_mode", "label",
                 "completed_modes", "total_modes")}
             if state["state"] == "running":
@@ -499,8 +501,8 @@ class JobService:
         with self._job_lock:
             state = self.get_job(job_id)
             spec = state["spec"]
-            if spec.get("kind") != "simulation" or spec["config"]["mode"] != "strict":
-                raise ValueError("只有严格可复现模拟支持恢复")
+            if spec.get("kind") != "simulation" or spec["config"]["mode"] not in {"strict", "pycharm"}:
+                raise ValueError("只有严格或 PyCharm NumPy 模拟支持阶段恢复")
             if state["state"] not in {"failed", "interrupted"} or process_alive(state.get("pid")):
                 raise ValueError("任务当前不能恢复，原任务可能仍在运行")
             from .runner import precheck_resume

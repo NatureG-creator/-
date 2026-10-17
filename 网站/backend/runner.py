@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -94,8 +95,8 @@ def precheck_resume(spec: dict, job_dir: Path) -> dict:
     """Read-only binding/integrity check used before spawning a resumed worker."""
     config = validate_simulation_config(spec["config"])
     validate_targets(spec["targets"], spec["run_mode"])
-    if config["mode"] != "strict":
-        raise ValueError("高速模式不提供逐个体严格恢复；请创建新任务")
+    if config["mode"] not in {"strict", "pycharm"}:
+        raise ValueError("Taichi 高速模式不提供阶段恢复；请创建新任务")
     fingerprint = fingerprint_config(spec)
     engine = engine_environment_fingerprint()
     request_path = Path(job_dir) / "request.json"
@@ -157,7 +158,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
     config = validate_simulation_config(spec["config"])
     targets = spec["targets"]
     validate_targets(targets, spec["run_mode"])
-    actual_backend = "NumPy"
+    actual_backend = "NumPy ProcessPool" if config["mode"] == "pycharm" else "NumPy"
     if config["mode"] == "fast" and config["TAICHI_CONFIG"]["use_taichi"]:
         try:
             import taichi  # noqa: F401
@@ -169,7 +170,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
         actual_backend = "Taichi"
     job_dir = Path(job_dir)
     started = time.perf_counter()
-    if config["mode"] == "strict":
+    if config["mode"] in {"strict", "pycharm"}:
         precheck_resume(spec, job_dir)
     output = job_dir / "outputs"
     output.mkdir(parents=True, exist_ok=True)
@@ -193,6 +194,9 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
               "postprocess_seconds": 0.0, "peak_memory_bytes": None}
     if config["mode"] == "fast":
         warnings.append("高速模式沿用原GA；不提供逐个体检查点及严格中断恢复。")
+    elif config["mode"] == "pycharm":
+        workers = int(settings["parallel_workers"])
+        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}；阶段完成后可复用，阶段内中断需重算当前阶段。")
 
     def timing_doc():
         document = dict(timing)
@@ -238,7 +242,8 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
     for index, row in enumerate(targets, start=1):
         stage_file = output / f"stage_{index:03d}.npz"
         read_started = time.perf_counter()
-        manifest = _stage_manifest(stage_file, fingerprint, engine_fingerprint) if config["mode"] == "strict" else None
+        manifest = (_stage_manifest(stage_file, fingerprint, engine_fingerprint)
+                    if config["mode"] in {"strict", "pycharm"} else None)
         if manifest is not None:
             result = _read_stage(stage_file)
             timing["reading_seconds"] += time.perf_counter() - read_started
@@ -247,8 +252,8 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                 timing[name] = value
         else:
             timing["reading_seconds"] += time.perf_counter() - read_started
-            emit("compute", stage=index, generation=1, completed_individuals=0,
-                 total_individuals=int(settings["nind"]))
+            emit("compute", stage=index, generation=1, maxgen=int(settings["maxgen"]),
+                 completed_individuals=0, total_individuals=int(settings["nind"]))
             if config["mode"] == "strict":
                 def stage_progress(event):
                     if event["phase"] == "generation_completed":
@@ -260,6 +265,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                         _atomic_json(output / "timing.json", timing_doc())
                     event["timing"] = timing_doc()
                     event["total_stages"] = len(targets)
+                    event["maxgen"] = int(settings["maxgen"])
                     if progress is not None:
                         progress(event)
                 stage = run_strict_stage(
@@ -283,6 +289,18 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                 original_initializer = fitness_module._fitness_worker_init
                 fitness_module._fitness_worker_init = functools.partial(_configured_worker_init, config)
                 compute_started = time.perf_counter()
+                def ga_progress(message):
+                    """将现有 GA 文本进度转成网页可读的结构化进度。"""
+                    generation_match = re.search(r"Gen(\d+)", message)
+                    individual_match = re.search(r"已完成\s+(\d+)\s*/\s*(\d+)\s+个体", message)
+                    changes = {"stage": index, "phase": "compute", "maxgen": int(settings["maxgen"]),
+                               "label": message}
+                    if generation_match:
+                        changes["generation"] = int(generation_match.group(1))
+                    if individual_match:
+                        changes["completed_individuals"] = int(individual_match.group(1))
+                        changes["total_individuals"] = int(individual_match.group(2))
+                    emit("compute", **changes)
                 try:
                     with scientific_settings(config):
                         stage = run_ga(
@@ -299,6 +317,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                             parallel_workers=int(settings["parallel_workers"]),
                             allow_taichi_parallel=bool(config["TAICHI_CONFIG"]["allow_taichi_parallel"]),
                             taichi_arch=str(config["TAICHI_CONFIG"]["arch"]),
+                            verbose=ga_progress,
                         )
                 finally:
                     fitness_module._fitness_worker_init = original_initializer
@@ -365,7 +384,8 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
             timing["plotting_seconds"] += time.perf_counter() - plot_started
         persist_summaries()
         emit("stage_completed", stage=index, stages_completed=index,
-             generation=summary["generations"], completed_individuals=int(settings["nind"]),
+             generation=summary["generations"], maxgen=int(settings["maxgen"]),
+             completed_individuals=int(settings["nind"]),
              total_individuals=int(settings["nind"]))
     previous = None
     del result

@@ -69,6 +69,21 @@ def run_job(job_id: str, runtime: Path) -> None:
                 detail = (runtime / "uploads" / spec["detail_id"] / "input").with_suffix(spec["detail_extension"])
             update({"phase": "matlab"})
             result = run_pointcloud(job_dir, reference, detail, spec["pointcloud_config"])
+            # The task-local outputs remain authoritative; the archive is a
+            # separate, categorized copy for downstream research use.
+            from .pointcloud_archive import archive_pointcloud_job
+            archive = archive_pointcloud_job(job_dir, job_id=job_id)
+            result["archive"] = archive
+            summary_path = job_dir / "outputs" / "summary.json"
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                summary["archive"] = archive
+                _atomic_json(summary_path, summary)
+            except (OSError, ValueError, TypeError):
+                # The task result still carries the archive status; a malformed
+                # summary must not hide an otherwise completed MATLAB run.
+                pass
+            update({"phase": "archive", "archive": archive})
         else:
             update({"phase": "finite_element_export"})
             source = job_dir / spec["frozen_source_path"]

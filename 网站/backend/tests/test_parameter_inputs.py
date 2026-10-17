@@ -27,7 +27,24 @@ class ParameterCatalogTests(unittest.TestCase):
             self.assertIn(item["type"], {"number", "integer", "boolean", "string", "array", "object", "null"})
         paths = [item for item in entries if item["group"] in {"PATH_CONFIG", "ROOT"}]
         self.assertTrue(paths)
-        self.assertTrue(all(not item["editable"] for item in paths))
+        self.assertTrue(all(item["editable"] for item in paths if item["group"] == "PATH_CONFIG"))
+        self.assertTrue(all(not item["editable"] for item in paths if item["group"] == "ROOT"))
+
+    def test_default_workspace_paths_use_research_root_and_numbered_chinese_names(self):
+        paths = cfg.default_simulation_config()["PATH_CONFIG"]
+        self.assertTrue(all(str(value).startswith("D:\\research\\DATA\\Corrosion modelling\\") for value in paths.values()))
+        self.assertTrue(str(paths["inputs"]).endswith("任务输入目录1"))
+        self.assertTrue(str(paths["curve_metadata"]).endswith("曲线元信息文件1.csv"))
+
+    def test_path_config_rejects_empty_or_nul_paths(self):
+        config = cfg.default_simulation_config()
+        config["PATH_CONFIG"]["inputs"] = ""
+        with self.assertRaisesRegex(ValueError, "inputs"):
+            cfg.validate_simulation_config(config)
+        config = cfg.default_simulation_config()
+        config["PATH_CONFIG"]["inputs"] = "D:\\研究\x00数据"
+        with self.assertRaisesRegex(ValueError, "NUL"):
+            cfg.validate_simulation_config(config)
 
     def test_resource_estimate_is_json_and_scales_with_stages(self):
         from backend.parameter_catalog import estimate_resources
