@@ -83,17 +83,27 @@ def _post(geometry: dict) -> str:
     if o['material_model'] == 'multilinear_iso':
         lines += material_coverage_commands()
     if o['export_full_field']:
+        lines += ['SET,LAST']
+        if o['material_model'] != 'elastic':
+            # Switching S/EPPL at every node repeatedly recomputes nodal averaging.
+            lines += [
+                '*GET,nn,NODE,0,COUNT', '*DIM,ns_values,ARRAY,nn', '*DIM,np_values,ARRAY,nn',
+                'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
+                '*GET,seqv,NODE,nid,S,EQV', 'ns_values(jj)=seqv', '*ENDDO',
+                'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
+                '*GET,eqpl,NODE,nid,EPPL,EQV', 'np_values(jj)=eqpl', '*ENDDO',
+            ]
         lines += [
-            'SET,LAST', '*CFOPEN,nodal_results,csv',
+            '*CFOPEN,nodal_results,csv',
             '! Final set; no header: id,x,y,z,ux,uy,uz,seqv,eqpl.',
             '! S/EPPL are averaged nodal results, not integration-point peaks.',
             '! Short field widths keep nine columns within 128 output characters.',
             '*GET,nn,NODE,0,COUNT', 'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
             '*GET,xx,NODE,nid,LOC,X', '*GET,yy,NODE,nid,LOC,Y', '*GET,zz,NODE,nid,LOC,Z',
             '*GET,uu,NODE,nid,U,X', '*GET,vv,NODE,nid,U,Y', '*GET,ww,NODE,nid,U,Z',
-            '*GET,seqv,NODE,nid,S,EQV',
         ]
-        lines += ['*GET,eqpl,NODE,nid,EPPL,EQV'] if o['material_model'] != 'elastic' else ['eqpl=0']
+        lines += (['seqv=ns_values(jj)', 'eqpl=np_values(jj)']
+                  if o['material_model'] != 'elastic' else ['*GET,seqv,NODE,nid,S,EQV', 'eqpl=0'])
         lines += [
             '*VWRITE,nid,xx,yy,zz,uu,vv,ww,seqv,eqpl',
             "(F12.0,8(',',E13.5))",

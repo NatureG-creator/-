@@ -15,6 +15,29 @@ from backend.apdl_presets import ORIGINAL_CURVE
 
 
 class APDLMacroTests(unittest.TestCase):
+    def test_nonlinear_nodal_export_does_not_alternate_stress_and_strain_reads(self):
+        for model in ('bilinear_iso', 'multilinear_iso'):
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as directory:
+                options = dict(material_model=model, export_full_field=True)
+                if model == 'multilinear_iso':
+                    options.update(plastic_curve=ORIGINAL_CURVE, allow_negative_slope=True)
+                self.bundle(directory, **options)
+                post = (Path(directory)/'post.mac').read_text()
+                loops = []
+                for line in post.splitlines():
+                    if line.startswith('*DO,'):
+                        loops.append([])
+                    elif line == '*ENDDO':
+                        body = '\n'.join(loops.pop())
+                        self.assertFalse('NODE,nid,S,EQV' in body and 'NODE,nid,EPPL,EQV' in body,
+                                         'Alternating result types recomputes nodal averaging for every node.')
+                    elif loops:
+                        loops[-1].append(line)
+                self.assertIn('*GET,seqv,NODE,nid,S,EQV', post)
+                self.assertIn('*GET,eqpl,NODE,nid,EPPL,EQV', post)
+                self.assertIn('*VWRITE,nid,xx,yy,zz,uu,vv,ww,seqv,eqpl', post)
+                self.assertIn("(F12.0,8(',',E13.5))", post)
+
     def test_tetra_uses_native_error_selection_without_raising_message_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             out=Path(directory)
