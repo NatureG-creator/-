@@ -85,8 +85,8 @@ def _precheck(output: Path, stats: dict, options: dict) -> dict | None:
             or diagnostics['output_policy'] != output_policy_summary(options)
             or manifest.get('output_policy') != diagnostics['output_policy']):
         raise ValueError('预检材料覆盖或保存策略与manifest原始参数不一致。')
-    nodes = options['nx']*options['ny']*(options['layers']+1)
-    elements = (options['nx']-1)*(options['ny']-1)*options['layers']
+    nodes = int(stats['node_count'])
+    elements = int(stats['element_count'])
     quality = diagnostics['mesh_quality']
     if (stats['node_count'] != nodes or stats['element_count'] != elements
             or quality.get('node_count') != nodes or quality.get('element_count') != elements
@@ -97,6 +97,22 @@ def _precheck(output: Path, stats: dict, options: dict) -> dict | None:
     return copy.deepcopy(diagnostics)
 
 
+def _element_records(stream):
+    pending = None
+    for line in stream:
+        fields = line.strip().split(',')
+        if fields[0].upper() == 'EN':
+            if pending is not None:
+                yield pending
+            pending = fields
+        elif fields[0].upper() == 'EMORE' and pending is not None and len(pending) == 10 and len(fields) == 3:
+            pending += fields[1:]
+        else:
+            raise ValueError('elements.dat 含无效 EN/EMORE 记录')
+    if pending is not None:
+        yield pending
+
+
 def _centroids(output: Path, ids: np.ndarray, nodes: np.ndarray, count: int) -> dict:
     """Stream EN commands and retain only elements used by the history."""
     wanted = set(map(int, ids))
@@ -104,21 +120,23 @@ def _centroids(output: Path, ids: np.ndarray, nodes: np.ndarray, count: int) -> 
     node_ids = nodes[:, 0]
     try:
         with (output/'elements.dat').open('r', encoding='ascii') as stream:
-            for line in stream:
-                fields = line.strip().split(',')
-                if len(fields) != 10 or fields[0].upper() != 'EN':
-                    raise ValueError('elements.dat 不是 EN,id,n1,...,n8 格式')
+            for fields in _element_records(stream):
+                if len(fields) not in (6, 10, 12) or fields[0].upper() != 'EN':
+                    raise ValueError('elements.dat 不是 SOLID185/187 的 EN 记录格式')
                 element_id = int(fields[1])
                 if element_id not in wanted:
                     continue
                 if element_id in centers or not 1 <= element_id <= count:
                     raise ValueError('原始单元编号重复或越界')
                 references = np.asarray([int(value) for value in fields[2:]], dtype=np.int64)
+                corner_count = 8 if len(fields) == 10 else 4
+                references_for_center = references[:corner_count]
                 indices = np.searchsorted(node_ids, references)
-                if (len(np.unique(references)) != 8 or np.any(indices >= len(node_ids))
+                if (len(np.unique(references)) != len(references) or np.any(indices >= len(node_ids))
                         or np.any(node_ids[indices] != references)):
                     raise ValueError('原始单元引用无效节点')
-                centers[element_id] = (nodes[indices, 1:]/8).sum(axis=0)
+                center_indices = np.searchsorted(node_ids, references_for_center)
+                centers[element_id] = (nodes[center_indices, 1:]/corner_count).sum(axis=0)
         if set(centers) != wanted:
             raise ValueError('原始网格中缺少材料筛查引用单元')
     except (OSError, UnicodeError, OverflowError, ValueError) as exc:
@@ -142,9 +160,13 @@ def read_diagnostics_reports(output: Path, stats: dict, options: dict,
         raise ValueError('新诊断schema需要可核验的原始 nodes.dat 网格。')
     if not np.array_equal(reference_nodes[:, 0], np.arange(1, stats['node_count']+1)):
         raise ValueError('新诊断schema原始网格节点必须使用连续编号。')
-    grip = options['ny']*(options['layers']+1)
+    xmin = float(np.min(reference_nodes[:, 1]))
+    xmax = float(np.max(reference_nodes[:, 1]))
+    tolerance = stats.get('grip_tolerance_mm', max(float(options['dx_mm'])*.01, 1e-12))
+    grip = int(np.count_nonzero(np.isclose(reference_nodes[:, 1], xmin, rtol=0, atol=tolerance)))
+    loaded = int(np.count_nonzero(np.isclose(reference_nodes[:, 1], xmax, rtol=0, atol=tolerance)))
     expected = np.asarray([[1, stats['node_count'], stats['element_count'], -1, -1, 1],
-                           [2, stats['node_count'], stats['element_count'], grip, grip, 1]])
+                           [2, stats['node_count'], stats['element_count'], grip, loaded, 1]])
     actual = _csv(output/'apdl_self_check.csv')
     if actual.shape != expected.shape or not np.array_equal(actual, expected):
         raise ValueError('apdl_self_check.csv 的阶段、节点/单元/端面数量或passed标志与预期不一致。')

@@ -15,6 +15,19 @@ from backend.apdl_presets import ORIGINAL_CURVE
 
 
 class APDLMacroTests(unittest.TestCase):
+    def test_tetra_uses_native_error_selection_without_raising_message_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out=Path(directory)
+            self.bundle(out, mesh_type='solid187_tetra')
+            main=(out/'main.inp').read_text()
+            self.assertIn('SHPP,ON\nSHPP,SILENT,ON', main)
+            quality=(out/'mesh_quality.mac').read_text()
+            self.assertIn('ESCHECK,ESEL,ERR', quality)
+            self.assertIn('*GET,ac_nshape,ELEM,0,COUNT', quality)
+            self.assertIn('*IF,ac_nshape,GT,0,THEN', quality)
+            self.assertNotIn('/NERR', main+quality)
+            self.assertNotIn('SHPP,WARN', main+quality)
+
     def bundle(self, directory, **options):
         geometry = build_geometry(np.array([[.2, .3, .4], [.5, .6, .7]]), None,
                                   dict(dx_mm=10, dy_mm=5, layers=2, **options))
@@ -57,6 +70,7 @@ class APDLMacroTests(unittest.TestCase):
             self.assertEqual(positions, sorted(positions))
             quality = (out/'mesh_quality.mac').read_text()
             self.assertIn('/OUTPUT,mesh_quality_report,txt', quality)
+            self.assertNotIn('/NERR', quality)
             self.assertIn('CHECK\nSHPP,STATUS\nSHPP,SUMMARY\n/OUTPUT', quality)
             self.assertNotIn('SHPP,WARN', main+quality)
 

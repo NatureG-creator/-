@@ -14,6 +14,16 @@ from backend.apdl_solver import read_tension_results
 
 
 class APDLReportsTests(unittest.TestCase):
+    def test_solid187_en_emore_centroid_uses_four_corners(self):
+        from backend.apdl_reports import _centroids
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out/'elements.dat').write_text('EN,1,1,2,3,4,5,6,7,8\nEMORE,9,10\n')
+            xyz = np.array([[0,0,0],[1,0,0],[0,1,0],[0,0,1],
+                [.5,0,0],[.5,.5,0],[0,.5,0],[0,0,.5],[.5,0,.5],[0,.5,.5]])
+            nodes = np.column_stack((np.arange(1,11),xyz))
+            np.testing.assert_allclose(_centroids(out,np.array([1]),nodes,1)[1], [.25,.25,.25])
+
     def fixture(self, out, *, material_model='multilinear_iso', last_plastic_strain=.1):
         g = build_geometry(None, None, dict(corrosion_mode='flat', nx=3, ny=2,
                            layers=2, material_model=material_model, export_full_field=False,

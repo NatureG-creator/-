@@ -1,6 +1,6 @@
 import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} from './task_io.mjs';
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
-import {mountApdl,renderApdlResult} from './apdl.mjs';
+import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261017-conforming-tetra';
 import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs';
 import {mountFitting,renderFittingResult} from './fitting.mjs';
 import {mountOrigin,renderOriginResult} from './origin.mjs';
@@ -11,7 +11,7 @@ const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<'
 const metrics=[['mean_depth_um','平均腐蚀深度','μm'],['nonuniform_depth_um','不均匀腐蚀深度','μm'],['mu_log_ratio','对数径深比均值','无量纲'],['mu_log_depth','对数坑深均值','无量纲'],['sigma_log_ratio','对数径深比标准差','无量纲'],['sigma_log_depth','对数坑深标准差','无量纲']];
 const groups={GEOMETRY_CONFIG:'几何与网格',STAGE_GA_CONFIG:'多阶段遗传算法',SINGLE_STAGE_GA_CONFIG:'单阶段遗传算法',GA_CONFIG:'遗传算法通用设置',CA_CONFIG:'元胞自动机',TAICHI_CONFIG:'Taichi 计算后端',POSTPROCESS_CONFIG:'结果后处理',MATLAB_CA_COMPARISON_CONFIG:'六指标与误差定义',FIGURE_CONFIG:'科研图像',FRACTURE_CONFIG:'断裂分析',常量:'目标与参数边界',TARGET_SOURCE_CONFIG:'目标文件来源',MULTI_CASE_CONFIG:'多工况默认调度',input:'输入文件',output:'输出文件',preprocessing:'点云预处理',reference:'参考面校准',pit_detection:'腐蚀坑识别',watershed:'分水岭分割',distribution:'深度与分布指标',visualization:'图像设置'};
 const statuses={created:'已创建',queued:'等待运行',pending:'等待运行',running:'计算中',stopping:'正在停止',stop_failed:'停止失败 · 可重试',stopped:'已停止',interrupted:'已中断',failed:'运行失败',completed:'已完成',cancelled:'已取消'};
-const phases={fitting:'函数拟合与验证',read:'读取输入',reading:'读取输入',compute:'计算',checkpoint:'保存检查点',generation_completed:'完成遗传迭代',stage_export:'阶段数值导出',plot:'生成科研图像',final_export:'汇总导出',preprocessing:'点云预处理',matlab:'MATLAB 计算',benchmark:'性能对比',diagnostics:'本机环境诊断',finite_element_export:'生成有限元输入',apdl_read:'读取 APDL 来源',apdl_build:'生成 SOLID185 模型',apdl_solve:'MAPDL 单轴拉伸求解',apdl_post:'提取与核验拉伸结果'};
+const phases={fitting:'函数拟合与验证',read:'读取输入',reading:'读取输入',compute:'计算',checkpoint:'保存检查点',generation_completed:'完成遗传迭代',stage_export:'阶段数值导出',plot:'生成科研图像',final_export:'汇总导出',preprocessing:'点云预处理',matlab:'MATLAB 计算',benchmark:'性能对比',diagnostics:'本机环境诊断',finite_element_export:'生成有限元输入',apdl_read:'读取 APDL 来源',apdl_build:'生成实体网格模型',apdl_solve:'MAPDL 单轴拉伸求解',apdl_post:'提取与核验拉伸结果'};
 let workspace=null,defaults=null,currentJob=null,currentJobId=null,currentBatchId=null,pollTimer=null,batchTimer=null,pollToken=0,pollErrors=0,finiteElementDraft=finiteElementDefaults(),finiteElementJobs=[];
 let finiteElementUpload=null;
 const uploads={reference:null,detail:null};let simulationCatalog=[],submitBusy=false,uploadBusy=0;

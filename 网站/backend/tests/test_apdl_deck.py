@@ -124,3 +124,33 @@ class APDLDeckTests(unittest.TestCase):
             self.assertIn('SOLCONTROL,ON', (out/'solve.mac').read_text())
             self.assertIn('LNSRCH,1', (out/'solve.mac').read_text())
             self.assertIn('EPPL,EQV', (out/'post.mac').read_text())
+
+    def test_tetra_bundle_uses_solid187_and_ten_node_connectivity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g = self.geometry(mesh_type='solid187_tetra')
+            create_tension_bundle(g, out, {})
+            self.assertIn('ET,1,SOLID187', (out/'main.inp').read_text())
+            records = (out/'elements.dat').read_text().splitlines()
+            self.assertEqual(len(records[0].split(',')), 10)  # EN + id + eight nodes
+            self.assertEqual(records[1].split(',')[0], 'EMORE')
+            self.assertEqual(len(records[1].split(',')), 3)
+
+    def test_tetra_grip_constraints_follow_coordinates_after_node_renumbering(self):
+        from backend.apdl_deck import _boundaries
+        g = self.geometry(mesh_type='solid187_tetra', boundary_mode='legacy_recommended')
+        g['nodes'][:,0] = np.arange(len(g['nodes']), 0, -1)
+        x, y = g['x'][0], g['y'][-1]
+        for z, dofs in ((g['bottom_depth'][-1,0], ('UY',)),
+                        (g['options']['thickness_mm']-g['top_depth'][-1,0], ('UY','UZ'))):
+            row = g['nodes'][np.all(g['nodes'][:,1:] == [x,y,z], axis=1)][0]
+            for dof in dofs:
+                self.assertIn(f'D,{int(row[0])},{dof},0', _boundaries(g))
+
+    def test_solid285_bundle_uses_four_node_connectivity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g = self.geometry(mesh_type='solid285_tetra')
+            create_tension_bundle(g, out, {})
+            self.assertIn('ET,1,SOLID285', (out/'main.inp').read_text())
+            self.assertEqual(len((out/'elements.dat').read_text().splitlines()[0].split(',')), 6)

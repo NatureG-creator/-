@@ -23,11 +23,18 @@ def _ascii(path: Path, text: str) -> None:
 
 def _boundaries(geometry: dict) -> str:
     o = geometry['options']
+    def corner(j, top=False):
+        z = o['thickness_mm']-geometry['top_depth'][j,0] if top else geometry['bottom_depth'][j,0]
+        target = [geometry['x'][0], geometry['y'][j], z]
+        matches = np.flatnonzero(np.all(geometry['nodes'][:,1:] == target, axis=1))
+        if len(matches) != 1:
+            raise ValueError('边界角点坐标不能唯一映射到网格节点。')
+        return int(geometry['nodes'][matches[0],0])
     first, last = _number(geometry['x'][0]), _number(geometry['x'][-1])
     delta = _number(o['target_displacement_mm'])
     lines = [
         '! X tension; all input coordinates and displacements are in mm.',
-        'CSYS,0', 'SELTOL,'+_number(o['dx_mm']*.01),
+        'CSYS,0', 'SELTOL,'+_number(geometry['stats'].get('grip_tolerance_mm', o['dx_mm']*.01)),
         'NSEL,S,LOC,X,'+first, 'CM,GRIP_FIXED,NODE', 'D,ALL,UX,0',
     ]
     if o['boundary_mode'] == 'clamped_grips':
@@ -36,17 +43,16 @@ def _boundaries(geometry: dict) -> str:
     if o['boundary_mode'] == 'clamped_grips':
         lines += ['D,ALL,UY,0', 'D,ALL,UZ,0']
     elif o['boundary_mode'] == 'legacy_recommended':
-        corner_a = 1+(o['ny']-1)*o['nx']
-        corner_b = corner_a+o['layers']*o['nx']*o['ny']
+        corner_a, corner_b = corner(-1), corner(-1, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',
                   f'D,{corner_b},UY,0', f'D,{corner_b},UZ,0', f'D,{corner_a},UY,0']
     else:
         # A=(xmin,ymin,bottomA), B=(xmin,ymax,bottomB).
         # A removes Y/Z translation; dy*UZ_B-dz*UY_B=0 removes only X rotation.
-        corner_b = 1+(o['ny']-1)*o['nx']
+        corner_a, corner_b = corner(0), corner(-1)
         dz = float(geometry['bottom_depth'][-1, 0]-geometry['bottom_depth'][0, 0])
         dy = float(geometry['y'][-1]-geometry['y'][0])
-        lines += ['ALLSEL,ALL', 'D,1,UY,0', 'D,1,UZ,0']
+        lines += ['ALLSEL,ALL', f'D,{corner_a},UY,0', f'D,{corner_a},UZ,0']
         if dz == 0:
             lines.append(f'D,{corner_b},UZ,0')
         else:
@@ -137,7 +143,9 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
             stream.write(f'N,{int(node[0])},'+','.join(_number(v) for v in node[1:])+'\n')
     with (output_dir/'elements.dat').open('w', encoding='ascii', newline='\n') as stream:
         for element in geometry['elements']:
-            stream.write('EN,'+','.join(str(int(v)) for v in element)+'\n')
+            stream.write('EN,'+','.join(str(int(v)) for v in element[:9])+'\n')
+            if len(element) > 9:
+                stream.write('EMORE,'+','.join(str(int(v)) for v in element[9:])+'\n')
     files += ['nodes.dat', 'elements.dat']
     materials = f"MP,EX,1,{_number(o['E_MPa'])}\nMP,PRXY,1,{_number(o['poisson_ratio'])}"
     if o['material_model'] == 'bilinear_iso':
@@ -167,10 +175,13 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
     for name, text in diagnostic_macros(geometry).items():
         _ascii(output_dir/name, text)
         files.append(name)
+    element_type = {'solid185_hex': 'SOLID185', 'solid187_tetra': 'SOLID187',
+                    'solid285_tetra': 'SOLID285'}[o['mesh_type']]
     _ascii(output_dir/'main.inp', '\n'.join([
         '! Generated geometry: N-mm-MPa. Inspect settings before research use.',
-        '/CLEAR,START', '/FILNAME,corrosion', '/PREP7', 'ET,1,SOLID185',
+        '/CLEAR,START', '/FILNAME,corrosion', '/PREP7', f'ET,1,{element_type}',
         '/INPUT,materials,mac', 'TYPE,1', 'MAT,1', 'SHPP,ON',
+        *(['SHPP,SILENT,ON'] if o['mesh_type'] != 'solid185_hex' else []),
         '/INPUT,nodes,dat', '/INPUT,elements,dat', 'ALLSEL,ALL',
         '/INPUT,mesh_quality,mac', '/INPUT,mesh_self_check,mac',
         '/INPUT,boundary,mac', '/INPUT,boundary_self_check,mac', 'FINISH', 'SAVE',
@@ -197,7 +208,7 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
         warnings.append(f'几何预览绘制失败，但数值和APDL输入已保留：{type(exc).__name__}: {exc}')
     readme = '''# 单轴拉伸 APDL 输入包
 
-本包是三维 SOLID185 输入，单位统一为 N、mm、MPa。腐蚀深度正值向板内，数据为 depth[row_y, col_x]。
+本包是三维 SOLID185、SOLID187 或 SOLID285 输入，单位统一为 N、mm、MPa。腐蚀深度正值向板内，数据为 depth[row_y, col_x]。
 正面 Z=t0-top_depth，反面 Z=bottom_depth；剩余厚度=t0-top_depth-bottom_depth。
 网格生成阶段不再插值、裁剪或修补形貌；来源阶段的显式裁剪、参考面与坐标变换见manifest.json。
 
@@ -210,11 +221,12 @@ clamped_grips 模板：两端UY/UZ为0，模拟夹持。模型不自动增加未
 legacy_recommended 模板保留原GitHub主宏的角点约束：固定端y最大处，正面角UY/UZ=0、反面角UY=0。
 双线性等向硬化参数为屈服应力与屈服后切线模量；多线性等向硬化输入[塑性应变,应力MPa]，不包含断裂或材料失效。
 多线性曲线要求首应变0、应变严格递增；负斜率需要明确允许并输出TBEO,NEGSLOPE,1，不擅自平滑原曲线。
-初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。
+初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。SOLID187/SOLID285使用全局一致六分四面体，公共面一致、厚度层正确连接，不自动加密；SOLID187增加共享边中节点，以EN前8节点加EMORE后2节点导入。两种阶次不能假定结果相同，需网格收敛验证。
+四面体表面采用固定00-11对角线三角化，保留全部原始采样坐标与深度；实际体积与双线性参考体积及二者之差见stats。原始点距不是允许放大的显示比例。
 
 diagnostics_precheck.json 仅包含输入推导的材料覆盖估算、Python网格几何预警和保存策略。
 diagnostics_schema_version=2；三个诊断宏及预检报告的SHA256记录于manifest.json。
-导入前SHPP,ON启用原默认单元形状检查；mesh_quality.mac保留CHECK并输出SHPP,STATUS/SUMMARY。
+导入前SHPP,ON启用默认单元形状阈值。六面体保留CHECK；四面体用SHPP,SILENT,ON汇总大量重复警告，并以SHPP,SUMMARY记录数量、ESCHECK,ESEL,ERR筛选形状错误，非零则退出。没有提高/NERR上限或放宽几何阈值。无形状错误也不代表质量优秀，长宽比警告仍需收敛验证。
 mesh_self_check.mac验证实际节点/单元数量和连续编号范围，boundary_self_check.mac验证两端组件数量、端面位置及互不重叠。
 失败输出APDL_SELF_CHECK_FAILED并退出，不继续SOLVE；两阶段原始记录不等于科研结果验收。
 

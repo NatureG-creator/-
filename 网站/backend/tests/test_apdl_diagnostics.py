@@ -156,6 +156,18 @@ class APDLDiagnosticsTests(unittest.TestCase):
         self.assertEqual(geometry['options'], options)
         np.testing.assert_array_equal(geometry['nodes'], nodes)
 
+    def test_tetra_quality_accepts_ten_node_connectivity(self):
+        nodes = np.array([
+            [1, 0, 0, 0], [2, 1, 0, 0], [3, 0, 1, 0], [4, 0, 0, 1],
+            [5, .5, 0, 0], [6, .5, .5, 0], [7, 0, .5, 0],
+            [8, 0, 0, .5], [9, .5, 0, .5], [10, 0, .5, .5]])
+        elements = np.array([[1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+        result = diagnostics.mesh_quality_precheck(nodes, elements)
+        self.assertEqual(result['element_type'], 'solid187_tetra')
+        self.assertGreater(result['min_tetra_volume_mm3'], 0)
+        self.assertEqual(result['negative_tetra_count'], 0)
+        self.assertAlmostEqual(result['min_scaled_jacobian'], .5)
+
 
 if __name__ == '__main__':
     unittest.main()

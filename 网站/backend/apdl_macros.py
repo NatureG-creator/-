@@ -37,9 +37,14 @@ def _self_check_row(*, append: bool) -> list[str]:
 def diagnostic_macros(geometry: dict) -> dict[str, str]:
     """Check actual database entities and grips without changing constraints."""
     o = geometry['options']
-    nodes = o['nx']*o['ny']*(o['layers']+1)
-    elements = (o['nx']-1)*(o['ny']-1)*o['layers']
-    grip_nodes = o['ny']*(o['layers']+1)
+    nodes = geometry['stats']['node_count']
+    elements = geometry['stats']['element_count']
+    x0, x1 = geometry['x'][0], geometry['x'][-1]
+    tolerance = geometry['stats'].get('grip_tolerance_mm', max(abs(o['dx_mm']) * .01, 1e-12))
+    grip_nodes = int(sum(abs(float(node[1]) - x0) <= tolerance
+                         for node in geometry['nodes']))
+    loaded_nodes = int(sum(abs(float(node[1]) - x1) <= tolerance
+                           for node in geometry['nodes']))
     mesh = [
         '! Actual imported database; contiguous IDs expected from nodes/elements.dat.',
         'ALLSEL,ALL', 'ac_stage=1', 'ac_pass=1', 'ac_nf=-1', 'ac_nl=-1',
@@ -55,7 +60,7 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
         '! Actual grip components; restore selections and the default selection tolerance.',
         'ALLSEL,ALL', 'CSYS,0', 'ac_stage=2', 'ac_pass=1',
         '*GET,ac_nn,NODE,0,COUNT', '*GET,ac_ne,ELEM,0,COUNT',
-        'SELTOL,'+_number(o['dx_mm']*.01),
+        'SELTOL,'+_number(tolerance),
         'NSEL,NONE', 'CMSEL,S,GRIP_FIXED', '*GET,ac_nf,NODE,0,COUNT',
         'NSEL,U,LOC,X,'+_number(geometry['x'][0]), '*GET,ac_fbad,NODE,0,COUNT',
         'NSEL,NONE', 'CMSEL,S,GRIP_LOADED', '*GET,ac_nl,NODE,0,COUNT',
@@ -64,7 +69,7 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
         '*GET,ac_overlap,NODE,0,COUNT', 'SELTOL',
     ]
     boundary += _conditions([f'ac_nn,NE,{nodes}', f'ac_ne,NE,{elements}',
-                             f'ac_nf,NE,{grip_nodes}', f'ac_nl,NE,{grip_nodes}',
+                             f'ac_nf,NE,{grip_nodes}', f'ac_nl,NE,{loaded_nodes}',
                              'ac_fbad,NE,0', 'ac_lbad,NE,0', 'ac_overlap,NE,0'])
     boundary += _self_check_row(append=True)
     quality = [
@@ -72,6 +77,15 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
         'ALLSEL,ALL', '/OUTPUT,mesh_quality_report,txt',
         'CHECK', 'SHPP,STATUS', 'SHPP,SUMMARY', '/OUTPUT', 'ALLSEL,ALL',
     ]
+    if o.get('mesh_type', 'solid185_hex') != 'solid185_hex':
+        quality = [
+            '! Keep native shape thresholds; summarize warnings without one message per element.',
+            'ALLSEL,ALL', '/OUTPUT,mesh_quality_report,txt', 'SHPP,STATUS', 'SHPP,SUMMARY',
+            'ESCHECK,ESEL,ERR', '*GET,ac_nshape,ELEM,0,COUNT',
+            '*VWRITE,ac_nshape', "('APDL_SHAPE_ERROR_COUNT=',F12.0)", '/OUTPUT',
+            '*IF,ac_nshape,GT,0,THEN', '/COM,APDL_SELF_CHECK_FAILED: SHAPE_ERRORS',
+            '/EXIT,NOSAVE', '*ENDIF', 'ALLSEL,ALL',
+        ]
     return {'mesh_quality.mac': '\n'.join(quality),
             'mesh_self_check.mac': '\n'.join(mesh),
             'boundary_self_check.mac': '\n'.join(boundary)}

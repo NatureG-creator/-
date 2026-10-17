@@ -1,4 +1,6 @@
 import unittest
+from collections import Counter
+from itertools import combinations
 
 import numpy as np
 
@@ -6,6 +8,42 @@ from backend.apdl_geometry import build_geometry, normalise_options
 
 
 class APDLGeometryTests(unittest.TestCase):
+    def test_tetra_flat_volume_and_boundary_have_no_missing_or_overlapping_cells(self):
+        for mesh_type in ('solid187_tetra', 'solid285_tetra'):
+            with self.subTest(mesh_type=mesh_type):
+                g = build_geometry(None, None, dict(corrosion_mode='flat', nx=3, ny=3,
+                    length_mm=2, width_mm=2, thickness_mm=2, layers=3, mesh_type=mesh_type))
+                corners = g['elements'][:, 1:5]
+                p = g['nodes'][corners-1, 1:]
+                volumes = np.linalg.det(p[:, 1:]-p[:, :1])/6
+                self.assertTrue(np.all(volumes > 0))
+                self.assertAlmostEqual(float(volumes.sum()), 8., places=10)
+                self.assertAlmostEqual(g['stats']['remaining_volume_mm3'], float(volumes.sum()))
+                faces = Counter(tuple(sorted(face)) for tet in corners for face in combinations(tet, 3))
+                self.assertTrue(all(count in (1, 2) for count in faces.values()))
+                for face, count in faces.items():
+                    if count == 1:
+                        xyz = g['nodes'][np.asarray(face)-1, 1:]
+                        self.assertTrue(any(np.allclose(xyz[:, axis], bound, atol=1e-10, rtol=0)
+                            for axis in range(3) for bound in (0., 2.)), face)
+
+    def test_tetra_preserves_all_input_surface_corners_and_triangular_volume(self):
+        top = np.array([[.1, .6, .2], [.4, 1.1, .7]])
+        bottom = np.array([[.05, .1, .2], [.3, .1, .15]])
+        for mode in ('single_top', 'single_bottom', 'double_independent', 'double_symmetric'):
+            with self.subTest(mode=mode):
+                g = build_geometry(top, bottom, dict(corrosion_mode=mode,
+                    mesh_type='solid187_tetra', dx_mm=.4, dy_mm=.5, layers=2))
+                remaining = g['remaining']
+                expected = .4*.5/6 * np.sum(2*remaining[:-1, :-1]+remaining[:-1, 1:]
+                    +2*remaining[1:, 1:]+remaining[1:, :-1])
+                self.assertAlmostEqual(g['stats']['remaining_volume_mm3'], expected, places=10)
+                xyz = g['nodes'][:, 1:]
+                for j, y in enumerate(g['y']):
+                    for i, x in enumerate(g['x']):
+                        for z in (g['bottom_depth'][j,i], 6-g['top_depth'][j,i]):
+                            self.assertTrue(np.any(np.all(xyz == [x,y,z], axis=1)))
+
     def test_output_policy_survives_geometry_option_normalisation(self):
         options = {'corrosion_mode': 'flat', 'result_save_mode': 'selected',
                    'field_output_times': [.2, .8, 1]}
@@ -103,3 +141,28 @@ class APDLGeometryTests(unittest.TestCase):
         for options in ({'substeps': 10, 'max_substeps': 5}, {'substeps': 10, 'min_substeps': 20}):
             with self.assertRaises(ValueError):
                 normalise_options(options)
+
+    def test_tetra_mode_preserves_surface_and_has_positive_tetrahedra(self):
+        top = np.array([[.1, 1.8, .2], [.4, .7, 1.9]])
+        before = top.copy()
+        g = build_geometry(top, None, {
+            'mesh_type': 'solid187_tetra', 'layers': 2, 'dx_mm': .025, 'dy_mm': .025})
+        self.assertEqual(g['options']['mesh_type'], 'solid187_tetra')
+        self.assertEqual(g['elements'].shape[1], 11)
+        self.assertGreater(g['stats']['positive_tetra_count'], 0)
+        self.assertEqual(g['stats']['negative_tetra_count'], 0)
+        self.assertGreater(g['stats']['min_tetra_volume_mm3'], 0)
+        np.testing.assert_array_equal(top, before)
+
+    def test_unknown_mesh_type_is_rejected(self):
+        with self.assertRaises(ValueError):
+            normalise_options({'mesh_type': 'magic'})
+
+    def test_solid285_mode_keeps_large_grid_with_four_node_tetrahedra(self):
+        g = build_geometry(np.zeros((4, 5)), None, {
+            'mesh_type': 'solid285_tetra', 'layers': 2, 'dx_mm': .025, 'dy_mm': .025})
+        self.assertEqual(g['elements'].shape[1], 5)
+        self.assertGreater(g['stats']['node_count'], 5 * 4 * 2)
+        self.assertGreater(g['stats']['element_count'], 4 * 3 * 2)
+        self.assertAlmostEqual(g['stats']['remaining_volume_mm3'], .1*.075*6)
+        self.assertEqual(g['stats']['negative_tetra_count'], 0)
