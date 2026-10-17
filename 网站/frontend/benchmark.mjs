@@ -86,12 +86,31 @@ function inputField([id,label,min,max]) {
  if(id==='target_index')return '<div class="field"><label for="benchmark-target_index">当前目标行</label><select id="benchmark-target_index"></select></div>';
  return `<div class="field"><label for="benchmark-${id}">${label}</label><input id="benchmark-${id}" type="number" min="${min}" max="${max}" step="1" required></div>`;
 }
+export function readBenchmarkConfiguration(text) {
+ const value=JSON.parse(text),config=value?.config;
+ if(!config?.GA_CONFIG||!config?.GEOMETRY_CONFIG)throw new Error('请导入第二部分导出的完整配置 JSON');
+ const targets=value.targets??config.ACTIVE_STAGE_TARGET_DATA;
+ if(!Array.isArray(targets)||!targets.length||targets.some(row=>!Array.isArray(row)||row.length!==6||row.some(x=>typeof x!=='number'||!Number.isFinite(x))))throw new Error('导入配置必须包含 N×6 有限数值的六指标目标');
+ return {config:structuredClone(config),targets:structuredClone(targets)};
+}
 export function mountBenchmark({getPayload,post,openJob,get=async url=>{const response=await fetch(url);if(!response.ok)throw new Error('来源任务读取失败');return response.json();}}) {
  const root=document.querySelector('#benchmark-panel');if(!root)return;
  root.innerHTML=`<div class="section-heading"><div><div class="section-overline">02 / SIMULATION ASSIST</div><h2>性能对比</h2><p>独立参数快照；固定种群与短程完整 GA 分开测量。</p></div><span class="badge neutral">模拟辅助</span></div><div class="card"><div class="actions"><button id="benchmark-self" class="button secondary">功能自检 5×6×4 · F3 · pop2 · 重复1</button><button id="benchmark-quick" class="button secondary">性能基准 40×40×16 · F8 · pop6 · 重复5</button><button id="benchmark-current" class="button secondary">采用当前 GA 配置</button><button id="benchmark-diagnostics" class="button secondary">本机环境诊断</button></div><p class="help-line">预设仅修改本页；不写回腐蚀演化配置。服务端预检累计所有种子、进程数与池方案的工作量，限制主机数组 1 GiB 和总工作量 2×10⁹。CPU 预算不得超过本机逻辑 CPU 数。</p>
  <div class="grid four"><div class="field"><label for="benchmark-initial">初始状态</label><select id="benchmark-initial"><option value="fresh">全新表面</option value="source">已完成阶段</option></select></div><div class="field"><label for="benchmark-source">来源模拟任务</label><select id="benchmark-source"><option value="">正在读取…</option></select></div><div class="field"><label for="benchmark-stage">来源阶段</label><select id="benchmark-stage"></select></div><button id="benchmark-source-grid" class="button secondary">采用源网格与物理间距</button></div><p id="benchmark-source-note" class="help-line">来源为已完成模拟的 stage_XXX.npz；下一次运行阶段为来源阶段 + 1，网格必须一致，不重采样。</p><p id="benchmark-spacing-note" class="help-line">尚未采用来源物理间距，沿用当前配置。</p>
  <div class="grid four">${fields.map(inputField).join('')}<div class="field"><label for="benchmark-workload">工作负载</label><select id="benchmark-workload"><option value="population">固定种群一代适应度</option><option value="short_ga">短程完整 GA（迭代与实际早停）</option></select></div><div class="field"><label for="benchmark-order_mode">执行顺序</label><select id="benchmark-order_mode"><option value="fixed">固定</option><option value="random">随机</option></select></div><div class="field"><label for="benchmark-worker_counts">进程数列表（逗号分隔）</label><input id="benchmark-worker_counts" value="2"></div><div class="field"><label for="benchmark-seeds">多种子（留空使用默认种子）</label><input id="benchmark-seeds" value=""></div></div><label class="check-field"><input id="benchmark-retain_detail" type="checkbox" checked>保留原始对照 NPZ 明细</label><p class="help-line">取消后仅保留报告与图片，全部对比结束后清理原始对照；失败或中断仍保留已生成数据。</p><h3>池生命周期</h3><div class="benchmark-modes"><label class="check-field"><input type="checkbox" data-benchmark-pool="recreate" checked>每次重建池（含创建）</label><label class="check-field"><input type="checkbox" data-benchmark-pool="persistent">常驻池（复用）</label></div><p class="help-line">单进程不区分池。并行进程数 × 每进程线程数必须在 CPU 预算内。</p><h3>参与方案</h3><div class="benchmark-modes">${benchmarkModes.map(([id,label],i)=>`<label class="check-field"><input type="checkbox" data-benchmark-mode="${id}" ${i<4?'checked':''} ${i===0?'disabled':''}>${label}${i===0?'（必选基准）':''}</label>`).join('')}</div><p class="help-line">Taichi 安装成功不等于动态库能加载或设备能运行；先运行本机环境诊断可定位依赖。多进程 Taichi 为实验方案。</p><div class="actions"><button id="benchmark-precheck" class="button secondary">预检全部方案</button><button id="benchmark-run" class="button primary">预检并运行 →</button></div><div id="benchmark-precheck-result"></div><div id="benchmark-message" class="message" role="status" hidden></div></div>`;
  const $=s=>root.querySelector(s),status=$('#benchmark-message');let sources=[],sourceGeometry=null;
+ const livePayload=getPayload;let imported=null,importBusy=false,importError='',importRevision=0;
+ getPayload=()=>{if(importBusy)throw new Error('配置文件正在读取，请稍后');if(importError)throw new Error(importError);return imported||livePayload();};
+ const imports=document.createElement('div');imports.className='card';
+ imports.innerHTML='<h3>选择参数来源</h3><div class="actions"><label class="button secondary file-button">从电脑导入模拟配置 JSON<input id="benchmark-import-config" type="file" accept=".json" aria-label="从电脑导入性能对比配置"></label><button id="benchmark-use-current" class="button secondary">改用第二部分当前配置</button></div><p id="benchmark-import-note" class="preview">默认使用第二部分当前配置和六指标目标；也可选择该部分导出的配置 JSON，独立运行性能对比。</p>';
+ root.querySelector('.section-heading').after(imports);
+ $('#benchmark-import-config').onchange=async event=>{
+  const file=event.target.files[0];if(!file)return;const revision=++importRevision;importBusy=true;importError='';
+  try{const value=readBenchmarkConfiguration(await file.text());if(revision!==importRevision)return;imported=value;$('#benchmark-import-note').textContent=`已导入 ${file.name}，包含 ${imported.targets.length} 行六指标目标。`;}
+  catch(error){if(revision!==importRevision)return;imported=null;importError=error.message;$('#benchmark-import-note').textContent=`导入失败：${error.message}`;}
+  finally{if(revision===importRevision){importBusy=false;try{refreshTargets();}catch{};}}
+ };
+ $('#benchmark-use-current').onclick=()=>{importRevision++;importBusy=false;imported=null;importError='';$('#benchmark-import-config').value='';$('#benchmark-import-note').textContent='已切回第二部分当前配置与目标。';try{refreshTargets();}catch(error){report(error);}};
  const report=e=>{status.hidden=false;status.textContent=e.message||String(e);status.classList.add('error');};
  function refreshTargets() {
   const previous=$('#benchmark-target_index').value,p=getPayload();
@@ -116,7 +135,7 @@ export function mountBenchmark({getPayload,post,openJob,get=async url=>{const re
  }
  async function loadSources() {
   try{const data=await get('/api/jobs');sources=(Array.isArray(data)?data:data.jobs||[]).filter(j=>j.kind==='simulation'&&j.state==='completed');
-   $('#benchmark-source').innerHTML=sources.length?sources.map(s=>`<option value="${esc(s.id)}">${esc(s.spec?.case_name||s.id)}</option>`).join(''):'<option value="">无可用的已完成模拟来源</option>';
+   $('#benchmark-source').innerHTML=sources.length?sources.map(s=>`<option value="${esc(s.id)}">${esc(s.display_name||s.spec?.case_name||s.id)}</option>`).join(''):'<option value="">无可用的已完成模拟来源</option>';
    sourceStages();if(!sources.length)$('#benchmark-source-note').textContent='无可用来源：尚无已完成模拟任务，仍可从全新表面运行。';
   }catch(e){$('#benchmark-source').innerHTML='<option value="">来源读取失败</option>';$('#benchmark-source-note').textContent=e.message;}
  }

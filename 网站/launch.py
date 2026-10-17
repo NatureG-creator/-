@@ -14,6 +14,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+from backend.service_identity import source_revision
+
 ROOT = Path(__file__).resolve().parent
 
 
@@ -22,13 +24,14 @@ def service_at(port: int) -> bool:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1) as response:
             info = json.load(response)
         return (info.get("service") == "corrosion-research-workbench" and
-                Path(info.get("site_root", "")).resolve() == ROOT)
+                Path(info.get("site_root", "")).resolve() == ROOT and
+                info.get("source_revision") == source_revision(ROOT))
     except (OSError, ValueError):
         return False
 
 
-def launch(*, open_browser=True, preferred_port=8523):
-    runtime = ROOT / ".runtime"
+def launch(*, open_browser=True, preferred_port=8537, runtime=None):
+    runtime = Path(runtime) if runtime is not None else ROOT / ".runtime"
     runtime.mkdir(exist_ok=True)
     marker = runtime / "service.json"
     ports = [preferred_port]
@@ -58,13 +61,13 @@ def launch(*, open_browser=True, preferred_port=8523):
             except OSError:
                 pass
     if port is None:
-        raise RuntimeError("未找到空闲端口，请检查8523附近的端口占用")
+        raise RuntimeError(f"未找到空闲端口，请检查{preferred_port}附近的端口占用")
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     environment = os.environ.copy()
     environment["PYTHONIOENCODING"] = "utf-8"
     with (runtime / "server.log").open("a", encoding="utf-8") as log:
         process = subprocess.Popen([sys.executable, "-u", str(ROOT / "start_server.py"),
-                                    "--port", str(port)], cwd=ROOT, env=environment,
+                                    "--port", str(port), "--runtime", str(runtime)], cwd=ROOT, env=environment,
                                    stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
                                    start_new_session=os.name != "nt")
     deadline = time.monotonic() + 25
@@ -83,7 +86,7 @@ def launch(*, open_browser=True, preferred_port=8523):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-browser", action="store_true")
-    parser.add_argument("--port", type=int, default=8523)
+    parser.add_argument("--port", type=int, default=8537)
     options = parser.parse_args()
     try:
         print(launch(open_browser=not options.no_browser, preferred_port=options.port))

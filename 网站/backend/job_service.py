@@ -201,6 +201,21 @@ class JobService:
         kind = payload.get("kind")
         if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting"}:
             raise ValueError("任务类型无效")
+        from .task_io import validate_task_io
+        io_settings = validate_task_io(payload, self.runtime)
+        if kind == "finite_element":
+            options = dict(payload.get("options") or {})
+            try:
+                options["space_z_um"] = float(options.get("space_z_um", 25.0))
+                options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
+                options["origin_x_mm"] = float(options.get("origin_x_mm", 0.0))
+                options["origin_y_mm"] = float(options.get("origin_y_mm", 0.0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("有限元导出尺寸参数必须是数值") from exc
+            if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
+                raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
+            if options.get("output_variable") not in {None, "", "Z_filled", "F_filled"}:
+                raise ValueError("output_variable 只能是 Z_filled 或 F_filled")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
@@ -266,6 +281,24 @@ class JobService:
                     "pointcloud_config": validate_pointcloud_config(payload.get("pointcloud_config", {})),
                     "reference_preview": inspect_xyz(ref_path), "detail_preview": inspect_xyz(detail_path),
                     "input_hashes": {"reference": sha256(ref_path), "detail": sha256(detail_path)}}
+        elif kind == "finite_element" and payload.get("upload_id"):
+            source_info, source_path = self.get_upload(payload["upload_id"])
+            source_kind = payload.get("source_kind")
+            expected = {"simulation": ".npz", "measured": ".mat"}.get(source_kind)
+            if expected is None or source_path.suffix.lower() != expected:
+                raise ValueError("模拟形貌请导入 NPZ，实测表面请导入 MAT（Z_filled / F_filled）")
+            if sha256(source_path) != source_info['sha256']:
+                raise ValueError('上传文件已被修改，请重新选择文件')
+            from .finite_element_export import _read_measured, _state_from_npz
+            if source_kind == 'simulation':
+                _state_from_npz(source_path)
+            else:
+                _read_measured(source_path, payload.get('input_variable'))
+            spec = {"kind": kind, "source_kind": source_kind, "source_upload": source_info,
+                    "source_path": str(source_path), "source_hash": source_info['sha256'],
+                    "source_file": source_info['name'], "input_variable": payload.get('input_variable'),
+                    "options": options,
+                    "reading_seconds": time.perf_counter() - started}
         else:
             source_job_id = self.validate_id(payload.get("source_job_id"))
             source_state = self.get_job(source_job_id)
@@ -299,18 +332,6 @@ class JobService:
                             continue
                 if source_path is None:
                     raise ValueError("点云任务结果中没有可用的 Z_filled/F_filled 表面 MAT")
-            options = dict(payload.get("options") or {})
-            try:
-                options["space_z_um"] = float(options.get("space_z_um", 25.0))
-                options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
-                options["origin_x_mm"] = float(options.get("origin_x_mm", 0.0))
-                options["origin_y_mm"] = float(options.get("origin_y_mm", 0.0))
-            except (TypeError, ValueError) as exc:
-                raise ValueError("有限元导出尺寸参数必须是数值") from exc
-            if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
-                raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
-            if options.get("output_variable") not in {None, "", "Z_filled", "F_filled"}:
-                raise ValueError("output_variable 只能是 Z_filled 或 F_filled")
             spec = {"kind": kind, "source_job_id": source_job_id, "source_kind": source_kind,
                     "source_path": str(source_path), "source_hash": sha256(source_path),
                     "source_file": source_path.name, "input_variable": payload.get("input_variable"),
@@ -343,6 +364,7 @@ class JobService:
                 if sha256(frozen) != spec["source_hash"]:
                     raise ValueError("有限元导出源文件冻结失败")
             _atomic_json(job_dir / "spec.json", spec)
+            _atomic_json(job_dir / "task_io.json", io_settings)
             status = {"id": job_id, "kind": kind, "state": "queued", "created_at": time.time(),
                       "updated_at": time.time(), "pid": None, "phase": "queued",
                       "case_name": spec.get("case_name", "")}
@@ -353,7 +375,7 @@ class JobService:
         self.pending_jobs.add(job_id)
         if launch:
             self.launch(job_id)
-        return status
+        return dict(status, display_name=io_settings['name'] or spec.get('case_name', ''), task_io=io_settings)
 
     def launch(self, job_id):
         self.validate_id(job_id)
@@ -464,6 +486,13 @@ class JobService:
                     _atomic_json(folder / "status.json", state)
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
+            from .task_io import job_io
+            state['task_io'] = job_io(folder, state['spec'])
+            state['display_name'] = state['task_io']['name']
+            if state.get('export_pending') and not process_alive(state.get('pid')):
+                state['export_pending'] = False
+                state['task_io']['last_export'] = {'state': 'failed',
+                    'error': '成果复制进程已退出，可重新选择目录并导出；原任务成果保留。'}
             state["summary"] = json_record(folder / "outputs" / "summary.json")
             state["effective_config"] = json_record(folder / "outputs" / "effective_config.json")
             state["timing"] = json_record(folder / "outputs" / "timing.json")

@@ -87,10 +87,25 @@ def run_job(job_id: str, runtime: Path) -> None:
         else:
             update({"phase": "finite_element_export"})
             source = job_dir / spec["frozen_source_path"]
+            options = dict(spec['options'])
+            if spec.get('input_variable'):
+                options['input_variable'] = spec['input_variable']
             result = create_surface_bundle(spec["source_kind"], source,
-                                           job_dir / "outputs", spec["options"])
+                                           job_dir / "outputs", options)
+        from .task_io import job_io
+        export_pending = bool(job_io(job_dir, spec).get('export_directory'))
         update({"state": "completed", "phase": "completed", "result": result,
+                "export_pending": export_pending,
                 "elapsed_seconds": round(time.perf_counter() - started, 3)})
+        try:
+            from .task_io import export_outputs
+            export_outputs(job_dir, runtime)
+        except Exception:
+            # Export is a separate copy operation; keep the scientific result usable.
+            traceback.print_exc()
+        finally:
+            if export_pending:
+                update({'export_pending': False})
     except Exception as exc:
         traceback.print_exc()
         update({"state": "failed", "error": str(exc),

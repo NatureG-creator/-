@@ -17,6 +17,7 @@ from .git_sync import sync_status, sync_website
 from .job_service import JobService
 from .pointcloud_config import catalog
 from .pointcloud_runner import inspect_xyz
+from .service_identity import source_revision
 from .system_info import ROOT, VERSION, capabilities, json_record
 from .targets import inspect_target
 
@@ -27,6 +28,7 @@ class JobServer(JobService, ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, host, port, runtime):
+        self.source_revision = source_revision(ROOT)
         self.initialize(runtime)
         super().__init__((host, port), Handler)
 
@@ -112,6 +114,7 @@ class Handler(BaseHTTPRequestHandler):
                                    "version": VERSION})
         if method == "GET" and path == "/api/health":
             return self._json(200, {"service": "corrosion-research-workbench", "version": VERSION,
+                                   "source_revision": self.server.source_revision,
                                    "site_root": str(ROOT), "capabilities": capabilities()})
         if method == "GET" and path == "/api/apdl/presets":
             from .apdl_presets import get_presets
@@ -200,6 +203,9 @@ class Handler(BaseHTTPRequestHandler):
             folders = [item for item in folders if item.is_dir() and (item / "status.json").is_file()
                        and len(item.name) == 16 and all(char in "0123456789abcdef" for char in item.name)]
             return self._json(200, [self.server.get_job(item.name) for item in folders[:100]])
+        if method == 'POST' and path == '/api/local-directory':
+            from .task_io import choose_directory
+            return self._json(200, choose_directory())
         if method == "POST" and path == "/api/finite-element/exports":
             body = self._body()
             body["kind"] = "finite_element"
@@ -283,6 +289,12 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 3 and method == "GET":
                 return self._json(200, self.server.get_job(job_id))
             if len(parts) == 4 and method == "POST":
+                if parts[3] == 'io':
+                    from .task_io import configure_job
+                    return self._json(200, configure_job(self.server, job_id, self._body()))
+                if parts[3] == 'export':
+                    from .task_io import export_job
+                    return self._json(200, export_job(self.server, job_id))
                 operation = {"resume": self.server.resume, "stop": self.server.stop,
                              "transfer": self.server.transfer}.get(parts[3])
                 if operation:
