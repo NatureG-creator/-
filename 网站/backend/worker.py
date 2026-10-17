@@ -46,6 +46,9 @@ def run_job(job_id: str, runtime: Path) -> None:
     try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
+        elif spec["kind"] == "morphology_analysis":
+            from .morphology_service import run_morphology
+            result = run_morphology(spec, job_dir, progress=update)
         elif spec["kind"] == "origin_plot":
             from .origin_plotting import run_origin
             result = run_origin(job_dir, spec, update)

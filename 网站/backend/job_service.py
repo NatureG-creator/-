@@ -201,7 +201,7 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot", "morphology_analysis"}:
             raise ValueError("任务类型无效")
         from .task_io import validate_task_io
         io_settings = validate_task_io(payload, self.runtime)
@@ -221,7 +221,10 @@ class JobService:
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "origin_plot":
+        if kind == "morphology_analysis":
+            from .morphology_service import prepare_morphology
+            spec, morphology_source = prepare_morphology(self, payload)
+        elif kind == "origin_plot":
             from .origin_plotting import prepare_origin
             source_id = self.validate_id(payload.get("source_job_id"))
             source_state = self.get_job(source_id)
@@ -349,6 +352,9 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "morphology_analysis":
+                from .morphology_service import freeze_morphology
+                freeze_morphology(spec, morphology_source, job_dir)
             if kind == "origin_plot":
                 from .origin_plotting import freeze_origin
                 freeze_origin(spec, origin_source, job_dir)
