@@ -44,6 +44,7 @@ export function mountTaskIO(request) {
 }
 
 export function taskPayload(url, payload) {
+  if(url==='/api/apdl/jobs'&&payload.execution_mode==='custom_commands')return payload;
   let panel;
   if(url==='/api/finite-element/exports')panel='legacy';
   else if(url==='/api/apdl/jobs')panel='finite-element-panel';

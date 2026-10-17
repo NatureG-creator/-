@@ -307,12 +307,19 @@ def _prepare(service,payload):
               precheck=geometry['stats'],reading_seconds=time.perf_counter()-started,
               case_name=str(payload.get('case_name',''))[:100])
     frozen_records=[]
+    if payload.get('material_source') is not None:
+        from .apdl_materials import prepare_material_source
+        spec['material_source'],material_record=prepare_material_source(service,payload['material_source'],options)
+        frozen_records.append(material_record)
     for value in records.values():
         frozen_records.extend(value if isinstance(value,list) else [value])
     return spec,frozen_records,geometry
 
 
 def prepare_apdl(service,payload):
+    if payload.get('execution_mode') == 'custom_commands':
+        from .apdl_commands import prepare_custom_apdl
+        return prepare_custom_apdl(service, payload)
     spec,records,_=_prepare(service,payload)
     if spec['registration_signature']:
         supplied=payload.get('registration_signature')
@@ -352,6 +359,9 @@ def freeze_apdl_sources(records,job_dir):
 
 
 def run_apdl_job(spec,job_dir,progress=None):
+    if spec.get('execution_mode') == 'custom_commands':
+        from .apdl_commands import run_custom_apdl
+        return run_custom_apdl(spec, job_dir, progress)
     from .apdl_geometry import build_geometry
     from .apdl_deck import create_tension_bundle
     job_dir=Path(job_dir); output=job_dir/'outputs'; output.mkdir(exist_ok=True)
@@ -431,7 +441,11 @@ def run_apdl_job(spec,job_dir,progress=None):
             result['execution_record']='mapdl_execution.json'
             try: result['solver']=json.loads(execution.read_text(encoding='utf-8'))
             except (ValueError,OSError): result['execution_record_error']='无法读取求解器执行记录'
+        from .apdl_analysis import diagnose_output
+        result['solver_diagnosis'] = diagnose_output(output)
         persist(exc)
         raise
+    from .apdl_analysis import diagnose_output
+    result['solver_diagnosis'] = diagnose_output(output)
     persist()
     return result
