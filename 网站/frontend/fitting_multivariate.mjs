@@ -17,11 +17,12 @@ export async function mountMultivariate({ get, post, openJob }) {
     table = data;
     $('#mv-preview').innerHTML = `<p>共 ${esc(data.row_count ?? data.rows?.length ?? 0)} 行、${esc(data.columns?.length || 0)} 列</p><div class="table-wrap"><table><thead><tr>${(data.columns || []).map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${(data.rows || []).slice(0, 10).map(row => `<tr>${row.map(value => `<td>${esc(value ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     for (const [id, optional] of [['mv-x1', false], ['mv-x2', false], ['mv-y', false], ['mv-group', true]]) {
-      $(id).innerHTML = `<option value="">${optional ? '不分组' : '请选择'}</option>` + (data.columns || []).map((name, index) => `<option value="${index}">${index + 1} · ${esc(name)}</option>`).join('');
+      $(`#${id}`).innerHTML = `<option value="">${optional ? '不分组' : '请选择'}</option>` + (data.columns || []).map((name, index) => `<option value="${index}">${index + 1} · ${esc(name)}</option>`).join('');
     }
   }
   function payload() {
     if (!table) throw new Error('请先读取数据预览');
+    if (['#mv-x1', '#mv-x2', '#mv-y'].some(id => $(id).value === '')) throw new Error('请选择 X1、X2 和 Y 列');
     const selection = { mode: 'multivariate2', x1_column: Number($('#mv-x1').value), x2_column: Number($('#mv-x2').value), y_column: Number($('#mv-y').value), group_column: $('#mv-group').value === '' ? null : Number($('#mv-group').value), missing_policy: 'reject' };
     if ([selection.x1_column, selection.x2_column, selection.y_column].some(Number.isNaN)) throw new Error('请选择 X1、X2 和 Y 列');
     return { mode: 'multivariate2', source: source(), selection, options: { models: selectedModels(), metric: $('#mv-metric').value, folds: Number($('#mv-folds').value), seed: Number($('#mv-seed').value) }, plot: { title: '双自变量响应面', dpi: 300 } };

@@ -122,6 +122,15 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/fitting/catalog":
             from .fitting_service import fitting_catalog
             return self._json(200, fitting_catalog())
+        if method == "GET" and path == "/api/origin/capabilities":
+            from .origin_plotting import origin_capabilities
+            return self._json(200, origin_capabilities())
+        if method == "POST" and path == "/api/origin/jobs":
+            body = self._body()
+            body['kind'] = 'origin_plot'
+            return self._json(201, self.server.create_job(body))
+        if method == "POST" and len(parts) == 5 and parts[:3] == ["api", "origin", "jobs"] and parts[4] == "open":
+            return self._json(200, self.server.open_origin(parts[3]))
         if method == "POST" and path == "/api/fitting/inspect":
             from .fitting_service import inspect_fitting
             return self._json(200, inspect_fitting(self.server, self._body()))

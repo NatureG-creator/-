@@ -49,6 +49,7 @@ class JobService:
         self._job_lock = threading.RLock()
         self.compute_slots = threading.BoundedSemaphore(2)
         self.benchmark_gate = threading.Lock()
+        self.origin_gate = threading.Lock()
         self.pending_jobs = set()
         self._launching_jobs = {}
         # 服务退出不等于独立计算进程退出；接管现存任务的并发占用。
@@ -65,7 +66,8 @@ class JobService:
             if ((status.get("state") in {"queued", "running", "stop_failed"} or pending_stop) and
                     status.get("pid") in {None, locked_pid} and process_alive(locked_pid)):
                 inherited[folder.name] = locked_pid
-                inherited_weights[folder.name] = 2 if status.get("kind") in {"benchmark", "diagnostics"} else 1
+                inherited_weights[folder.name] = (0 if status.get("kind") == "origin_plot" else
+                                                  2 if status.get("kind") in {"benchmark", "diagnostics"} else 1)
         self.inherited_processes = inherited
         reserved = min(2, sum(inherited_weights.values()))
         for _ in range(reserved):
@@ -199,7 +201,7 @@ class JobService:
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot"}:
             raise ValueError("任务类型无效")
         from .task_io import validate_task_io
         io_settings = validate_task_io(payload, self.runtime)
@@ -219,7 +221,15 @@ class JobService:
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "fitting":
+        if kind == "origin_plot":
+            from .origin_plotting import prepare_origin
+            source_id = self.validate_id(payload.get("source_job_id"))
+            source_state = self.get_job(source_id)
+            if source_state.get("kind") != "fitting" or source_state.get("state") != "completed":
+                raise ValueError("Origin绘图必须来自已完成的拟合任务")
+            origin_source = self.runtime / "jobs" / source_id
+            spec = prepare_origin(payload, origin_source)
+        elif kind == "fitting":
             from .fitting_service import prepare_fitting
             spec, fitting_table, fitting_path, fitting_text = prepare_fitting(self, payload)
         elif kind == "apdl_tension":
@@ -339,6 +349,9 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "origin_plot":
+                from .origin_plotting import freeze_origin
+                freeze_origin(spec, origin_source, job_dir)
             if kind == "fitting":
                 from .fitting_service import freeze_fitting
                 freeze_fitting(spec, fitting_table, fitting_path, fitting_text, job_dir)
@@ -394,11 +407,14 @@ class JobService:
         def scheduled():
             try:
                 benchmark = current.get("kind") in {"benchmark", "diagnostics"}
+                origin = current.get("kind") == "origin_plot"
                 # Benchmarks reserve both server slots; two concurrent benchmarks
                 # must not each hold one slot and wait forever for the other.
-                with self.benchmark_gate if benchmark else nullcontext():
+                with self.origin_gate if origin else self.benchmark_gate if benchmark else nullcontext():
+                    if origin:
+                        self._wait_for_origin_cleanup(job_id, token)
                     with ExitStack() as slots:
-                        for _ in range(2 if benchmark else 1):
+                        for _ in range(0 if origin else 2 if benchmark else 1):
                             slots.enter_context(self.compute_slots)
                         with self._job_lock:
                             if self._launching_jobs.get(job_id) != token:
@@ -406,6 +422,10 @@ class JobService:
                             process = self._start_process(job_id)
                         if process is not None:
                             process.wait()
+                            if origin:
+                                with self._job_lock:
+                                    finished = json_record(self.runtime / 'jobs' / job_id / 'status.json', {})
+                                    self._cleanup_origin_worker(self.runtime / 'jobs' / job_id, finished)
             except Exception as exc:
                 with self._job_lock:
                     if self._launching_jobs.get(job_id) == token:
@@ -419,6 +439,47 @@ class JobService:
                         self.pending_jobs.discard(job_id)
 
         threading.Thread(target=scheduled, daemon=True, name=f"job-{job_id}").start()
+
+    def _wait_for_origin_cleanup(self, job_id, token):
+        # An inherited worker or a failed verified cleanup keeps the next job
+        # queued until the prior instance is confirmed gone (or Stop retries).
+        while self._launching_jobs.get(job_id) == token:
+            blocked = False
+            for folder in (self.runtime / 'jobs').iterdir():
+                if folder.name == job_id:
+                    continue
+                state = json_record(folder / 'status.json', {})
+                if state.get('kind') != 'origin_plot':
+                    continue
+                if state.get('state') == 'running':
+                    state = self.get_job(folder.name)
+                elif state.get('state') == 'queued' and process_alive(state.get('pid')):
+                    blocked = True
+                elif state.get('state') == 'failed' and (folder / 'origin_process.json').exists():
+                    with self._job_lock:
+                        self._cleanup_origin_worker(folder, state)
+                if state.get('state') in {'running', 'stop_failed'}:
+                    blocked = True
+            if not blocked:
+                return
+            time.sleep(.1)
+
+    @staticmethod
+    def _cleanup_origin_worker(folder, state):
+        if state.get('state') == 'completed':
+            return
+        from .origin_plotting import stop_origin_process
+        try:
+            stop_origin_process(folder)
+        except Exception as exc:
+            state.update(state='stop_failed', stop_error=str(exc),
+                         error=f'Origin工作进程已退出，但专属实例清理失败：{exc}；请重试停止。',
+                         updated_at=time.time())
+        else:
+            if state.get('state') in {'running', 'queued'}:
+                state.update(state='interrupted', error='Origin工作进程已退出，专属实例已清理；已有文件保留。',
+                             updated_at=time.time())
+        _atomic_json(folder / 'status.json', state)
 
     def _start_process(self, job_id):
         with self._job_lock:
@@ -469,7 +530,9 @@ class JobService:
                     state["state"] == "running" and not process_alive(state.get("pid")) or
                     state["state"] == "queued" and job_id not in self.pending_jobs)
                 if dead_owned or dead_orphan:
-                    if state.get('kind')=='apdl_tension':
+                    if state.get('kind') == 'origin_plot':
+                        self._cleanup_origin_worker(folder, state)
+                    elif state.get('kind')=='apdl_tension':
                         cleanup=self._stop_apdl_group(folder)
                         try: _atomic_json(folder/'outputs'/'apdl_stop.json',cleanup)
                         except Exception as exc: state['stop_persistence_error']=str(exc)
@@ -574,7 +637,7 @@ class JobService:
                     if ((process is None and process_alive(state.get('pid'))) or
                             (process is not None and process.poll() is None)):
                         worker=verify_worker_process(job_id,state,job_dir,self.runtime,ROOT)
-                    elif not apdl:
+                    elif not apdl and state.get('kind') != 'origin_plot':
                         raise ValueError('任务进程已结束')
                     if apdl:
                         cleanup=self._stop_apdl_group(job_dir)
@@ -583,6 +646,9 @@ class JobService:
                         stop_verified_process(worker)
                     if process is not None:
                         process.wait(timeout=20)
+                    if state.get('kind') == 'origin_plot':
+                        from .origin_plotting import stop_origin_process
+                        stop_origin_process(job_dir)
                     if apdl:
                         cleanup=self._stop_apdl_group(job_dir)
                         if (cleanup.get('state')=='failed' or
@@ -615,6 +681,13 @@ class JobService:
                     cancel_report(self.runtime / "jobs" / job_id, state.get("benchmark_mode"))
                     state["error"] = "测速已停止，已完成方案及报告已保留；未完成方案不支持恢复"
             return persist()
+
+    def open_origin(self, job_id):
+        state = self.get_job(job_id)
+        if state.get("kind") != "origin_plot" or state.get("state") != "completed":
+            raise ValueError("只能打开已完成的Origin绘图工程")
+        from .origin_plotting import open_origin_project
+        return open_origin_project(self.runtime / "jobs" / job_id)
 
     @staticmethod
     def _stop_apdl_group(job_dir):

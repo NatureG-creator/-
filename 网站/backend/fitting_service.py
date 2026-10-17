@@ -32,7 +32,7 @@ def fitting_catalog():
                 defaults=normalise_fit_options({}),plot_defaults=normalise_plot_options({}),
                 multivariate_defaults=normalise_multivariate_options({}),
                 limits=dict(rows=5000,columns=64,groups=10,bytes=MAX_BYTES),
-                origin=dict(state='export_only',note='提供Origin数据包与外部originpro导入脚本；本机Origin联动尚未验证。'))
+                origin=dict(state='direct_plotting',note='提供Origin交换文件，并支持从已完成拟合结果创建独立Origin绘图任务；本机安装与依赖见Origin能力检测，实际运行以绘图任务记录为准。'))
 
 
 def _source_table(service,source):
@@ -176,7 +176,7 @@ def run_fitting(spec,job_dir,progress=None):
                   warnings=spec['warnings']+result.get('warnings',[]),
                   versions=dict(python=platform.python_version(),numpy=numpy.__version__,scipy=scipy.__version__,matplotlib=matplotlib.__version__),
                   scope_note='候选显式函数中的相对比较；不证明全局最佳或外推物理有效。单X单Y，各分类独立拟合；共享参数联合拟合和样条未接入。',
-                  origin=dict(state='export_only',note='数据和origin_import.py可下载；本机Origin绘图尚未验证。'))
+                  origin=dict(state='export_only',note='本拟合任务提供数据和origin_import.py；实际Origin绘图请从结果页创建独立绘图任务，运行状态以该任务记录为准。'))
     # 图形与数值先落盘，打包失败也保留结果。
     _atomic_json(output/'summary.json',result)
     files=[dict(name=p.name,sha256=sha256(p)) for p in sorted(output.iterdir()) if p.is_file() and p.name not in {'manifest.json','fitting_bundle.zip'}]

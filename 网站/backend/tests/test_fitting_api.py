@@ -21,6 +21,7 @@ class FittingApiTests(unittest.TestCase):
         code,catalog=self.request('/api/fitting/catalog')
         self.assertEqual(code,200)
         self.assertTrue(catalog['models'])
+        self.assertEqual(catalog['origin']['state'],'direct_plotting')
         code,result=self.request('/api/fitting/precheck',self.payload())
         self.assertEqual(code,200,result)
         self.assertEqual(result['dataset']['row_count'],12)
