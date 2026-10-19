@@ -194,9 +194,13 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
               "postprocess_seconds": 0.0, "peak_memory_bytes": None}
     if config["mode"] == "fast":
         warnings.append("高速模式沿用原GA；不提供逐个体检查点及严格中断恢复。")
+        if settings.get("reuse_process_pool", False):
+            warnings.append("当前GA阶段启用跨代复用进程池；阶段结束或异常时关闭worker池。")
     elif config["mode"] == "pycharm":
         workers = int(settings["parallel_workers"])
-        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}；每代及已完成个体评价保存检查点，未保存个体按原种子重算。")
+        reuse_pool = bool(settings.get("reuse_process_pool", False))
+        pool_note = "；GA阶段内跨代复用worker" if reuse_pool else "；每代重建worker池"
+        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}{pool_note}；每代及已完成个体评价保存检查点，未保存个体按原种子重算。")
 
     def timing_doc():
         document = dict(timing)
@@ -287,6 +291,12 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                 )
                 import corrosion_model.fitness_优化版 as fitness_module
                 original_initializer = fitness_module._fitness_worker_init
+                original_executor = fitness_module.ProcessPoolExecutor
+                pool_scope = None
+                if settings.get("reuse_process_pool", False) and int(settings["parallel_workers"]) > 1:
+                    from .benchmark_pool import ExecutorScope
+                    pool_scope = ExecutorScope(original_executor, "persistent")
+                    fitness_module.ProcessPoolExecutor = pool_scope
                 fitness_module._fitness_worker_init = functools.partial(_configured_worker_init, config)
                 compute_started = time.perf_counter()
                 def ga_progress(message):
@@ -325,6 +335,9 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                         )
                 finally:
                     fitness_module._fitness_worker_init = original_initializer
+                    fitness_module.ProcessPoolExecutor = original_executor
+                    if pool_scope is not None:
+                        pool_scope.close()
                 timing["compute_seconds"] += time.perf_counter() - compute_started
             result = {
                 "perfect_result": stage.perfect_result,

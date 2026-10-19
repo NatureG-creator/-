@@ -1,4 +1,4 @@
-"""Benchmark-only executor lifetime and input helpers; scientific code stays untouched."""
+"""Executor lifetime and input helpers; scientific code stays untouched."""
 from contextlib import nullcontext
 import multiprocessing
 import numpy as np

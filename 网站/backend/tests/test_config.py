@@ -41,6 +41,19 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "arch"):
             validate_simulation_config(config)
 
+    def test_process_pool_reuse_requires_parallel_non_strict_mode(self):
+        config = default_simulation_config()
+        config["STAGE_GA_CONFIG"]["reuse_process_pool"] = True
+        with self.assertRaisesRegex(ValueError, "严格可复现模式"):
+            validate_simulation_config(config)
+        config = default_simulation_config()
+        config["mode"] = "pycharm"
+        config["STAGE_GA_CONFIG"]["reuse_process_pool"] = True
+        with self.assertRaisesRegex(ValueError, "parallel_workers 大于1"):
+            validate_simulation_config(config)
+        config["STAGE_GA_CONFIG"]["parallel_workers"] = 2
+        self.assertIs(validate_simulation_config(config), config)
+
 
 if __name__ == "__main__":
     unittest.main()

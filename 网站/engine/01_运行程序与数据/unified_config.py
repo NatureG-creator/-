@@ -84,6 +84,7 @@ STAGE_GA_CONFIG = {
     "selected_count": 10,
     "maxgen": 101,
     "parallel_workers": 10,
+    "reuse_process_pool": False,
 }
 
 # 第一步保留原入口中的快速示例设置。
@@ -93,6 +94,7 @@ SINGLE_STAGE_GA_CONFIG = {
     "selected_count": 4,
     "maxgen": 3,
     "parallel_workers": 8,
+    "reuse_process_pool": False,
 }
 
 GA_CONFIG = {

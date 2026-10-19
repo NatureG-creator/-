@@ -87,6 +87,32 @@ class PyCharmResumeTests(unittest.TestCase):
                 with np.load(root/'resume/outputs/simulation.npz',allow_pickle=False) as resumed:
                     for key in full.files:np.testing.assert_array_equal(full[key],resumed[key])
 
+    def test_persistent_pool_matches_recreated_pool(self):
+        from backend.runner import run_simulation
+        from backend.config import default_simulation_config
+        configs=[]
+        for reuse in (False, True):
+            cfg=default_simulation_config()
+            cfg['mode']='pycharm'
+            cfg['TAICHI_CONFIG']['use_taichi']=False
+            cfg['GEOMETRY_CONFIG'].update(grid_w=5,grid_l=6,grid_n=4)
+            cfg['SINGLE_STAGE_GA_CONFIG'].update(F=3,nind=6,selected_count=1,maxgen=4,
+                                                 parallel_workers=2,reuse_process_pool=reuse)
+            configs.append(cfg)
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            outputs=[]
+            with patch('backend.runner._plot_stage'):
+                for index,cfg in enumerate(configs):
+                    spec=dict(kind='simulation',run_mode='single',config=cfg,
+                              targets=[[10,2,1,3,.2,.3]])
+                    run_simulation(spec,root/str(index))
+                    with np.load(root/str(index)/'outputs/simulation.npz',allow_pickle=False) as data:
+                        outputs.append({key:np.array(data[key],copy=True) for key in data.files})
+            self.assertEqual(outputs[0].keys(),outputs[1].keys())
+            for key in outputs[0]:
+                np.testing.assert_array_equal(outputs[0][key],outputs[1][key])
+
     def test_real_worker_stop_and_service_resume_matches_full_run(self):
         from backend.server import make_server
         from backend.runner import run_simulation
@@ -94,7 +120,8 @@ class PyCharmResumeTests(unittest.TestCase):
         cfg['mode']='pycharm'
         cfg['TAICHI_CONFIG']['use_taichi']=False
         cfg['GEOMETRY_CONFIG'].update(grid_w=12,grid_l=13,grid_n=6)
-        cfg['SINGLE_STAGE_GA_CONFIG'].update(F=3,nind=12,selected_count=1,maxgen=4,parallel_workers=2)
+        cfg['SINGLE_STAGE_GA_CONFIG'].update(F=3,nind=12,selected_count=1,maxgen=4,
+                                             parallel_workers=2,reuse_process_pool=True)
         with tempfile.TemporaryDirectory() as folder:
             server=make_server(port=0,runtime=Path(folder)/'runtime')
             job=None
