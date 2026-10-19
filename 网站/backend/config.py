@@ -240,7 +240,7 @@ def validate_simulation_config(config: dict) -> dict:
         if not 0 <= config[group][key] <= 1:
             raise ValueError(f"{group}.{key} 必须在[0,1]范围内")
     for group, key, choices in (
-        ("TAICHI_CONFIG", "arch", {"cpu", "gpu"}),
+        ("TAICHI_CONFIG", "arch", {"cpu"}),
         ("MATLAB_CA_COMPARISON_CONFIG", "depth_log_scale", {"space_z", "raw"}),
     ):
         if config[group][key] not in choices:

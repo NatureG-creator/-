@@ -140,15 +140,16 @@ def run_morphology(spec,job_dir,progress=None, *, state=None, output=None):
     return report
 
 
-def run_morphology_pair(spec, job_dir, progress=None):
+def run_morphology_pair(spec, job_dir, progress=None, *, state=None, output=None):
     path=job_dir/'inputs/source.npz'
     if sha256(path)!=spec['source_sha256']:raise ValueError('冻结 NPZ 已改变')
     started=time.perf_counter()
     if progress:progress({'phase':'reading'})
-    state,_=read_npz_state(path,spec['npz_variable'],spec['npz_stage'])
+    if state is None:
+        state,_=read_npz_state(path,spec['npz_variable'],spec['npz_stage'])
     settings=dict(spec,reading_seconds=spec['reading_seconds']+time.perf_counter()-started)
     return {mode:run_morphology(dict(settings,analysis_mode=mode),job_dir,progress,
-                state=state,output=job_dir/'outputs'/mode) for mode in ('ga','detail')}
+                state=state,output=(output or job_dir/'outputs')/mode) for mode in ('ga','detail')}
 
 
 def run_morphology_batch(spec, job_dir, progress=None):
@@ -161,14 +162,8 @@ def run_morphology_batch(spec, job_dir, progress=None):
         state,_=read_npz_state(path,spec['npz_variable'],stage)
         stage_dir=job_dir/'outputs'/f'stage_{stage:03d}'
         if spec['analysis_mode']=='both':
-            modes=run_morphology_pair(dict(spec,npz_stage=stage,npz_stages=None),job_dir,progress)
-            # Pair output is generated in the task root; move it into this stage directory.
-            for mode in ('ga','detail'):
-                target=stage_dir/mode;target.mkdir(parents=True,exist_ok=True)
-                source=job_dir/'outputs'/mode
-                for item in source.iterdir():
-                    item.replace(target/item.name)
-                source.rmdir()
+            modes=run_morphology_pair(dict(spec,npz_stage=stage,npz_stages=None),job_dir,progress,
+                                      state=state,output=stage_dir)
             reports.append({'stage':stage,'modes':modes})
         else:
             report=run_morphology(dict(spec,npz_stage=stage,npz_stages=None),job_dir,progress,state=state,output=stage_dir)
@@ -225,7 +220,7 @@ def write_morphology_archive(job_dir):
         mode=None
         parts=relative.split('/')
         if len(parts)>2 and parts[0] in {'inputs','outputs'} and parts[1] in {'ga','detail','single'}:mode=parts[1]
-        batch_stage=parts[1] if len(parts)>3 and parts[0]=='outputs' and parts[1].startswith('stage_') else None
+        batch_stage=parts[1] if len(parts)>2 and parts[0] in {'inputs','outputs'} and parts[1].startswith('stage_') else None
         if relative=='spec.json':archive_path=f'{prefix}/配置与溯源/任务配置.json'
         elif relative=='inputs/source_spec.json':archive_path=f'{prefix}/配置与溯源/来源任务配置.json'
         elif relative.startswith('inputs/source.'):
@@ -235,9 +230,11 @@ def write_morphology_archive(job_dir):
         elif len(parts)>2 and parts[0]=='outputs' and parts[1] in {'ga','detail','single'}:
             mode=parts[1];archive_path=f"{prefix}/分析结果/{mode_names[mode]}/{'/'.join(parts[2:])}"
         elif batch_stage and len(parts)>2 and parts[2] in {'ga','detail','single'}:
-            mode=parts[2];archive_path=f"{prefix}/分析结果/{batch_stage}/{mode_names[mode]}/{'/'.join(parts[3:])}"
+            mode=parts[2];category_label='冻结分析数据' if parts[0]=='inputs' else '分析结果'
+            archive_path=f"{prefix}/{category_label}/{batch_stage}/{mode_names[mode]}/{'/'.join(parts[3:])}"
         elif batch_stage and len(parts)>2:
-            archive_path=f"{prefix}/分析结果/{batch_stage}/单模式分析/{'/'.join(parts[2:])}"
+            category_label='冻结分析数据' if parts[0]=='inputs' else '分析结果'
+            archive_path=f"{prefix}/{category_label}/{batch_stage}/{mode_names['single']}/{'/'.join(parts[2:])}"
         elif relative=='outputs/morphology_manifest.json':archive_path=f'{prefix}/报告/清单.json'
         elif relative=='outputs/summary.json':archive_path=f'{prefix}/报告/汇总.json'
         elif relative.startswith('outputs/'):
@@ -257,7 +254,7 @@ def write_morphology_archive(job_dir):
     manifest_path=output/'morphology_manifest.json'
     paths.append(manifest_path)
     with zipfile.ZipFile(temporary,'w',zipfile.ZIP_DEFLATED) as bundle:
-        for path in paths:
+        for path in dict.fromkeys(paths):
             if path in (archive,temporary) or path.suffix=='.tmp':continue
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(job_dir.resolve()):
                 relative=path.relative_to(job_dir).as_posix()
@@ -277,6 +274,9 @@ def prepare_export(service,payload):
         raise ValueError('导出格式只能为 PNG、PDF 或 SVG')
     folder=service.runtime/'jobs'/source_id
     modes=['ga','detail'] if source['spec']['analysis_mode']=='both' else ['single']
+    stages=source['spec'].get('npz_stages')
+    if stages:
+        modes=[f'stage_{stage:03d}'+('/'+mode if mode!='single' else '') for stage in stages for mode in modes]
     for mode in modes:
         out=folder/'outputs'/(mode if mode!='single' else '')
         for name in ('analysis_arrays.npz','analysis_report.json'):
@@ -287,6 +287,7 @@ def prepare_export(service,payload):
     return dict(kind='morphology_export',source_job_id=source_id,modes=modes,
                 source_name=source_spec.get('source_name'),source_sha256=source_spec.get('source_sha256'),
                 npz_variable=source_spec.get('npz_variable'),npz_stage=source_spec.get('npz_stage'),
+                npz_stages=stages,analysis_mode=source_spec.get('analysis_mode'),
                 formats=list(dict.fromkeys(formats)),case_name='形貌分析高清导出'),folder
 
 
@@ -298,7 +299,7 @@ def freeze_export(spec,source,job_dir):
     hashes={}
     for mode in spec['modes']:
         out=source/'outputs'/(mode if mode!='single' else '')
-        target=dest/mode;target.mkdir()
+        target=dest/mode;target.mkdir(parents=True)
         for name in ('analysis_arrays.npz','analysis_report.json'):
             shutil.copy2(out/name,target/name)
             hashes[f'{mode}/{name}']=sha256(target/name)
@@ -332,7 +333,16 @@ def run_export(spec,job_dir,progress=None):
             for figure in figures:plt.close(figure)
         finally:plt.close('all')
         reports[mode]=report
-    summary=reports['single'] if 'single' in reports else {'modes':reports}
+    if spec.get('npz_stages'):
+        rows=[]
+        for stage in spec['npz_stages']:
+            prefix=f'stage_{stage:03d}'
+            rows.append({'stage':stage,**({'modes':{mode:reports[prefix+'/'+mode] for mode in ('ga','detail')}}
+                        if spec['analysis_mode']=='both' else {'report':reports[prefix]})})
+        summary={key:spec.get(key) for key in ('npz_stages','npz_variable','source_name','source_sha256')}
+        summary['stages']=rows
+    else:
+        summary=reports['single'] if 'single' in reports else {'modes':reports}
     _atomic_json(job_dir/'outputs/summary.json',summary)
     write_morphology_archive(job_dir)
     return summary

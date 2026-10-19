@@ -18,6 +18,7 @@
       <button class="tab" data-panel="multivariate-panel"><span class="nav-icon">◇</span><span>双自变量拟合<small>响应面 · Origin XYZ</small></span><span class="nav-number">04+</span></button>
     </div>
     <div class="nav-group" data-nav-group="结果与记录"><span class="nav-group-title">结果与记录</span>
+      <button class="tab" data-panel="visualization-panel"><span class="nav-icon">▧</span><span>可视化中心<small>输入数据与结果图像</small></span><span class="nav-number">07</span></button>
       <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">05</span></button>
       <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">06</span><span class="count" id="job-count">0</span></button>
     </div>
@@ -61,6 +62,10 @@
   <section id="benchmark-panel" class="panel" aria-label="性能对比"></section>
   <section id="fitting-panel" class="panel" aria-label="通用数据拟合"></section>
   <section id="multivariate-panel" class="panel" aria-label="双自变量拟合"></section>
+  <section id="visualization-panel" class="panel" aria-labelledby="visualization-heading">
+    <div class="section-heading"><div><div class="section-overline">07 / VISUALIZATION</div><h2 id="visualization-heading">可视化中心</h2><p>从同一个入口预览实测数据、腐蚀阶段形貌和 APDL 求解云图；所有预览都保留来源与单位信息。</p></div><span class="badge neutral">只读预览</span></div>
+    <div id="visualization-root"></div>
+  </section>
   <section id="finite-element-panel" class="panel" aria-label="腐蚀钢板与 APDL 单轴拉伸">
     <div id="apdl-root"></div>
     <details class="card apdl-legacy"><summary><strong>兼容：原有限元表面导出</strong><small>保留 MAT / CSV / 坐标输入包工作流</small></summary><div class="apdl-legacy-body">
@@ -78,5 +83,5 @@
     <details class="card"><summary>腐蚀模拟中断后，怎样继续？</summary><p>在下方找到原任务，点击“恢复”，或“查看”后使用恢复按钮。后端会核对配置、输入和检查点；续算时不能修改参数或随机种子。</p><ul><li><strong>严格复现模式：</strong>从完整检查点恢复阶段、代/个体和随机状态，未保存的工作重新计算。</li><li><strong>PyCharm NumPy 模式：</strong>新任务保存每代状态及当前代已完成个体评价。点击“恢复（阶段内）”，未保存个体按原种子重算。旧任务仅能复用已完成阶段；没有检查点的历史任务无法补回进度。</li><li><strong>Taichi 模式：</strong>目前不支持续算。没有恢复按钮时，可能尚无完整检查点或运行模式不支持；“载入本次配置”后运行是新任务。</li></ul><p>隐藏的任务可勾选“包含已隐藏记录”找回；永久删除会同时清除续算所需的检查点。</p></details>
     <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-</main></div><script type="module" src="/app.js?v=20261019-morphology-batch2"></script>
+</main></div><script type="module" src="/app.js?v=20261019-third-batch"></script>
 </body></html>

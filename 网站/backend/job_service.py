@@ -392,9 +392,11 @@ class JobService:
                     raise ValueError("有限元导出源文件冻结失败")
             _atomic_json(job_dir / "spec.json", spec)
             _atomic_json(job_dir / "task_io.json", io_settings)
+            reserved_slots = 2 if kind in {"benchmark", "diagnostics"} else 1
             status = {"id": job_id, "kind": kind, "state": "queued", "created_at": time.time(),
                       "updated_at": time.time(), "pid": None, "phase": "queued",
-                      "case_name": spec.get("case_name", "")}
+                      "case_name": spec.get("case_name", ""), "scheduler_slots": reserved_slots,
+                      "queue_reason": "等待本机计算槽位"}
             _atomic_json(job_dir / "status.json", status)
         except Exception:
             shutil.rmtree(job_dir)
@@ -433,6 +435,10 @@ class JobService:
                         with self._job_lock:
                             if self._launching_jobs.get(job_id) != token:
                                 return
+                            admitted = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+                            admitted.update(queue_reason=None, scheduler_state="admitted",
+                                            updated_at=time.time())
+                            _atomic_json(self.runtime / "jobs" / job_id / "status.json", admitted)
                             process = self._start_process(job_id)
                         if process is not None:
                             process.wait()
@@ -575,6 +581,19 @@ class JobService:
                     _atomic_json(folder / "status.json", state)
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
+            # Observe the worker tree rather than reporting a configured constant.
+            state['actual_process_count']=None
+            try:
+                import psutil
+                if state.get('pid') and process_alive(state['pid']):
+                    worker=psutil.Process(state['pid'])
+                    state['actual_process_count']=1+sum(child.is_running() for child in worker.children(recursive=True))
+                else:
+                    state['actual_process_count']=0
+            except ImportError:
+                pass
+            except (OSError, psutil.Error):
+                pass
             from .job_history import hidden
             state['history_hidden'] = hidden(folder)
             from .task_io import job_io

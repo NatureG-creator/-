@@ -30,12 +30,12 @@ def service_at(port: int) -> bool:
         return False
 
 
-def launch(*, open_browser=True, preferred_port=8537, runtime=None):
+def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=False):
     runtime = Path(runtime) if runtime is not None else ROOT / ".runtime"
     runtime.mkdir(exist_ok=True)
     marker = runtime / "service.json"
     ports = [preferred_port]
-    if marker.exists():
+    if marker.exists() and not fixed_port:
         try:
             ports.insert(0, int(json.loads(marker.read_text(encoding="utf-8"))["port"]))
         except (ValueError, KeyError):
@@ -52,7 +52,7 @@ def launch(*, open_browser=True, preferred_port=8537, runtime=None):
         raise RuntimeError("当前Python缺少依赖：" + "、".join(missing) +
                            "\n请运行：python -m pip install -r requirements.txt")
     port = None
-    for candidate in range(preferred_port, preferred_port + 30):
+    for candidate in range(preferred_port, preferred_port + (1 if fixed_port else 30)):
         with socket.socket() as probe:
             try:
                 probe.bind(("127.0.0.1", candidate))
@@ -61,7 +61,7 @@ def launch(*, open_browser=True, preferred_port=8537, runtime=None):
             except OSError:
                 pass
     if port is None:
-        raise RuntimeError(f"未找到空闲端口，请检查{preferred_port}附近的端口占用")
+        raise RuntimeError(f"端口 {preferred_port} 已被占用，请检查服务后重试" if fixed_port else f"未找到空闲端口，请检查{preferred_port}附近的端口占用")
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     environment = os.environ.copy()
     environment["PYTHONIOENCODING"] = "utf-8"

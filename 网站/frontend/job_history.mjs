@@ -56,6 +56,7 @@ function mountHistorySelection(root,{post,refresh,onDeleted,report,confirmDelete
     for(const day of ['',...historyDates(jobs)]){const option=document.createElement('option');option.value=day;option.textContent=day||'全部日期';select.append(option);}
     if([...select.options].some(o=>o.value===previous))select.value=previous;
     label.append(select);toolbar.append(label);
+    const search=document.createElement('input');search.type='search';search.placeholder='搜索任务名称、编号或类型';search.setAttribute('aria-label','搜索运行记录');toolbar.append(search);
     const all=document.createElement('button');all.className='button secondary';all.textContent='全选当日可删除记录';
     const remove=document.createElement('button');remove.className='button danger';
     const countLabel=document.createElement('span');countLabel.className='help-line';
@@ -77,8 +78,8 @@ function mountHistorySelection(root,{post,refresh,onDeleted,report,confirmDelete
       }
     }
     function update(){const visible=rows.filter(r=>!r.row.hidden),count=visible.filter(r=>r.checkbox.checked).length;remove.textContent='删除已选（'+count+'）';remove.disabled=count===0;countLabel.textContent='显示 '+visible.length+' / '+rows.length+' 条；引用中的任务由服务端拒绝删除。';}
-    function filter(){for(const r of rows){r.row.hidden=!!select.value&&historyDay(r.job)!==select.value;r.checkbox.checked=false;}update();}
-    select.onchange=filter;
+    function filter(){const needle=search.value.trim().toLowerCase();for(const r of rows){const hay=[r.job.id,r.job.kind,r.job.display_name,r.job.case_name,r.job.spec?.case_name].filter(Boolean).join(' ').toLowerCase();r.row.hidden=(!!select.value&&historyDay(r.job)!==select.value)||(!!needle&&!hay.includes(needle));r.checkbox.checked=false;}update();}
+    select.onchange=filter;search.oninput=filter;
     for(const r of rows)r.checkbox.onchange=update;
     all.onclick=()=>{const available=rows.filter(r=>!r.row.hidden&&!r.checkbox.disabled),checked=available.some(r=>!r.checkbox.checked);for(const r of available)r.checkbox.checked=checked;update();};
     remove.onclick=async()=>{

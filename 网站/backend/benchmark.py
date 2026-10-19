@@ -16,9 +16,7 @@ MODES = {
     "numpy_serial": "NumPy · 单进程",
     "numpy_parallel": "NumPy · 多进程",
     "taichi_cpu": "Taichi CPU · 单进程",
-    "taichi_gpu": "Taichi GPU · 单进程",
     "taichi_cpu_parallel": "Taichi CPU · 多进程",
-    "taichi_gpu_parallel": "Taichi GPU · 多进程",
 }
 SCOPE_NOTE = ("固定种群的一代适应度评估：从初始状态开始，使用所选目标行，"
               "不运行前序阶段、GA选择/交叉/变异或多工况。首次评估含惰性编译；"
@@ -129,9 +127,11 @@ def build_variants(spec):
 
 
 def verify_arch(requested: str, actual: str) -> None:
+    if requested != "cpu":
+        raise ValueError("当前仅允许 Taichi CPU 架构")
     cpu = any(name in actual.lower() for name in ("x64", "arm64", "cpu"))
-    if (requested == "gpu" and cpu) or (requested == "cpu" and not cpu):
-        raise ValueError(f"请求{requested.upper()}，实际架构为{actual}；禁止把CPU回退记作GPU测速")
+    if not cpu:
+        raise ValueError(f"请求CPU，实际架构为{actual}；拒绝使用非CPU后端")
 
 
 def compare_arrays(reference: Path, candidate: Path) -> dict:

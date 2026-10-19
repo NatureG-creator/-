@@ -146,6 +146,25 @@ class MorphologyServiceTests(unittest.TestCase):
                     names=bundle.namelist()
                     self.assertTrue(any('/分析结果/stage_001/精细形貌分析/' in name for name in names))
                     self.assertTrue(any('/分析结果/stage_003/精细形貌分析/' in name for name in names))
+                from backend.morphology_service import run_export,read_npz_state
+                (folder/'status.json').write_text(json.dumps(dict(job,state='completed')),encoding='utf-8')
+                child=server.create_job({'kind':'morphology_export','source_job_id':job['id'],'formats':['svg']},launch=False)
+                child_folder=Path(tmp)/'jobs'/child['id']
+                child_spec=json.loads((child_folder/'spec.json').read_text(encoding='utf-8'))
+                with patch('morphology_analysis.analyze_surface',side_effect=AssertionError('export must reuse arrays')):
+                    exported=run_export(child_spec,child_folder)
+                self.assertEqual(exported['npz_stages'],[1,3])
+                self.assertTrue((child_folder/'outputs/stage_003/surface_and_contour.svg').exists())
+                with zipfile.ZipFile(child_folder/'outputs/morphology_bundle.zip') as bundle:
+                    self.assertEqual(len(bundle.namelist()),len(set(bundle.namelist())))
+                pair_job=server.create_job({'kind':'morphology_analysis','upload_id':upload['id'],'analysis_mode':'both','source_stages':[1,3]},launch=False)
+                folder=Path(tmp)/'jobs'/pair_job['id']
+                both=json.loads((folder/'spec.json').read_text(encoding='utf-8'))
+                with patch('backend.morphology_service.read_npz_state',wraps=read_npz_state) as reader:
+                    pair=run_morphology(both,folder)
+                self.assertEqual(reader.call_count,2)
+                self.assertEqual(set(pair['stages'][0]['modes']),{'ga','detail'})
+                self.assertTrue((folder/'outputs/stage_001/ga/analysis_report.json').exists())
             finally: server.server_close()
 
     def test_invalid_mode_rejected_before_job_creation(self):

@@ -35,6 +35,12 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "use_taichi"):
             validate_simulation_config(config)
 
+    def test_taichi_arch_is_cpu_only(self):
+        config = default_simulation_config()
+        config["TAICHI_CONFIG"]["arch"] = "gpu"
+        with self.assertRaisesRegex(ValueError, "arch"):
+            validate_simulation_config(config)
+
 
 if __name__ == "__main__":
     unittest.main()

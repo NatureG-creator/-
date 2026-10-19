@@ -21,6 +21,12 @@ TARGET = np.array([50.,20.,2.,4.,.6,.3])
 
 
 class OptimizedBackendTests(unittest.TestCase):
+    def test_taichi_initializers_reject_non_cpu_architecture(self):
+        for backend in (taichi_accel, fast_taichi):
+            with self.subTest(backend=backend.__name__):
+                self.assertFalse(backend.init_taichi("gpu"))
+                self.assertIn("仅允许 Taichi CPU", backend.taichi_last_error())
+
     def test_highspeed_entry_save_and_reader_time(self):
         root = Path(__file__).resolve().parent
         spec = importlib.util.spec_from_file_location('highspeed_entry',root/'02_运行多阶段stage_moni_高速版.py')

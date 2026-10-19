@@ -5,6 +5,8 @@ import traceback
 
 
 def probe(name):
+    if name not in ('import', 'cpu'):
+        return {'state': 'unavailable', 'message': '当前仅允许 Taichi CPU 诊断。'}
     try:
         from backend.native_runtime import load_configured_runtime
     except ModuleNotFoundError:
@@ -13,10 +15,8 @@ def probe(name):
     import taichi as ti
     if name == 'import':
         return {'state': 'passed', 'message': 'Taichi Python 包和原生扩展导入成功。', 'version': '.'.join(map(str, ti.__version__))}
-    ti.init(arch=ti.cpu if name == 'cpu' else ti.gpu, offline_cache=False)
+    ti.init(arch=ti.cpu, offline_cache=False)
     arch = str(ti.lang.impl.current_cfg().arch).split('.')[-1]
-    if name == 'gpu' and arch.lower() in ('x64', 'arm64', 'cpu'):
-        return {'state': 'unavailable', 'actual_arch': arch, 'message': 'GPU 初始化回退至 CPU，不能据此认定 GPU 可用。'}
     values = ti.field(dtype=ti.i32, shape=8)
 
     @ti.kernel
