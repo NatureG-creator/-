@@ -54,7 +54,7 @@ def render_result_contours(output: Path, options: dict, progress=None) -> dict:
     The returned image list contains only files verified after MAPDL exits.
     """
     from PIL import Image
-    from .apdl_solver import mapdl_capabilities, _solver_errors
+    from .apdl_solver import mapdl_capabilities, mapdl_environment, _solver_errors
 
     output = Path(output).resolve()
     work = output/'contour_plots'
@@ -85,7 +85,7 @@ def render_result_contours(output: Path, options: dict, progress=None) -> dict:
         if progress:
             progress({'phase': 'apdl_post', 'message': '正在读取已有末步结果并导出 MAPDL 云图，不重新求解。'})
         with (work/'mapdl_launcher.log').open('wb') as stream:
-            process = launch_owned(command, work, stream)
+            process = launch_owned(command, work, stream, env=mapdl_environment(capability['executable']))
             report['pid'] = process.pid
             report['exit_code'] = process.wait(timeout=600)
         if report['exit_code'] != 0:

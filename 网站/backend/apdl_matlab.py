@@ -35,24 +35,73 @@ def _matlab_string(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _validate_mat_variable(path: Path, requested: str | None) -> str:
+def inspect_mat_variables(path: Path) -> list[dict]:
     if path.suffix.lower() != ".mat":
-        return ""
+        return []
     try:
         values = loadmat(path, variable_names=None)
     except (NotImplementedError, ValueError, OSError):
-        # MATLAB also supports v7.3/HDF5 MAT files. Let MATLAB validate those
-        # files instead of rejecting them in the Python preflight.
-        return str(requested or "")
-    candidates = [name for name in ("Z_filled", "F_filled")
-                  if name in values and getattr(values[name], "ndim", 0) == 2]
+        matlab = find_matlab()
+        if not matlab:
+            return []
+        expression = (
+            "s=whos('-file'," + _matlab_string(str(path.resolve())) + ");"
+            "for k=1:numel(s), if numel(s(k).size)==2 && "
+            "any(strcmp(s(k).class,{'double','single','uint8','uint16','uint32','uint64','int8','int16','int32','int64'})), "
+            "fprintf('%s\\t%d\\t%d\\n',s(k).name,s(k).size(1),s(k).size(2)); end; end;"
+        )
+        try:
+            completed = subprocess.run([matlab, "-batch", expression], capture_output=True,
+                                       text=True, encoding="utf-8", errors="replace", timeout=120, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        result = []
+        for line in completed.stdout.splitlines():
+            parts = line.strip().split('\t')
+            if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                result.append({"name": parts[0], "shape": [int(parts[1]), int(parts[2])]})
+        return result
+    result = []
+    for name, value in values.items():
+        if name.startswith("__") or getattr(value, "ndim", 0) != 2:
+            continue
+        if not getattr(value, "dtype", None) or not getattr(value.dtype, "kind", "").isnumeric():
+            continue
+        result.append({"name": name, "shape": [int(value.shape[0]), int(value.shape[1])]})
+    return result
+
+
+def _validate_mat_variable(path: Path, requested: str | None) -> str:
+    if path.suffix.lower() != ".mat":
+        return ""
+    candidates = [item["name"] for item in inspect_mat_variables(path)]
+    if not candidates and path.suffix.lower() == ".mat":
+        # The MATLAB converter can still inspect legacy MAT files when the
+        # lightweight upload inspector did not return variable metadata.
+        matlab = find_matlab()
+        if matlab:
+            expression = (
+                "s=whos('-file'," + _matlab_string(str(path.resolve())) + ");"
+                "for k=1:numel(s), if numel(s(k).size)==2 && "
+                "any(strcmp(s(k).class,{'double','single','uint8','uint16','uint32','uint64','int8','int16','int32','int64'})), "
+                "fprintf('%s\\t%d\\t%d\\n',s(k).name,s(k).size(1),s(k).size(2)); end; end;"
+            )
+            try:
+                completed = subprocess.run([matlab, "-batch", expression], capture_output=True,
+                                           text=True, encoding="utf-8", errors="replace", timeout=120, check=False)
+                candidates = [line.split('\t', 1)[0] for line in completed.stdout.splitlines()
+                              if line.count('\t') == 2]
+            except (OSError, subprocess.TimeoutExpired):
+                candidates = []
+    preferred = [name for name in ("Z_filled", "F_filled") if name in candidates]
+    candidates = preferred or candidates
     variable = str(requested or "")
     if variable:
         if variable not in candidates:
-            raise ValueError("MAT 中没有指定的二维变量 Z_filled 或 F_filled")
+            raise ValueError(f"MAT 中没有指定的二维变量：{variable}")
         return variable
     if len(candidates) != 1:
-        raise ValueError("MAT 需要明确选择唯一表面变量 Z_filled 或 F_filled")
+        raise ValueError("MAT 中存在多个二维数值变量，请先选择要转换的腐蚀 Z 矩阵")
     return candidates[0]
 
 

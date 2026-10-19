@@ -196,7 +196,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
         warnings.append("高速模式沿用原GA；不提供逐个体检查点及严格中断恢复。")
     elif config["mode"] == "pycharm":
         workers = int(settings["parallel_workers"])
-        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}；阶段完成后可复用，阶段内中断需重算当前阶段。")
+        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}；每代及已完成个体评价保存检查点，未保存个体按原种子重算。")
 
     def timing_doc():
         document = dict(timing)
@@ -293,7 +293,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                     """将现有 GA 文本进度转成网页可读的结构化进度。"""
                     generation_match = re.search(r"Gen(\d+)", message)
                     individual_match = re.search(r"已完成\s+(\d+)\s*/\s*(\d+)\s+个体", message)
-                    changes = {"stage": index, "phase": "compute", "maxgen": int(settings["maxgen"]),
+                    changes = {"stage": index, "maxgen": int(settings["maxgen"]),
                                "label": message}
                     if generation_match:
                         changes["generation"] = int(generation_match.group(1))
@@ -318,6 +318,10 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
                             allow_taichi_parallel=bool(config["TAICHI_CONFIG"]["allow_taichi_parallel"]),
                             taichi_arch=str(config["TAICHI_CONFIG"]["arch"]),
                             verbose=ga_progress,
+                            checkpoint=CheckpointStore(
+                                job_dir / "checkpoints" / f"stage_{index:03d}", fingerprint,
+                                engine_fingerprint=engine_fingerprint,
+                            ) if config["mode"] == "pycharm" else None,
                         )
                 finally:
                     fitness_module._fitness_worker_init = original_initializer

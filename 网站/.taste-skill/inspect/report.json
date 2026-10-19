@@ -1,0 +1,1494 @@
+{
+ "url": "http://127.0.0.1:8539/",
+ "at": "2026-10-17T04:40:41.354Z",
+ "allow": [],
+ "viewports": [
+  {
+   "width": 1440,
+   "height": 900,
+   "load": "load",
+   "screens": 3,
+   "filled": [
+    0.67,
+    0.82,
+    0.79
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 1440,
+     "h": 900
+    },
+    "page": {
+     "height": 2633,
+     "screens": 2.9,
+     "words": 249,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 0,
+     "sections": 9,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "让每一次腐蚀计算 都有清晰的来路。",
+     "words": 2,
+     "chars": 17,
+     "lines": 2,
+     "size": 57.6,
+     "vw": 4,
+     "font": "Inter",
+     "weight": 650,
+     "tracking": -0.04,
+     "leading": 1.08,
+     "upper": false,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "left",
+     "widthRatio": 0.31,
+     "top": 168,
+     "tag": "h1",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "让每一次腐蚀计算 都有清晰的来路。",
+     "words": 2,
+     "lines": 2,
+     "size": 57.6,
+     "font": "Inter"
+    },
+    "headings": [
+     {
+      "text": "C ↗",
+      "words": 2,
+      "chars": 3,
+      "lines": 1,
+      "size": 28,
+      "vw": 1.9,
+      "font": "Georgia",
+      "weight": 400,
+      "tracking": 0,
+      "leading": 1.6,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.03,
+      "top": 28,
+      "tag": "span",
+      "kind": "heading"
+     },
+     {
+      "text": "让每一次腐蚀计算 都有清晰的来路。",
+      "words": 2,
+      "chars": 17,
+      "lines": 2,
+      "size": 57.6,
+      "vw": 4,
+      "font": "Inter",
+      "weight": 650,
+      "tracking": -0.04,
+      "leading": 1.08,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.31,
+      "top": 168,
+      "tag": "h1",
+      "kind": "heading"
+     },
+     {
+      "text": "实测点云处理",
+      "words": 1,
+      "chars": 6,
+      "lines": 1,
+      "size": 33.1,
+      "vw": 2.3,
+      "font": "Inter",
+      "weight": 700,
+      "tracking": -0.03,
+      "leading": 1.15,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.38,
+      "top": 451,
+      "tag": "h2",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 3,
+     "maxLines": 2,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 2,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Inter",
+       "share": 0.58,
+       "mono": false
+      },
+      {
+       "family": "Consolas",
+       "share": 0.42,
+       "mono": true
+      },
+      {
+       "family": "Georgia",
+       "share": 0,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      20,
+      21,
+      28,
+      33,
+      58
+     ],
+     "sizeCount": 15,
+     "notLoaded": [],
+     "body": {
+      "font": "Inter",
+      "size": 13,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 5.8
+     },
+     "measureChars": 154,
+     "max": {
+      "size": 57.6,
+      "vw": 4,
+      "font": "Inter",
+      "text": "让每一次腐蚀计算都有清晰的来路。"
+     },
+     "monoShare": 0.42,
+     "monoProseShare": 0.32,
+     "monoFamilies": [
+      "Consolas"
+     ],
+     "monoSamples": [
+      "preprocessing.grid_resolution_mm",
+      "preprocessing.trim_edge_rows",
+      "preprocessing.trim_legacy_asymmetric",
+      "preprocessing.main_gaussian_sigma",
+      "preprocessing.remove_edge_ratio",
+      "preprocessing.invert_z_on_load"
+     ],
+     "microLabels": 2,
+     "microLabelShare": 0.007,
+     "microSamples": [
+      "RESEARCH / WORKBENCH",
+      "01 / POINT CLOUD"
+     ],
+     "upperShare": 0.05,
+     "centerShare": 0.01,
+     "smallText": 128
+    },
+    "eyebrows": [
+     {
+      "text": "数据有来源，计算可追溯",
+      "above": "让每一次腐蚀计算 都有清晰的来路。",
+      "upper": false,
+      "tracked": false,
+      "mono": false,
+      "pill": false,
+      "size": 13,
+      "top": 132
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "above": "实测点云处理",
+      "upper": true,
+      "tracked": true,
+      "mono": false,
+      "pill": false,
+      "size": 12,
+      "top": 421
+     }
+    ],
+    "numbered": [
+     {
+      "text": "01",
+      "size": 11,
+      "top": 194
+     },
+     {
+      "text": "02",
+      "size": 11,
+      "top": 259
+     },
+     {
+      "text": "03",
+      "size": 11,
+      "top": 431
+     },
+     {
+      "text": "04",
+      "size": 11,
+      "top": 496
+     },
+     {
+      "text": "05",
+      "size": 11,
+      "top": 667
+     },
+     {
+      "text": "06",
+      "size": 11,
+      "top": 732
+     },
+     {
+      "text": "01",
+      "size": 12,
+      "top": 197
+     },
+     {
+      "text": "02",
+      "size": 12,
+      "top": 197
+     },
+     {
+      "text": "03",
+      "size": 12,
+      "top": 197
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "size": 12,
+      "top": 421
+     }
+    ],
+    "color": {
+     "bodyBg": "#eaf0eb",
+     "bodyBgHsl": {
+      "h": 130,
+      "s": 0.17,
+      "l": 0.93
+     },
+     "dark": false,
+     "sectionBgs": [
+      {
+       "color": "#ffffff",
+       "top": 1246,
+       "hsl": {
+        "h": 0,
+        "s": 0,
+        "l": 1
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#9aa590",
+       "share": 0.32
+      },
+      {
+       "color": "#6d8579",
+       "share": 0.25
+      },
+      {
+       "color": "#3c5e4f",
+       "share": 0.1
+      },
+      {
+       "color": "#375340",
+       "share": 0.08
+      },
+      {
+       "color": "#536b61",
+       "share": 0.06
+      }
+     ],
+     "button": {
+      "bg": "#ffffff",
+      "hsl": {
+       "h": 0,
+       "s": 0,
+       "l": 1
+      },
+      "fg": "#084b3b"
+     },
+     "lowContrast": [
+      {
+       "text": "preprocessing.grid_resolution_mm",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_edge_rows",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_legacy_asymmetric",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.main_gaussian_sigma",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.remove_edge_ratio",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.invert_z_on_load",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      }
+     ]
+    },
+    "buttons": {
+     "count": 5,
+     "inHero": 4,
+     "radius": 10,
+     "height": 43,
+     "withShadow": 1,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "跳转到工作区",
+      "◈ 实测点云 预处理与六指标 01",
+      "↑ 同步网站源码",
+      "选择目录…"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 13,
+     "shadowOverlay": 1,
+     "shadowSamples": [
+      "header.topbar → rgba(31, 72, 56, 0.07) 0px 1px 0px 0px",
+      "pre → rgba(34, 58, 43, 0.125) 0px 8px 24px 0px",
+      "div#task-io-pointcloud-panel.card.task-io-card → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px",
+      "div.upload-box → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px"
+     ],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 0,
+     "hairlineSamples": [],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 8,
+     "boxRadius": 18,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 0,
+     "fixed": true,
+     "height": 900,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": []
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 768,
+   "height": 1024,
+   "load": "load",
+   "screens": 5,
+   "filled": [
+    0.69,
+    0.73,
+    0.92,
+    0.88,
+    0.73
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 768,
+     "h": 1024
+    },
+    "page": {
+     "height": 4318,
+     "screens": 4.2,
+     "words": 198,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 0,
+     "sections": 9,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "让每一次腐蚀计算都有清晰的来路。",
+     "words": 1,
+     "chars": 16,
+     "lines": 1,
+     "size": 36,
+     "vw": 4.7,
+     "font": "Inter",
+     "weight": 650,
+     "tracking": -0.04,
+     "leading": 1.08,
+     "upper": false,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "center",
+     "widthRatio": 0.95,
+     "top": 303,
+     "tag": "h1",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "让每一次腐蚀计算都有清晰的来路。",
+     "words": 1,
+     "lines": 1,
+     "size": 36,
+     "font": "Inter"
+    },
+    "headings": [
+     {
+      "text": "让每一次腐蚀计算都有清晰的来路。",
+      "words": 1,
+      "chars": 16,
+      "lines": 1,
+      "size": 36,
+      "vw": 4.7,
+      "font": "Inter",
+      "weight": 650,
+      "tracking": -0.04,
+      "leading": 1.08,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.95,
+      "top": 303,
+      "tag": "h1",
+      "kind": "heading"
+     },
+     {
+      "text": "实测点云处理",
+      "words": 1,
+      "chars": 6,
+      "lines": 1,
+      "size": 30,
+      "vw": 3.9,
+      "font": "Inter",
+      "weight": 700,
+      "tracking": -0.03,
+      "leading": 1.15,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.71,
+      "top": 608,
+      "tag": "h2",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 2,
+     "maxLines": 1,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 1,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Inter",
+       "share": 0.56,
+       "mono": false
+      },
+      {
+       "family": "Consolas",
+       "share": 0.44,
+       "mono": true
+      },
+      {
+       "family": "Georgia",
+       "share": 0,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      21,
+      23,
+      30,
+      36
+     ],
+     "sizeCount": 13,
+     "notLoaded": [],
+     "body": {
+      "font": "Inter",
+      "size": 13,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 5.8
+     },
+     "measureChars": 105,
+     "max": {
+      "size": 36,
+      "vw": 4.7,
+      "font": "Inter",
+      "text": "让每一次腐蚀计算都有清晰的来路。"
+     },
+     "monoShare": 0.44,
+     "monoProseShare": 0.33,
+     "monoFamilies": [
+      "Consolas"
+     ],
+     "monoSamples": [
+      "preprocessing.grid_resolution_mm",
+      "preprocessing.trim_edge_rows",
+      "preprocessing.trim_legacy_asymmetric",
+      "preprocessing.main_gaussian_sigma",
+      "preprocessing.remove_edge_ratio",
+      "preprocessing.invert_z_on_load"
+     ],
+     "microLabels": 2,
+     "microLabelShare": 0.007,
+     "microSamples": [
+      "RESEARCH / WORKBENCH",
+      "01 / POINT CLOUD"
+     ],
+     "upperShare": 0.04,
+     "centerShare": 0.01,
+     "smallText": 123
+    },
+    "eyebrows": [
+     {
+      "text": "数据有来源，计算可追溯",
+      "above": "让每一次腐蚀计算都有清晰的来路。",
+      "upper": false,
+      "tracked": false,
+      "mono": false,
+      "pill": false,
+      "size": 13,
+      "top": 267
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "above": "实测点云处理",
+      "upper": true,
+      "tracked": true,
+      "mono": false,
+      "pill": false,
+      "size": 12,
+      "top": 579
+     }
+    ],
+    "numbered": [
+     {
+      "text": "01",
+      "size": 12,
+      "top": 426
+     },
+     {
+      "text": "02",
+      "size": 12,
+      "top": 426
+     },
+     {
+      "text": "03",
+      "size": 12,
+      "top": 426
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "size": 12,
+      "top": 579
+     }
+    ],
+    "color": {
+     "bodyBg": "#eaf0eb",
+     "bodyBgHsl": {
+      "h": 130,
+      "s": 0.17,
+      "l": 0.93
+     },
+     "dark": false,
+     "sectionBgs": [
+      {
+       "color": "#ffffff",
+       "top": 758,
+       "hsl": {
+        "h": 0,
+        "s": 0,
+        "l": 1
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#9aa590",
+       "share": 0.33
+      },
+      {
+       "color": "#6d8579",
+       "share": 0.25
+      },
+      {
+       "color": "#3c5e4f",
+       "share": 0.1
+      },
+      {
+       "color": "#375340",
+       "share": 0.09
+      },
+      {
+       "color": "#536b61",
+       "share": 0.06
+      }
+     ],
+     "button": {
+      "bg": "#ffffff",
+      "hsl": {
+       "h": 0,
+       "s": 0,
+       "l": 1
+      },
+      "fg": "#084b3b"
+     },
+     "lowContrast": [
+      {
+       "text": "preprocessing.grid_resolution_mm",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_edge_rows",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_legacy_asymmetric",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.main_gaussian_sigma",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.remove_edge_ratio",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.invert_z_on_load",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      }
+     ]
+    },
+    "buttons": {
+     "count": 5,
+     "inHero": 4,
+     "radius": 10,
+     "height": 42,
+     "withShadow": 1,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "跳转到工作区",
+      "◈ 实测点云",
+      "↑ 同步网站源码",
+      "选择目录…"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 13,
+     "shadowOverlay": 0,
+     "shadowSamples": [
+      "header.topbar → rgba(31, 72, 56, 0.07) 0px 1px 0px 0px",
+      "pre → rgba(34, 58, 43, 0.125) 0px 8px 24px 0px",
+      "div#task-io-pointcloud-panel.card.task-io-card → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px",
+      "div.upload-box → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px"
+     ],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 1,
+     "hairlineSamples": [
+      "aside.sidebar 768px"
+     ],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 7,
+     "boxRadius": 18,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 0,
+     "fixed": false,
+     "height": 92,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": []
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 390,
+   "height": 844,
+   "load": "load",
+   "screens": 5,
+   "filled": [
+    0.64,
+    0.75,
+    0.92,
+    0.86,
+    0.81
+   ],
+   "motion": {
+    "elements": 0,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 0,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 390,
+     "h": 844
+    },
+    "page": {
+     "height": 3912,
+     "screens": 4.6,
+     "words": 199,
+     "img": 0,
+     "video": 0,
+     "canvas": 0,
+     "svg": 0,
+     "sections": 9,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "实测点云处理",
+     "words": 1,
+     "chars": 6,
+     "lines": 1,
+     "size": 30,
+     "vw": 7.7,
+     "font": "Inter",
+     "weight": 700,
+     "tracking": -0.03,
+     "leading": 1.15,
+     "upper": false,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "center",
+     "widthRatio": 0.9,
+     "top": 612,
+     "tag": "h2",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "让每一次腐蚀计算都有清晰的来路。",
+     "words": 1,
+     "lines": 2,
+     "size": 25,
+     "font": "Inter"
+    },
+    "headings": [
+     {
+      "text": "C ↗",
+      "words": 2,
+      "chars": 3,
+      "lines": 1,
+      "size": 23,
+      "vw": 5.9,
+      "font": "Georgia",
+      "weight": 400,
+      "tracking": 0,
+      "leading": 1.6,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.09,
+      "top": 15,
+      "tag": "span",
+      "kind": "heading"
+     },
+     {
+      "text": "让每一次腐蚀计算都有清晰的来路。",
+      "words": 1,
+      "chars": 16,
+      "lines": 2,
+      "size": 25,
+      "vw": 6.4,
+      "font": "Inter",
+      "weight": 650,
+      "tracking": -0.024,
+      "leading": 1.45,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.9,
+      "top": 320,
+      "tag": "h1",
+      "kind": "heading"
+     },
+     {
+      "text": "实测点云处理",
+      "words": 1,
+      "chars": 6,
+      "lines": 1,
+      "size": 30,
+      "vw": 7.7,
+      "font": "Inter",
+      "weight": 700,
+      "tracking": -0.03,
+      "leading": 1.15,
+      "upper": false,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.9,
+      "top": 612,
+      "tag": "h2",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 3,
+     "maxLines": 2,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 2,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "Inter",
+       "share": 0.56,
+       "mono": false
+      },
+      {
+       "family": "Consolas",
+       "share": 0.44,
+       "mono": true
+      },
+      {
+       "family": "Georgia",
+       "share": 0,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      17,
+      18,
+      21,
+      23,
+      25,
+      30
+     ],
+     "sizeCount": 14,
+     "notLoaded": [],
+     "body": {
+      "font": "Inter",
+      "size": 13,
+      "leading": 1.7,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 5.8
+     },
+     "measureChars": 48,
+     "max": {
+      "size": 30,
+      "vw": 7.7,
+      "font": "Inter",
+      "text": "实测点云处理"
+     },
+     "monoShare": 0.44,
+     "monoProseShare": 0.33,
+     "monoFamilies": [
+      "Consolas"
+     ],
+     "monoSamples": [
+      "preprocessing.grid_resolution_mm",
+      "preprocessing.trim_edge_rows",
+      "preprocessing.trim_legacy_asymmetric",
+      "preprocessing.main_gaussian_sigma",
+      "preprocessing.remove_edge_ratio",
+      "preprocessing.invert_z_on_load"
+     ],
+     "microLabels": 2,
+     "microLabelShare": 0.007,
+     "microSamples": [
+      "RESEARCH / WORKBENCH",
+      "01 / POINT CLOUD"
+     ],
+     "upperShare": 0.05,
+     "centerShare": 0.01,
+     "smallText": 134
+    },
+    "eyebrows": [
+     {
+      "text": "数据有来源，计算可追溯",
+      "above": "让每一次腐蚀计算都有清晰的来路。",
+      "upper": false,
+      "tracked": false,
+      "mono": false,
+      "pill": false,
+      "size": 9,
+      "top": 298
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "above": "实测点云处理",
+      "upper": true,
+      "tracked": true,
+      "mono": false,
+      "pill": false,
+      "size": 8,
+      "top": 589
+     }
+    ],
+    "numbered": [
+     {
+      "text": "01",
+      "size": 8,
+      "top": 464
+     },
+     {
+      "text": "02",
+      "size": 8,
+      "top": 464
+     },
+     {
+      "text": "03",
+      "size": 8,
+      "top": 464
+     },
+     {
+      "text": "01 / POINT CLOUD",
+      "size": 8,
+      "top": 589
+     }
+    ],
+    "color": {
+     "bodyBg": "#eaf0eb",
+     "bodyBgHsl": {
+      "h": 130,
+      "s": 0.17,
+      "l": 0.93
+     },
+     "dark": false,
+     "sectionBgs": [
+      {
+       "color": "#ffffff",
+       "top": 1703,
+       "hsl": {
+        "h": 0,
+        "s": 0,
+        "l": 1
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#9aa590",
+       "share": 0.33
+      },
+      {
+       "color": "#6d8579",
+       "share": 0.25
+      },
+      {
+       "color": "#3c5e4f",
+       "share": 0.1
+      },
+      {
+       "color": "#375340",
+       "share": 0.09
+      },
+      {
+       "color": "#536b61",
+       "share": 0.06
+      }
+     ],
+     "button": {
+      "bg": "#ffffff",
+      "hsl": {
+       "h": 0,
+       "s": 0,
+       "l": 1
+      },
+      "fg": "#084b3b"
+     },
+     "lowContrast": [
+      {
+       "text": "preprocessing.grid_resolution_mm",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_edge_rows",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.trim_legacy_asymmetric",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.main_gaussian_sigma",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.remove_edge_ratio",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      },
+      {
+       "text": "preprocessing.invert_z_on_load",
+       "ratio": 2.6,
+       "need": 4.5,
+       "size": 11,
+       "fg": "#9aa590",
+       "bg": "#ffffff"
+      }
+     ]
+    },
+    "buttons": {
+     "count": 5,
+     "inHero": 3,
+     "radius": 10,
+     "height": 37,
+     "withShadow": 1,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "跳转到工作区",
+      "◈ 实测点云",
+      "↑ 同步网站源码"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 13,
+     "shadowOverlay": 0,
+     "shadowSamples": [
+      "header.topbar → rgba(31, 72, 56, 0.07) 0px 1px 0px 0px",
+      "pre → rgba(34, 58, 43, 0.125) 0px 8px 24px 0px",
+      "div#task-io-pointcloud-panel.card.task-io-card → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px",
+      "div.upload-box → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px"
+     ],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 1,
+     "hairlineSamples": [
+      "aside.sidebar 390px"
+     ],
+     "outlinedBoxes": 1,
+     "dashed": 0,
+     "blurred": 0,
+     "roundedBoxes": 7,
+     "boxRadius": 18,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": []
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 0,
+     "fixed": false,
+     "height": 123,
+     "floatingPill": false,
+     "blur": false
+    },
+    "fontsLoaded": []
+   },
+   "consoleErrors": []
+  }
+ ],
+ "findings": [
+  {
+   "level": "FAIL",
+   "id": "eyebrow",
+   "width": 1440,
+   "message": "2 eyebrow/kicker label(s) above headings: \"数据有来源，计算可追溯\" above \"让每一次腐蚀计算 都有清晰的来路。\"; \"01 / POINT CLOUD\" above \"实测点云处理\"",
+   "fix": "Delete them. If the label carried real information, fold it into the headline or the supporting sentence.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "mono",
+   "width": 1440,
+   "message": "Monospace type outside code: Consolas — e.g. \"preprocessing.grid_resolution_mm\", \"preprocessing.trim_edge_rows\", \"preprocessing.trim_legacy_asymmetric\", \"preprocessing.main_gaussian_sigma\"",
+   "fix": "Set it in the text face. Monospace is for literal code inside <pre>/<code> only.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "numbering",
+   "width": 1440,
+   "message": "Decorative index numbers: \"01\", \"02\", \"03\", \"04\", \"05\", \"06\"",
+   "fix": "Remove them. If order truly matters, write it into the words (\"First, …\") or use a real <ol>.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "micro-label",
+   "width": 1440,
+   "message": "2 tiny uppercase letter-spaced label(s): \"RESEARCH / WORKBENCH\", \"01 / POINT CLOUD\"",
+   "fix": "Prefer sentence case at body size.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "shadow",
+   "width": 1440,
+   "message": "13 box-shadow(s) on elements at rest: header.topbar → rgba(31, 72, 56, 0.07) 0px 1px 0px 0px | pre → rgba(34, 58, 43, 0.125) 0px 8px 24px 0px | div#task-io-pointcloud-panel.card.task-io-card → rgba(29, 76, 56, 0.06) 0px 10px 28px 0px",
+   "fix": "Remove. Separate surfaces with a tone step or space. Shadows are for things that really float (menus, dialogs, sticky bars).",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "button-fx",
+   "width": 1440,
+   "message": "Buttons with shadow/glow.",
+   "fix": "Flat fill, one colour.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "outlined-box",
+   "width": 1440,
+   "message": "1 box(es) drawn with a 1px outline.",
+   "fix": "Prefer a filled surface or no box.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "contrast",
+   "width": 1440,
+   "message": "Low-contrast text: \"preprocessing.grid_resolution_mm\" 2.6:1 needs 4.5:1; \"preprocessing.trim_edge_rows\" 2.6:1 needs 4.5:1; \"preprocessing.trim_legacy_asymmetric\" 2.6:1 needs 4.5:1; \"preprocessing.main_gaussian_sigma\" 2.6:1 needs 4.5:1",
+   "fix": "Darken or lighten the text colour.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "size-count",
+   "width": 1440,
+   "message": "15 different font sizes (9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 28, 33, 58).",
+   "fix": "A page needs about five: display, heading, lead, body, small.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "body-size",
+   "width": 1440,
+   "message": "Body text is 13px (the size most of the running text is set in).",
+   "fix": "Body copy 16–20px. Map small sizes from blueprints onto your body step.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "grey-body",
+   "width": 1440,
+   "message": "The running text is a soft grey on its ground (5.8:1).",
+   "fix": "Set body copy in the full ink (7:1 or more). Keep the muted ink for secondary notes; pages read thin and unfinished when everything is grey.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "few-pictures",
+   "width": 1440,
+   "message": "Only 0 picture(s) on the page (0 photographs, footage or raster images, 0 interface fragments). Drawings in SVG do not count.",
+   "fix": "Find real pictures of the subject's world with scripts/assets.mjs (photographs, archival images, maps, engravings, footage), download them to assets/ and give them room: a hero picture, one per section that has a subject, a full-width band. At least four, usually six to twelve."
+  },
+  {
+   "level": "WARN",
+   "id": "no-footage",
+   "width": 1440,
+   "message": "No video anywhere on the page.",
+   "fix": "Look for one honest clip with scripts/assets.mjs --video (the place, the material, the process) and use it as a muted loop with a poster frame. Defend its absence only if no clip fits the subject."
+  },
+  {
+   "level": "WARN",
+   "id": "measure",
+   "width": 1440,
+   "message": "Longest paragraph runs about 154 characters per line.",
+   "fix": "Cap paragraphs at 45–75 characters (max-width: 60ch).",
+   "alsoAt": [
+    768
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "small-text",
+   "width": 1440,
+   "message": "128 text blocks under 13px.",
+   "fix": "Nothing meant to be read goes below 13px.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "FAIL",
+   "id": "focal-point",
+   "width": 1440,
+   "message": "The first screen has no dominant element: the largest type is 57.6px (4vw) and no single picture holds a third of the viewport.",
+   "fix": "Make one thing lead: the headline at display size, or one large picture. A grid of many small pictures is not one thing; in blind tests jurors marked a first screen without a headline down every time. On the strongest studied sites the largest type has a median of 8.4vw."
+  },
+  {
+   "level": "FAIL",
+   "id": "still-page",
+   "width": 1440,
+   "message": "Only 0 element(s) moved while the page loaded and scrolled.",
+   "fix": "Build the motion layer (SKILL.md step 9, references/motion.md): the signature move, an entrance for the parts of every section, feedback on every control, and one moving picture. Transform and opacity only, with a reduced-motion fallback."
+  },
+  {
+   "level": "WARN",
+   "id": "hairline",
+   "width": 768,
+   "message": "1 thin rule(s)/divider line(s): aside.sidebar 768px",
+   "fix": "Delete. Separate with space, a tone change, or scale. Lines are only for real tables and form fields.",
+   "alsoAt": [
+    390
+   ]
+  }
+ ],
+ "images": [
+  {
+   "viewport": "desktop",
+   "width": 1440,
+   "fold": "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\desktop-fold.jpg",
+   "pages": [
+    "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\desktop-page-01.jpg"
+   ]
+  },
+  {
+   "viewport": "tablet",
+   "width": 768,
+   "fold": "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\tablet-fold.jpg",
+   "pages": [
+    "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\tablet-page-01.jpg"
+   ]
+  },
+  {
+   "viewport": "mobile",
+   "width": 390,
+   "fold": "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\mobile-fold.jpg",
+   "pages": [
+    "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\.taste-skill\\inspect\\mobile-page-01.jpg"
+   ]
+  }
+ ]
+}

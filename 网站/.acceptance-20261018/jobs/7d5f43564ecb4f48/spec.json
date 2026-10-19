@@ -1,0 +1,20 @@
+{
+  "kind": "morphology_export",
+  "source_job_id": "9a336ccf5a05468e",
+  "modes": [
+    "ga",
+    "detail"
+  ],
+  "formats": [
+    "png",
+    "pdf",
+    "svg"
+  ],
+  "case_name": "形貌分析高清导出",
+  "input_hashes": {
+    "ga/analysis_arrays.npz": "5b285d02abe34d77ec8c44b186dbde536faf1e9feb9b42d99f4d4679abbc4f4a",
+    "ga/analysis_report.json": "3e5f505bd124345bcd520deea28b1aecb11d76880d6c92108965b22146d9cded",
+    "detail/analysis_arrays.npz": "3bc9676237cfcb46d3f856886bf2047506b2887f422185979eeeeb70149f2895",
+    "detail/analysis_report.json": "7289a2042ce0643f0442105cdca72d4a5a45bb652e9c5ad9acee683521a1b793"
+  }
+}

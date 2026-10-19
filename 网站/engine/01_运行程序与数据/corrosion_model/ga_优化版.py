@@ -211,6 +211,7 @@ def run_ga(
     taichi_arch: str = "cpu",
     verbose: ProgressTarget = False,
     progress_label: str = "GA",
+    checkpoint=None,
 ) -> GAResult:
     """Python version of MATLAB `GA.m`.
 
@@ -234,16 +235,42 @@ def run_ga(
         else np.asarray(ub, dtype=np.float64)
     )
     data_arr = np.asarray(data, dtype=np.float64)
+    if checkpoint is not None and use_taichi:
+        raise ValueError("阶段内检查点仅支持 NumPy 模式")
     rng = np.random.default_rng(seed)
-    chrom = latin_begin(config.nind, config.lind, config.bits_per_param, rng)
+    state = checkpoint.load() if checkpoint is not None else None
+    if state is not None and state.get("backend") != "pycharm":
+        raise ValueError("检查点计算模式不匹配")
+    if state is None:
+        chrom = latin_begin(config.nind, config.lind, config.bits_per_param, rng)
+        state = dict(backend="pycharm", generation=1, chrom=chrom.tolist(),
+                     rng_state=rng.bit_generator.state, evaluation_seed=None, scores={},
+                     next_individual=0, best_state=None, best_result=None,
+                     best_parameter=None, last_generation=0, completed=False)
+        if checkpoint is not None: checkpoint.save(state)
+    else:
+        chrom = np.asarray(state["chrom"], dtype=np.int8)
+        rng.bit_generator.state = state["rng_state"]
     perfect_result: np.ndarray | None = None
     perfect_parameter: np.ndarray | None = None
     perfect_a: np.ndarray | None = None
     perfect_d: np.ndarray | None = None
     perfect_cl: np.ndarray | None = None
     last_gen = 1
+    if state["best_state"] is not None:
+        saved = checkpoint.load_arrays(state["best_state"])
+        perfect_result = np.asarray(state["best_result"], dtype=float)
+        perfect_parameter = np.asarray(state["best_parameter"], dtype=float)
+        perfect_a, perfect_d, perfect_cl = saved["a"], saved["d"], saved["cl"]
+        last_gen = int(state["last_generation"])
+    def numeric_list(values):
+        return [float(x) if np.isfinite(x) else str(float(x)) for x in values]
+    def save_individual(index, row):
+        state["scores"][str(index)] = numeric_list(row)
+        state["next_individual"] = len(state["scores"])
+        checkpoint.save(state)
     emit_progress(verbose, f"[{progress_label}] 开始寻优：最大代数={config.maxgen}, 种群={config.nind}, Taichi={use_taichi}")
-    for gen in range(1, config.maxgen):
+    for gen in range(int(state["generation"]), config.maxgen) if not state["completed"] else ():
         last_gen = gen
         xy = decode_binary_population(chrom, lb, ub, config.bits_per_param)
         current_px = max(0.6, min(0.95, config.base_px * np.exp(-config.decay_rate * (gen / config.maxgen))))
@@ -256,6 +283,10 @@ def run_ga(
             a_jisuan = a_input
             d_jisuan = d_input
             cl_jisuan = cl_input
+        if state["evaluation_seed"] is None:
+            state["evaluation_seed"] = int(rng.integers(0, np.iinfo(np.uint32).max))
+            state["rng_state"] = rng.bit_generator.state
+            if checkpoint is not None: checkpoint.save(state)
         fitness_result: FitnessResult = evaluate_population(
             xy,
             data_arr,
@@ -269,7 +300,7 @@ def run_ga(
             a_jisuan,
             d_jisuan,
             cl_jisuan,
-            seed=int(rng.integers(0, np.iinfo(np.uint32).max)),
+            seed=state["evaluation_seed"],
             use_taichi=use_taichi,
             parallel_workers=parallel_workers,
             allow_taichi_parallel=allow_taichi_parallel,
@@ -277,6 +308,8 @@ def run_ga(
             verbose=verbose,
             progress_label=f"{progress_label}/Gen{gen}",
             retain_states=use_taichi,
+            saved_scores=state["scores"] if checkpoint is not None else None,
+            on_individual=save_individual if checkpoint is not None else None,
         )
         edited_objv, weighted_objv = combine_objectives(fitness_result.objv)
         fitness = shared_fitness(xy, weighted_objv, config.sigma_share)
@@ -297,7 +330,18 @@ def run_ga(
                     progress_label=f"{progress_label}/Gen{gen}/最优状态恢复",
                 )
                 perfect_a, perfect_d, perfect_cl = best.a, best.d, best.cl_concentration
+        def save_generation(completed):
+            if checkpoint is None: return
+            # Large arrays change only when the global best improves.
+            if state["best_result"] != numeric_list(perfect_result) or state["best_state"] is None:
+                state["best_state"] = checkpoint.save_arrays(a=perfect_a, d=perfect_d, cl=perfect_cl)
+            state.update(best_result=numeric_list(perfect_result),
+                         best_parameter=perfect_parameter.tolist(), last_generation=gen,
+                         generation=gen+1, chrom=chrom.tolist(), rng_state=rng.bit_generator.state,
+                         evaluation_seed=None, scores={}, next_individual=0, completed=completed)
+            checkpoint.save(state)
         if np.sum(perfect_result) <= 0.01:
+            save_generation(True)
             break
         sorted_indices = np.argsort(fitness)
         diversity = float(np.std(fitness))
@@ -311,6 +355,9 @@ def run_ga(
         mutated = mutate_population(crossed, current_pm, rng)
         worst = sorted_indices[: mutated.shape[0]]
         chrom[worst, :] = mutated
+        save_generation(gen == config.maxgen-1)
+        if checkpoint is None:
+            state.update(evaluation_seed=None, scores={})
         emit_progress(
             verbose,
             f"[{progress_label}] 已完成第 {gen} 代，当前最优误差={np.array2string(perfect_result, precision=4)}",

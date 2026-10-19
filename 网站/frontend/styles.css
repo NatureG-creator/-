@@ -135,3 +135,15 @@ footer{margin-top:60px;border-top:0;padding:28px 0 38px;font-size:12px;color:#71
 .origin-settings { border-top: 1px solid var(--line, #e0e4eb); padding-top: 12px; }
 .origin-settings summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
 .origin-settings .check-field { align-self: center; }
+
+/* Keep history selection, task details and actions in stable columns. */
+#history-panel .history-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:16px}
+#history-panel .history-item > input[type=checkbox]{grid-column:1;width:15px;height:15px;margin:0}
+#history-panel .history-info{grid-column:2;min-width:0;width:auto;align-items:flex-start}
+#history-panel .history-info > div{min-width:0;overflow-wrap:anywhere}
+#history-panel .history-type{flex-shrink:0}
+#history-panel .history-actions{grid-column:3;width:auto;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:1000px){
+  #history-panel .history-item{grid-template-columns:18px minmax(0,1fr)}
+  #history-panel .history-actions{grid-column:2;justify-content:flex-start}
+}

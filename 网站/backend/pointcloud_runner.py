@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-from scipy.io import loadmat
 
 from .pointcloud_config import validate_pointcloud_config
 from .system_info import runtime_provenance
@@ -102,6 +101,10 @@ def run_pointcloud(
     job_dir: Path, reference: Path, detail: Path, config: dict,
     *, matlab_bin: Path | None = None,
 ) -> dict:
+    try:
+        from scipy.io import loadmat
+    except ImportError as exc:
+        raise RuntimeError("点云 MATLAB 数据处理需要 scipy.io；请在 PyCharm 使用已配置 scipy 的解释器运行") from exc
     overrides = validate_pointcloud_config(config)
     if matlab_bin is None:
         located = os.environ.get("MATLAB_BIN") or shutil.which("matlab")

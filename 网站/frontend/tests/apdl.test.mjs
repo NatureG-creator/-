@@ -27,8 +27,17 @@ test('结果卡区分求解后处理和未核验RST，不把未核验显示成�
 
 test('默认弹性平板可直接建模且不附带无关表面',()=>{
  const draft=apdlDefaults(),p=buildApdlPayload(draft,'build');
- assert.equal(p.options.corrosion_mode,'flat');assert.equal(p.options.E_MPa,206000);
+ assert.equal(p.options.corrosion_mode,'flat');assert.equal(p.options.E_MPa,206000);assert.equal(p.options.tensile_direction,'X');
  assert.equal(p.run_mode,'build');assert.equal(p.top_source,undefined);assert.equal(p.bottom_source,undefined);
+});
+test('拉伸方向可切换为Y并随任务参数提交',()=>{
+ const draft=apdlDefaults();draft.options.tensile_direction='Y';
+ const payload=buildApdlPayload(draft,'build');
+ assert.equal(payload.options.tensile_direction,'Y');
+});
+test('Y向结果卡按Y跨度显示轴向标距和横向跨度',()=>{
+ const html=renderApdlResult({solve_state:'solved',options:{tensile_direction:'Y'},stats:{length_mm:20,width_mm:100,nominal_area_mm2:120}});
+ assert.match(html,/拉伸方向：全局 Y；轴向标距 100 mm，横向跨度 20 mm/);
 });
 test('模拟继承真实间距，阶段使用整数',()=>{
  const d=apdlDefaults();d.options.corrosion_mode='single_top';d.top={source_kind:'simulation',source_job_id:'abc',source_stage:'2',mapping:{dx_mm:'0.3',dy_mm:'0.3',layout:'auto'}};
@@ -137,4 +146,9 @@ test('预检只转传后端签名，任何草稿修改拒绝陈旧结果',()=>{
  assert.equal(state.acceptPrecheck({registration_signature:'backend-signature'},version,payload),payload);assert.equal(payload.registration_signature,'backend-signature');
  state.update('control','case_name','新名称');assert.equal(state.precheck,null);assert.throws(()=>state.acceptPrecheck({registration_signature:'old'},version,{}),/配置发生变化/);
  const flat={};state.acceptPrecheck({},state.revision,flat);assert.equal(flat.registration_signature,undefined);
+});
+test('旧服务未确认Y向时阻止生成避免静默按X向求解',()=>{
+ const state=draftState(),payload={options:{tensile_direction:'Y'}};
+ assert.throws(()=>state.acceptPrecheck({options:{tensile_direction:'X'}},state.revision,payload),/服务端未确认所选拉伸方向/);
+ assert.throws(()=>state.acceptPrecheck({},state.revision,payload),/服务端未确认所选拉伸方向/);
 });

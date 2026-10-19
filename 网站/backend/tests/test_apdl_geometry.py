@@ -98,6 +98,11 @@ class APDLGeometryTests(unittest.TestCase):
                                      'width_mm': 20, 'nx': 3, 'ny': 2})
         self.assertEqual(g['stats']['analytic_stiffness_n_per_mm'], 206000*120/100)
         self.assertEqual(g['stats']['analytic_force_n'], 206000*120*.1/100)
+        y = build_geometry(None, None, {'corrosion_mode': 'flat', 'length_mm': 100,
+            'width_mm': 20, 'nx': 3, 'ny': 2, 'tensile_direction': 'Y'})
+        self.assertEqual(y['stats']['nominal_area_mm2'], 600)
+        self.assertEqual(y['stats']['analytic_stiffness_n_per_mm'], 206000*600/20)
+        self.assertEqual(y['stats']['analytic_force_n'], 206000*600*.1/20)
         self.assertNotIn('analytic_force_n', build_geometry(np.zeros((2, 2)), None, {})['stats'])
 
     def test_invalid_material_arrays_and_piercing_are_rejected(self):
@@ -110,7 +115,7 @@ class APDLGeometryTests(unittest.TestCase):
                         {'poisson_ratio': .5}, {'tangent_MPa': 206000},
                         {'target_displacement_mm': -1}, {'nx': 2.5},
                         {'corrosion_mode': []}, {'material_model': {}},
-                        {'boundary_mode': ['poisson_free']}):
+                        {'boundary_mode': ['poisson_free']}, {'tensile_direction': 'Z'}):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 normalise_options(options)
 

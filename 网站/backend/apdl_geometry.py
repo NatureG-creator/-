@@ -20,6 +20,7 @@ DEFAULTS = {
     'poisson_ratio': .3, 'material_model': 'elastic', 'yield_MPa': 235.,
     'tangent_MPa': 1000., 'target_displacement_mm': .1, 'substeps': 10,
     'large_deflection': False, 'boundary_mode': 'poisson_free',
+    'tensile_direction': 'X',
     'export_full_field': True, 'cores': 2, 'timeout_seconds': 3600,
     'restart_frequency': 1,
     'plastic_curve': None, 'allow_negative_slope': False,
@@ -66,6 +67,8 @@ def normalise_options(options: dict) -> dict:
         raise ValueError('material_model 只支持 elastic、bilinear_iso 或 multilinear_iso。')
     if not isinstance(result['boundary_mode'], str) or result['boundary_mode'] not in {'poisson_free', 'clamped_grips', 'legacy_recommended'}:
         raise ValueError('boundary_mode 无效。')
+    if not isinstance(result['tensile_direction'], str) or result['tensile_direction'] not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
     if not isinstance(result['mesh_type'], str) or result['mesh_type'] not in MESH_TYPES:
         raise ValueError('mesh_type 只支持 solid185_hex、solid187_tetra 或 solid285_tetra。')
     if not -1 < result['poisson_ratio'] < .5:
@@ -156,8 +159,12 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         o.update(nx=nx, ny=ny, length_mm=(nx-1)*o['dx_mm'], width_mm=(ny-1)*o['dy_mm'])
     _count_bound, element_count = _counts(nx, ny, o['layers'], o['mesh_type'])
     count = nx * ny * (o['layers'] + 1)
-    nominal_area = o['width_mm']*o['thickness_mm']
-    original_volume = o['length_mm']*nominal_area
+    tensile_direction = o['tensile_direction']
+    axial_length = o['length_mm'] if tensile_direction == 'X' else o['width_mm']
+    transverse_length = o['width_mm'] if tensile_direction == 'X' else o['length_mm']
+    nominal_area = transverse_length*o['thickness_mm']
+    original_volume = (o['length_mm']*nominal_area if tensile_direction == 'X'
+                       else o['width_mm']*nominal_area)
     if not math.isfinite(nominal_area) or nominal_area <= 0 or not math.isfinite(original_volume) or original_volume <= 0:
         raise ValueError('名义面积或原始体积数值溢出或退化。')
     remaining = o['thickness_mm'] - top - bottom
@@ -232,12 +239,14 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     }
     stats.update(tetra_stats)
     if tetra_stats:
-        tolerance = 32*np.finfo(float).eps*max(1., float(np.max(np.abs(nodes[:,1]))))
+        coordinate = 1 if tensile_direction == 'X' else 2
+        grip_axis = x if tensile_direction == 'X' else y
+        tolerance = 32*np.finfo(float).eps*max(1., float(np.max(np.abs(nodes[:,coordinate]))))
         stats['grip_tolerance_mm'] = tolerance
-        stats['fixed_grip_node_count'] = int(np.count_nonzero(np.abs(nodes[:,1]-x[0]) <= tolerance))
-        stats['loaded_grip_node_count'] = int(np.count_nonzero(np.abs(nodes[:,1]-x[-1]) <= tolerance))
+        stats['fixed_grip_node_count'] = int(np.count_nonzero(np.abs(nodes[:,coordinate]-grip_axis[0]) <= tolerance))
+        stats['loaded_grip_node_count'] = int(np.count_nonzero(np.abs(nodes[:,coordinate]-grip_axis[-1]) <= tolerance))
     if mode == 'flat':
-        stats['analytic_stiffness_n_per_mm'] = o['E_MPa']*stats['nominal_area_mm2']/o['length_mm']
+        stats['analytic_stiffness_n_per_mm'] = o['E_MPa']*stats['nominal_area_mm2']/axial_length
         stats['analytic_force_n'] = stats['analytic_stiffness_n_per_mm']*o['target_displacement_mm']
     warnings = [
         ('网格采用原始XY采样及厚度方向结构化六面体；边长比和体积检查不等同于ANSYS单元质量验收。'

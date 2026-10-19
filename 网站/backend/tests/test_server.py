@@ -4,11 +4,26 @@ import threading
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.server import make_server
 
 
 class ServerTests(unittest.TestCase):
+    def test_unavailable_console_does_not_break_http_response(self):
+        from backend.server import Handler
+        with tempfile.TemporaryDirectory() as folder:
+            server=make_server('127.0.0.1',0,Path(folder))
+            thread=threading.Thread(target=server.serve_forever,daemon=True)
+            thread.start()
+            try:
+                with patch('http.server.BaseHTTPRequestHandler.log_message',side_effect=OSError('console closed')):
+                    with urllib.request.urlopen(f'http://127.0.0.1:{server.server_port}/',timeout=5) as response:
+                        self.assertEqual(response.status,200)
+                self.assertIn('GET /', (Path(folder)/'http.log').read_text(encoding='utf-8'))
+            finally:
+                server.shutdown();server.server_close();thread.join(5)
+
     def test_defaults_and_pointcloud_upload(self):
         with tempfile.TemporaryDirectory() as folder:
             server = make_server("127.0.0.1", 0, Path(folder))

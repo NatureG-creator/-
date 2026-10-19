@@ -71,6 +71,39 @@ class APDLDeckTests(unittest.TestCase):
             self.assertIn('CE,1,0,3,UZ,3,3,UY,-0.5', text)
             self.assertNotIn('D,3,UZ,0', text)
 
+    def test_y_tension_uses_y_grips_dofs_reaction_strain_and_cross_section(self):
+        from backend.apdl_deck import _boundaries, _post
+        from backend.apdl_macros import diagnostic_macros
+        g = build_geometry(None, None, {'corrosion_mode': 'flat', 'length_mm': 12,
+            'width_mm': 6, 'nx': 3, 'ny': 2, 'layers': 2,
+            'tensile_direction': 'Y', 'boundary_mode': 'clamped_grips'})
+        boundary = _boundaries(g)
+        self.assertIn('NSEL,S,LOC,Y,0', boundary)
+        self.assertIn('NSEL,S,LOC,Y,6', boundary)
+        self.assertIn('D,ALL,UY,0.10000000000000001', boundary)
+        self.assertIn('D,ALL,UX,0', boundary)
+        self.assertNotIn('NSEL,S,LOC,X', boundary)
+        post = _post(g)
+        self.assertIn('RF,FY', post)
+        self.assertIn('U,Y', post)
+        self.assertIn('engstrain=uax/6', post)
+        self.assertIn('nomstress=fl/72', post)
+        checks = diagnostic_macros(g)['boundary_self_check.mac']
+        self.assertIn('NSEL,U,LOC,Y,0', checks)
+        self.assertIn('NSEL,U,LOC,Y,6', checks)
+        self.assertIn('ac_nf,NE,9', checks)
+        self.assertIn('ac_nl,NE,9', checks)
+
+    def test_y_tension_sloped_fixed_end_uses_xz_rotation_constraint(self):
+        from backend.apdl_deck import _boundaries
+        g = build_geometry(None, np.array([[0, .5], [0, .5]]), {
+            'corrosion_mode': 'single_bottom', 'dx_mm': 2, 'dy_mm': 3,
+            'tensile_direction': 'Y'})
+        text = _boundaries(g)
+        self.assertIn('NSEL,S,LOC,Y,0', text)
+        self.assertIn('D,ALL,UY,0', text)
+        self.assertIn('CE,1,0,2,UX,-0.5,2,UZ,2', text)
+
     def test_clamped_grips_and_elastic_eqpl(self):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)

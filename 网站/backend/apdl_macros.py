@@ -39,11 +39,16 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
     o = geometry['options']
     nodes = geometry['stats']['node_count']
     elements = geometry['stats']['element_count']
-    x0, x1 = geometry['x'][0], geometry['x'][-1]
-    tolerance = geometry['stats'].get('grip_tolerance_mm', max(abs(o['dx_mm']) * .01, 1e-12))
-    grip_nodes = int(sum(abs(float(node[1]) - x0) <= tolerance
+    direction = o.get('tensile_direction', 'X')
+    axis = 'X' if direction == 'X' else 'Y'
+    axis_index = 1 if direction == 'X' else 2
+    axial_coords = geometry['x'] if direction == 'X' else geometry['y']
+    x0, x1 = axial_coords[0], axial_coords[-1]
+    axial_spacing = o['dx_mm'] if direction == 'X' else o['dy_mm']
+    tolerance = geometry['stats'].get('grip_tolerance_mm', max(abs(axial_spacing) * .01, 1e-12))
+    grip_nodes = int(sum(abs(float(node[axis_index]) - x0) <= tolerance
                          for node in geometry['nodes']))
-    loaded_nodes = int(sum(abs(float(node[1]) - x1) <= tolerance
+    loaded_nodes = int(sum(abs(float(node[axis_index]) - x1) <= tolerance
                            for node in geometry['nodes']))
     mesh = [
         '! Actual imported database; contiguous IDs expected from nodes/elements.dat.',
@@ -62,9 +67,9 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
         '*GET,ac_nn,NODE,0,COUNT', '*GET,ac_ne,ELEM,0,COUNT',
         'SELTOL,'+_number(tolerance),
         'NSEL,NONE', 'CMSEL,S,GRIP_FIXED', '*GET,ac_nf,NODE,0,COUNT',
-        'NSEL,U,LOC,X,'+_number(geometry['x'][0]), '*GET,ac_fbad,NODE,0,COUNT',
+        f'NSEL,U,LOC,{axis},'+_number(axial_coords[0]), '*GET,ac_fbad,NODE,0,COUNT',
         'NSEL,NONE', 'CMSEL,S,GRIP_LOADED', '*GET,ac_nl,NODE,0,COUNT',
-        'NSEL,U,LOC,X,'+_number(geometry['x'][-1]), '*GET,ac_lbad,NODE,0,COUNT',
+        f'NSEL,U,LOC,{axis},'+_number(axial_coords[-1]), '*GET,ac_lbad,NODE,0,COUNT',
         'NSEL,NONE', 'CMSEL,S,GRIP_FIXED', 'CMSEL,R,GRIP_LOADED',
         '*GET,ac_overlap,NODE,0,COUNT', 'SELTOL',
     ]

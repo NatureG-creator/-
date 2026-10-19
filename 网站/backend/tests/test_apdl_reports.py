@@ -41,22 +41,27 @@ class APDLReportsTests(unittest.TestCase):
             nodes = np.column_stack((np.arange(1,11),xyz))
             np.testing.assert_allclose(_centroids(out,np.array([1]),nodes,1)[1], [.25,.25,.25])
 
-    def fixture(self, out, *, material_model='multilinear_iso', last_plastic_strain=.1):
+    def fixture(self, out, *, material_model='multilinear_iso', last_plastic_strain=.1,
+                tensile_direction='X'):
         g = build_geometry(None, None, dict(corrosion_mode='flat', nx=3, ny=2,
                            layers=2, material_model=material_model, export_full_field=False,
-                           plastic_curve=[[0., 250.], [last_plastic_strain, 300.]]))
+                           plastic_curve=[[0., 250.], [last_plastic_strain, 300.]],
+                           tensile_direction=tensile_direction))
         with patch('backend.apdl_deck._write_preview', side_effect=lambda path, _: path.write_bytes(b'fixture')):
             create_tension_bundle(g, out, {})
         o, s = g['options'], g['stats']
         rows = []
+        length = o['length_mm'] if tensile_direction == 'X' else o['width_mm']
         for time in (.5, 1.):
             u = time*o['target_displacement_mm']
             force = 100*time
-            rows.append([time, u, force, -force, u/s['length_mm'], force/s['nominal_area_mm2']])
+            rows.append([time, u, force, -force, u/length, force/s['nominal_area_mm2']])
         np.savetxt(out/'force_displacement.csv', rows, delimiter=',')
         (out/'corrosion.rst').write_bytes(b'SYNTHETIC-CONTRACT-FIXTURE-NOT-MAPDL')
         selfcheck = [[1, s['node_count'], s['element_count'], -1, -1, 1],
-                     [2, s['node_count'], s['element_count'], o['ny']*(o['layers']+1), o['ny']*(o['layers']+1), 1]]
+                     [2, s['node_count'], s['element_count'],
+                      (o['ny'] if tensile_direction == 'X' else o['nx'])*(o['layers']+1),
+                      (o['ny'] if tensile_direction == 'X' else o['nx'])*(o['layers']+1), 1]]
         np.savetxt(out/'apdl_self_check.csv', selfcheck, delimiter=',')
         (out/'mesh_quality_report.txt').write_text('Synthetic raw ANSYS report fixture\nSHPP SUMMARY\n', encoding='utf-8')
         last = o['plastic_curve'][-1][0] if material_model == 'multilinear_iso' else .1
@@ -96,6 +101,16 @@ class APDLReportsTests(unittest.TestCase):
             for name in ('apdl_self_check.csv', 'mesh_quality_report.txt', 'material_coverage_history.csv', 'diagnostics_precheck.json'):
                 self.assertIn(name, result['files'])
             self.assertTrue(any('超' in w and '元素节点' in w for w in result['warnings']))
+
+    def test_y_tension_uses_y_axis_for_self_check_and_axial_length(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp); g, _, _ = self.fixture(out, tensile_direction='Y')
+            result = self.read(out, g)
+            self.assertEqual(result['tensile_direction'], 'Y')
+            self.assertEqual(result['axial_length_mm'], g['options']['width_mm'])
+            self.assertEqual(result['diagnostics']['self_check']['state'], 'passed')
+            self.assertEqual(result['diagnostics']['self_check']['stages'][1][3:5],
+                             [g['options']['nx']*(g['options']['layers']+1)]*2)
 
     def test_missing_actual_file_fails_without_deleting_other_evidence(self):
         for name in ('apdl_self_check.csv', 'mesh_quality_report.txt', 'material_coverage_history.csv', 'diagnostics_precheck.json'):

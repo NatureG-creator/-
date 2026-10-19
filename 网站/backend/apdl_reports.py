@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from .apdl_diagnostics import material_coverage_hint, output_policy_summary
-from .apdl_geometry import _counts
+from .apdl_geometry import _counts, normalise_options
 from .apdl_macros import DIAGNOSTICS_SCHEMA_VERSION
 
 
@@ -75,15 +75,19 @@ def _precheck(output: Path, stats: dict, options: dict) -> dict | None:
     version = manifest['diagnostics_schema_version']
     if type(version) is not int or version != DIAGNOSTICS_SCHEMA_VERSION:
         raise ValueError(f'不支持或无效的 diagnostics schema 版本：{version!r}。')
-    if manifest.get('options') != options or manifest.get('stats') != stats:
+    try:
+        manifest_options = normalise_options(manifest.get('options', {}))
+    except ValueError as exc:
+        raise ValueError('manifest 原始options无效。') from exc
+    if manifest_options != options or manifest.get('stats') != stats:
         raise ValueError('manifest 原始options/stats与本次结果验收输入不一致。')
     diagnostics = _json(_verified_file(output, manifest, 'diagnostics_precheck.json'))
     if (any(not isinstance(diagnostics.get(key), dict) for key in
             ('material_coverage', 'mesh_quality', 'output_policy'))
             or manifest.get('diagnostics') != diagnostics):
         raise ValueError('manifest 诊断对象与预检报告不一致。')
-    if (diagnostics['material_coverage'] != material_coverage_hint(options)
-            or diagnostics['output_policy'] != output_policy_summary(options)
+    if (diagnostics['material_coverage'] != material_coverage_hint(manifest['options'])
+            or diagnostics['output_policy'] != output_policy_summary(manifest['options'])
             or manifest.get('output_policy') != diagnostics['output_policy']):
         raise ValueError('预检材料覆盖或保存策略与manifest原始参数不一致。')
     nodes, elements = _counts(options['nx'], options['ny'], options['layers'],
@@ -161,11 +165,14 @@ def read_diagnostics_reports(output: Path, stats: dict, options: dict,
         raise ValueError('新诊断schema需要可核验的原始 nodes.dat 网格。')
     if not np.array_equal(reference_nodes[:, 0], np.arange(1, stats['node_count']+1)):
         raise ValueError('新诊断schema原始网格节点必须使用连续编号。')
-    xmin = float(np.min(reference_nodes[:, 1]))
-    xmax = float(np.max(reference_nodes[:, 1]))
-    tolerance = stats.get('grip_tolerance_mm', max(float(options['dx_mm'])*.01, 1e-12))
-    grip = int(np.count_nonzero(np.isclose(reference_nodes[:, 1], xmin, rtol=0, atol=tolerance)))
-    loaded = int(np.count_nonzero(np.isclose(reference_nodes[:, 1], xmax, rtol=0, atol=tolerance)))
+    axis_index = 1 if options.get('tensile_direction', 'X') == 'X' else 2
+    axial_spacing = options['dx_mm'] if axis_index == 1 else options['dy_mm']
+    axial = reference_nodes[:, axis_index]
+    xmin = float(np.min(axial))
+    xmax = float(np.max(axial))
+    tolerance = stats.get('grip_tolerance_mm', max(float(axial_spacing)*.01, 1e-12))
+    grip = int(np.count_nonzero(np.isclose(axial, xmin, rtol=0, atol=tolerance)))
+    loaded = int(np.count_nonzero(np.isclose(axial, xmax, rtol=0, atol=tolerance)))
     expected = np.asarray([[1, stats['node_count'], stats['element_count'], -1, -1, 1],
                            [2, stats['node_count'], stats['element_count'], grip, loaded, 1]])
     actual = _csv(output/'apdl_self_check.csv')

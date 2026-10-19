@@ -24,60 +24,84 @@ def _ascii(path: Path, text: str) -> None:
 
 def _boundaries(geometry: dict) -> str:
     o = geometry['options']
-    def corner(j, top=False):
-        z = o['thickness_mm']-geometry['top_depth'][j,0] if top else geometry['bottom_depth'][j,0]
-        target = [geometry['x'][0], geometry['y'][j], z]
+    direction = o.get('tensile_direction', 'X')
+    if direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    axis, axial_dof = ('X', 'UX') if direction == 'X' else ('Y', 'UY')
+    transverse_dof = 'UY' if direction == 'X' else 'UX'
+    axial_coords = geometry['x'] if direction == 'X' else geometry['y']
+    transverse_coords = geometry['y'] if direction == 'X' else geometry['x']
+    axial_spacing = o['dx_mm'] if direction == 'X' else o['dy_mm']
+
+    def corner(transverse_index, axial_index, top=False):
+        row, col = ((transverse_index, axial_index) if direction == 'X'
+                    else (axial_index, transverse_index))
+        z = (o['thickness_mm']-geometry['top_depth'][row, col]
+             if top else geometry['bottom_depth'][row, col])
+        target = [geometry['x'][col], geometry['y'][row], z]
         matches = np.flatnonzero(np.all(geometry['nodes'][:,1:] == target, axis=1))
         if len(matches) != 1:
             raise ValueError('边界角点坐标不能唯一映射到网格节点。')
         return int(geometry['nodes'][matches[0],0])
-    first, last = _number(geometry['x'][0]), _number(geometry['x'][-1])
+    first, last = _number(axial_coords[0]), _number(axial_coords[-1])
     delta = _number(o['target_displacement_mm'])
     lines = [
-        '! X tension; all input coordinates and displacements are in mm.',
-        'CSYS,0', 'SELTOL,'+_number(geometry['stats'].get('grip_tolerance_mm', o['dx_mm']*.01)),
-        'NSEL,S,LOC,X,'+first, 'CM,GRIP_FIXED,NODE', 'D,ALL,UX,0',
+        f'! {direction} tension; all input coordinates and displacements are in mm.',
+        'CSYS,0', 'SELTOL,'+_number(geometry['stats'].get('grip_tolerance_mm', axial_spacing*.01)),
+        f'NSEL,S,LOC,{axis},{first}', 'CM,GRIP_FIXED,NODE', f'D,ALL,{axial_dof},0',
     ]
     if o['boundary_mode'] == 'clamped_grips':
-        lines += ['D,ALL,UY,0', 'D,ALL,UZ,0']
-    lines += ['NSEL,S,LOC,X,'+last, 'CM,GRIP_LOADED,NODE', 'D,ALL,UX,'+delta]
+        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
+    lines += [f'NSEL,S,LOC,{axis},{last}', 'CM,GRIP_LOADED,NODE', f'D,ALL,{axial_dof},{delta}']
     if o['boundary_mode'] == 'clamped_grips':
-        lines += ['D,ALL,UY,0', 'D,ALL,UZ,0']
+        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
     elif o['boundary_mode'] == 'legacy_recommended':
-        corner_a, corner_b = corner(-1), corner(-1, top=True)
+        corner_a, corner_b = corner(-1, 0), corner(-1, 0, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',
-                  f'D,{corner_b},UY,0', f'D,{corner_b},UZ,0', f'D,{corner_a},UY,0']
+                  f'D,{corner_b},{transverse_dof},0', f'D,{corner_b},UZ,0',
+                  f'D,{corner_a},{transverse_dof},0']
     else:
-        # A=(xmin,ymin,bottomA), B=(xmin,ymax,bottomB).
-        # A removes Y/Z translation; dy*UZ_B-dz*UY_B=0 removes only X rotation.
-        corner_a, corner_b = corner(0), corner(-1)
-        dz = float(geometry['bottom_depth'][-1, 0]-geometry['bottom_depth'][0, 0])
-        dy = float(geometry['y'][-1]-geometry['y'][0])
-        lines += ['ALLSEL,ALL', f'D,{corner_a},UY,0', f'D,{corner_a},UZ,0']
+        # One corner removes transverse/Z translation; the second removes only
+        # rotation about the loading axis while preserving Poisson contraction.
+        corner_a, corner_b = corner(0, 0), corner(-1, 0)
+        z_a = float(geometry['bottom_depth'][0, 0])
+        z_b = float(geometry['bottom_depth'][-1, 0] if direction == 'X'
+                    else geometry['bottom_depth'][0, -1])
+        dz = z_b-z_a
+        span = float(transverse_coords[-1]-transverse_coords[0])
+        lines += ['ALLSEL,ALL', f'D,{corner_a},{transverse_dof},0', f'D,{corner_a},UZ,0']
         if dz == 0:
             lines.append(f'D,{corner_b},UZ,0')
         else:
-            lines += ['! Rotation constraint permits isotropic Poisson contraction.',
-                      f'CE,1,0,{corner_b},UZ,{_number(dy)},{corner_b},UY,{_number(-dz)}']
+            lines.append('! Rotation constraint permits isotropic Poisson contraction.')
+            if direction == 'X':
+                lines.append(f'CE,1,0,{corner_b},UZ,{_number(span)},{corner_b},UY,{_number(-dz)}')
+            else:
+                lines.append(f'CE,1,0,{corner_b},UX,{_number(-dz)},{corner_b},UZ,{_number(span)}')
     return '\n'.join(lines+['ALLSEL,ALL', 'SELTOL'])
 
 
 def _post(geometry: dict) -> str:
     o = geometry['options']
+    direction = o.get('tensile_direction', 'X')
+    if direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    displacement_dof, reaction_dof = ('UX', 'FX') if direction == 'X' else ('UY', 'FY')
+    axial_length = o['length_mm'] if direction == 'X' else o['width_mm']
     lines = [
         '/POST1', 'RSYS,0', 'ALLSEL,ALL', 'SET,LAST',
         '*GET,nsets,ACTIVE,0,SET,NSET', '*CFOPEN,force_displacement,csv',
-        '! No header: time,ux,Floaded,Ffixed,engineering_strain,nominal_stress.',
+        f'! No header: time,{displacement_dof.lower()},Floaded,Ffixed,engineering_strain,nominal_stress.',
         '! Six E19.11 fields + commas fit the MAPDL 128 character output limit.',
         '*DO,iset,1,nsets', 'SET,,,,,,,iset', '*GET,tm,ACTIVE,0,SET,TIME',
         'CMSEL,S,GRIP_LOADED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'fl=0', 'usum=0',
-        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', '*GET,rr,NODE,nid,RF,FX',
-        '*GET,uu,NODE,nid,U,X', 'fl=fl+rr', 'usum=usum+uu', '*ENDDO',
-        'ux=usum/ncnt', 'CMSEL,S,GRIP_FIXED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'ff=0',
-        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', '*GET,rr,NODE,nid,RF,FX', 'ff=ff+rr', '*ENDDO',
-        'engstrain=ux/'+_number(o['length_mm']),
+        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', f'*GET,rr,NODE,nid,RF,{reaction_dof}',
+        f'*GET,uu,NODE,nid,U,{direction}', 'fl=fl+rr', 'usum=usum+uu', '*ENDDO',
+        'uax=usum/ncnt', 'CMSEL,S,GRIP_FIXED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'ff=0',
+        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', f'*GET,rr,NODE,nid,RF,{reaction_dof}', 'ff=ff+rr', '*ENDDO',
+        'engstrain=uax/'+_number(axial_length),
         'nomstress=fl/'+_number(geometry['stats']['nominal_area_mm2']),
-        '*VWRITE,tm,ux,fl,ff,engstrain,nomstress',
+        '*VWRITE,tm,uax,fl,ff,engstrain,nomstress',
         "(E19.11,5(',',E19.11))",
         '*ENDDO', '*CFCLOS', 'ALLSEL,ALL',
     ]
@@ -126,10 +150,21 @@ def _write_preview(path: Path, geometry: dict) -> None:
             image = axis.imshow(geometry[key], extent=extent, origin='lower', aspect='auto')
             axis.set(title=title, xlabel='X (mm)', ylabel='Y (mm)')
             fig.colorbar(image, ax=axis)
-        middle = o['ny']//2
-        axes[2].plot(geometry['x'], o['thickness_mm']-geometry['top_depth'][middle], label='Top')
-        axes[2].plot(geometry['x'], geometry['bottom_depth'][middle], label='Bottom')
-        axes[2].set(title='Mid-width section (undeformed)', xlabel='X (mm)', ylabel='Z (mm)')
+        direction = o.get('tensile_direction', 'X')
+        if direction == 'X':
+            middle = o['ny']//2
+            axial_coords = geometry['x']
+            top_section = geometry['top_depth'][middle]
+            bottom_section = geometry['bottom_depth'][middle]
+        else:
+            middle = o['nx']//2
+            axial_coords = geometry['y']
+            top_section = geometry['top_depth'][:, middle]
+            bottom_section = geometry['bottom_depth'][:, middle]
+        axes[2].plot(axial_coords, o['thickness_mm']-top_section, label='Top')
+        axes[2].plot(axial_coords, bottom_section, label='Bottom')
+        axes[2].set(title=f'Midline section along {direction} (undeformed)',
+                    xlabel=f'{direction} (mm)', ylabel='Z (mm)')
         axes[2].legend()
         fig.savefig(path, dpi=150)
     finally:
@@ -229,9 +264,10 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
 `run_apdl.cmd "C:\\Program Files\\ANSYS Inc\\vXXX\\ansys\\bin\\winx64\\ANSYSXXX.exe"`
 也可在 MAPDL 中读取 main.inp。需要本机合法可用的 MAPDL 和对应许可证。
 
-poisson_free 模板：两端仅约束UX，固定端角A去除UY/UZ平移，横向角B用UZ约束或几何约束方程去除绕X转动。
-clamped_grips 模板：两端UY/UZ为0，模拟夹持。模型不自动增加未腐蚀夹持段。
-legacy_recommended 模板保留原GitHub主宏的角点约束：固定端y最大处，正面角UY/UZ=0、反面角UY=0。
+拉伸方向由 options.tensile_direction 选择 X 或 Y（默认 X）。相应两端选择全局 X/Y 端面并施加 UX/UY；位移、反力、标距和名义截面积随方向同步变化。
+poisson_free 模板：两端仅约束所选轴向位移，固定端角点去除横向/Z平移，第二角点用几何约束方程去除绕拉伸轴转动，保持泊松收缩可行。
+clamped_grips 模板：两端横向/Z位移为0，模拟夹持。模型不自动增加未腐蚀夹持段。
+legacy_recommended 模板保留原GitHub主宏的角点约束，并按所选拉伸轴映射到对应固定端。
 双线性等向硬化参数为屈服应力与屈服后切线模量；多线性等向硬化输入[塑性应变,应力MPa]，不包含断裂或材料失效。
 多线性曲线要求首应变0、应变严格递增；负斜率需要明确允许并输出TBEO,NEGSLOPE,1，不擅自平滑原曲线。
 初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。SOLID187/SOLID285使用全局一致六分四面体，公共面一致、厚度层正确连接，不自动加密；SOLID187增加共享边中节点，以EN前8节点加EMORE后2节点导入。两种阶次不能假定结果相同，需网格收敛验证。
@@ -250,7 +286,7 @@ RST保存策略与export_full_field末步节点CSV导出独立；稀疏元素场
 
 真实求解后才生成以下CSV（无表头）：
 force_displacement.csv：6列 time, displacement_mm, loaded_reaction_N, fixed_reaction_N, engineering_strain, nominal_stress_MPa。
-名义应力分母为原始 width*thickness，反力按约束节点求和保留符号；平衡检查看两端反力之和。
+名义应力分母为拉伸轴横向尺寸*thickness，反力按约束节点求和保留符号；平衡检查看两端反力之和。
 nodal_results.csv（可选）：9列 id,x_mm,y_mm,z_mm,ux_mm,uy_mm,uz_mm,seqv_MPa,eqpl。
 SEQV/EPPL为平均节点值，不代表积分点峰值；弹性模型eqpl固定为0。
 apdl_self_check.csv：6列stage,node_count,element_count,fixed_count,loaded_count,passed；阶段1为网格，固定/加载数量均为-1；阶段2为边界实际数量。

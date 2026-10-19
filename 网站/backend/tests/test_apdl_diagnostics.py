@@ -83,6 +83,18 @@ class APDLDiagnosticsTests(unittest.TestCase):
             self.assertIsNone(hint['last_plastic_strain'])
             self.assertIsNone(hint['exceeds_estimated_coverage'])
 
+    def test_material_coverage_uses_selected_y_span(self):
+        options = normalise_options({'material_model': 'multilinear_iso',
+            'plastic_curve': copy.deepcopy(ORIGINAL_CURVE), 'allow_negative_slope': True,
+            'tensile_direction': 'Y', 'length_mm': 57.6, 'width_mm': 17.7,
+            'target_displacement_mm': 11})
+        hint = diagnostics.material_coverage_hint(options)
+        self.assertEqual(hint['tensile_direction'], 'Y')
+        self.assertEqual(hint['axial_length_mm'], 17.7)
+        self.assertAlmostEqual(hint['target_engineering_strain'], 11/17.7)
+        self.assertAlmostEqual(hint['estimated_uniform_extension_mm'],
+                               17.7*math.expm1(.137798+621.16/206000))
+
     def test_cube_has_unit_scaled_jacobian_and_preserves_arrays(self):
         nodes, elements = cube()
         before_nodes, before_elements = nodes.copy(), elements.copy()

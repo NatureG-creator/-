@@ -21,6 +21,7 @@ from .pointcloud_runner import POINT_EXTENSIONS, inspect_xyz
 from .runner import _atomic_json
 from .system_info import ROOT, find_matlab, json_record, process_alive, sha256
 from .targets import inspect_target, load_targets
+from .job_history import history_guarded
 
 UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv", ".npz"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
@@ -197,11 +198,12 @@ class JobService:
                         "info": spec["initial_state_info"], "stage_number": spec["stage_number"]}
         return self.create_job(value, benchmark_snapshot=snapshot, retry_of=job_id)
 
+    @history_guarded
     def create_job(self, payload: dict, *, launch=True, benchmark_snapshot=None, retry_of=None):
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot", "morphology_analysis"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot", "morphology_analysis", "morphology_export"}:
             raise ValueError("任务类型无效")
         from .task_io import validate_task_io
         io_settings = validate_task_io(payload, self.runtime)
@@ -221,7 +223,10 @@ class JobService:
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "morphology_analysis":
+        if kind == "morphology_export":
+            from .morphology_service import prepare_export
+            spec, morphology_source = prepare_export(self, payload)
+        elif kind == "morphology_analysis":
             from .morphology_service import prepare_morphology
             spec, morphology_source = prepare_morphology(self, payload)
         elif kind == "origin_plot":
@@ -352,6 +357,9 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "morphology_export":
+                from .morphology_service import freeze_export
+                freeze_export(spec, morphology_source, job_dir)
             if kind == "morphology_analysis":
                 from .morphology_service import freeze_morphology
                 freeze_morphology(spec, morphology_source, job_dir)
@@ -508,6 +516,18 @@ class JobService:
             self.processes[job_id] = process
             return process
 
+    def list_jobs(self, *, include_hidden=True, limit=100):
+        from .job_history import list_jobs
+        return list_jobs(self, include_hidden=include_hidden, limit=limit)
+
+    def set_job_hidden(self, job_id, hidden):
+        from .job_history import set_hidden
+        return set_hidden(self, job_id, hidden)
+
+    def delete_job(self, job_id, confirmation):
+        from .job_history import delete_job
+        return delete_job(self, job_id, confirmation)
+
     def get_job(self, job_id):
         self.validate_id(job_id)
         folder = self.runtime / "jobs" / job_id
@@ -555,6 +575,8 @@ class JobService:
                     _atomic_json(folder / "status.json", state)
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
+            from .job_history import hidden
+            state['history_hidden'] = hidden(folder)
             from .task_io import job_io
             state['task_io'] = job_io(folder, state['spec'])
             state['display_name'] = state['task_io']['name']
@@ -574,6 +596,21 @@ class JobService:
                              state["spec"].get("config", {}).get("mode") in {"strict", "pycharm"} and
                              state["state"] in {"failed", "interrupted"} and (checkpoint_exists or stage_exports),
                 "validated": False}
+            if state.get("kind") == "simulation":
+                snapshots = []
+                for progress_path in sorted((folder / "checkpoints").glob("stage_*/progress.json")):
+                    try:
+                        saved = json_record(progress_path, {}).get("state", {})
+                    except (OSError, ValueError):
+                        continue
+                    if saved.get("backend") == "pycharm":
+                        snapshots.append({"stage": int(progress_path.parent.name.split("_")[-1]),
+                                          "generation": saved.get("generation"),
+                                          "completed_individuals": saved.get("next_individual", 0),
+                                          "generation_completed": saved.get("last_generation", 0),
+                                          "completed": saved.get("completed", False)})
+                if snapshots:
+                    state["checkpoint"].update(backend="pycharm", saved=snapshots[-1])
             state["progress"] = {key: state.get(key) for key in (
                 "stage", "generation", "maxgen", "completed_individuals", "total_individuals", "phase",
                 "stages_completed", "total_stages", "benchmark_mode", "label",
@@ -595,6 +632,7 @@ class JobService:
             files.append({"name": "benchmark_bundle.zip", "on_demand": True})
         return files
 
+    @history_guarded
     def resume(self, job_id):
         with self._job_lock:
             state = self.get_job(job_id)
@@ -612,7 +650,7 @@ class JobService:
             if not checked.get("available"):
                 raise ValueError("任务尚未保存完整检查点，请使用原配置新建任务")
             state = {key: value for key, value in state.items() if key not in {
-                "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}}
+                "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing", "history_hidden"}}
             state.update(state="queued", error=None, pid=None, updated_at=time.time())
             _atomic_json(self.runtime / "jobs" / job_id / "status.json", state)
             self.launch(job_id)
@@ -623,7 +661,7 @@ class JobService:
             state = self.get_job(job_id)
             process = self.processes.get(job_id)
             job_dir=self.runtime / "jobs" / job_id
-            excluded={"files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}
+            excluded={"files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing", "history_hidden"}
             def persist():
                 from .job_status import update_job_status
                 persisted={key:value for key,value in state.items() if key not in excluded}
@@ -677,7 +715,7 @@ class JobService:
                         state['error']+=f'；任务停止状态未能持久化：{write_error}'
                         exc.add_note(f'任务停止状态保存失败：{write_error}')
                     raise ValueError(state['error']) from exc
-                state.update(state="interrupted", error="用户停止任务，完整个体进度已保留",
+                state.update(state="interrupted", error="用户停止任务；已写入磁盘的检查点保留，能否恢复请以检查点检查为准",
                              updated_at=time.time())
                 state.pop('stop_error',None)
                 if state.get('kind')=='apdl_tension':

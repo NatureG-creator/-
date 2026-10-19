@@ -81,7 +81,7 @@ def annotate_analysis_figure(fig, report, distribution=None):
     fig.tight_layout(rect=(0,.17 if distribution else .13,1,.94))
 
 
-def export_analysis(result, output_dir, *, source_name, plot_mode='paper', dpi=160, raw_bin_width_um=None):
+def export_analysis(result, output_dir, *, source_name, plot_mode='paper', dpi=160, raw_bin_width_um=None, formats=("png","pdf","svg")):
     """Reuse the original morphology view; write only into a new analysis directory."""
     import matplotlib.pyplot as plt
     from depth_distribution_diagnostics import plot_depth_comparison
@@ -94,7 +94,8 @@ def export_analysis(result, output_dir, *, source_name, plot_mode='paper', dpi=1
         for k,(value,diameter) in enumerate(zip(result['jsb'],result['pit_diameter_cells']),1):
             writer.writerow([k,float(value) if np.isfinite(value) else '',float(diameter)])
     np.savez_compressed(output/'analysis_arrays.npz',baseline_um=result['baseline_um'],
-        max_locs=result['max_locs'],pit_depth_cells=result['pit_depth_cells'],log_ratio=result['jsb'])
+        max_locs=result['max_locs'],pit_depth_cells=result['pit_depth_cells'],log_ratio=result['jsb'],
+        pit_diameter_cells=result['pit_diameter_cells'])
     figures=[]
     if plot_mode in {'paper','full'}:
         spec=importlib.util.spec_from_file_location('_corrosion_surface_view',Path(__file__).with_name('04_交互查看腐蚀形貌.py'))
@@ -119,6 +120,6 @@ def export_analysis(result, output_dir, *, source_name, plot_mode='paper', dpi=1
                 ax.lines[0].set_label('Normal reference curve');ax.legend(loc='upper right',fontsize=8)
         figures.append(('pit_depth_comparison',fig))
     for name,fig in figures:
-        for suffix in ('png','pdf','svg'): fig.savefig(output/f'{name}.{suffix}',dpi=dpi)
+        for suffix in formats: fig.savefig(output/f'{name}.{suffix}',dpi=dpi)
     (output/'analysis_report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf-8')
     return [fig for _,fig in figures]

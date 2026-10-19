@@ -111,7 +111,12 @@ def material_coverage_hint(options: dict) -> dict:
             raise ValueError('塑性应变不能为负。')
         _real(point[1], '应力MPa', positive=True)
     last_plastic, last_stress = map(float, curve[-1])
-    length = _real(options.get('length_mm', 100.), 'length_mm', positive=True)
+    direction = options.get('tensile_direction', 'X')
+    if not isinstance(direction, str) or direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    x_length = _real(options.get('length_mm', 100.), 'length_mm', positive=True)
+    y_length = _real(options.get('width_mm', 20.), 'width_mm', positive=True)
+    length = x_length if direction == 'X' else y_length
     displacement = _real(options.get('target_displacement_mm', .1),
                          'target_displacement_mm', positive=True)
     modulus = _real(options.get('E_MPa', 206000.), 'E_MPa', positive=True)
@@ -133,6 +138,9 @@ def material_coverage_hint(options: dict) -> dict:
         estimated_uniform_extension_mm=uniform_extension,
         exceeds_estimated_coverage=logarithmic > last_total,
     )
+    if 'tensile_direction' in options:
+        hint.update(tensile_direction=direction, axial_length_mm=length,
+                    transverse_length_mm=y_length if direction == 'X' else x_length)
     if uniform_extension is None:
         hint['warnings'].append('对应均匀延伸的估算超出浮点表示范围，未给出该数值。')
     if hint['exceeds_estimated_coverage']:

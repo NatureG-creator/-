@@ -1,0 +1,15 @@
+{
+  "id": "c036996745ff4d8d",
+  "kind": "morphology_analysis",
+  "state": "completed",
+  "created_at": 1792148400,
+  "updated_at": 1792300810.0700216,
+  "pid": null,
+  "phase": "queued",
+  "case_name": "",
+  "display_name": "",
+  "task_io": {
+    "name": "",
+    "export_directory": ""
+  }
+}

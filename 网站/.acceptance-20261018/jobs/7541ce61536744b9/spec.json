@@ -1,0 +1,256 @@
+{
+  "kind": "simulation",
+  "config": {
+    "ROOT": "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\engine\\01_运行程序与数据",
+    "GEOMETRY_CONFIG": {
+      "grid_w": 5,
+      "grid_l": 6,
+      "grid_n": 4,
+      "space_xy_um": 25,
+      "space_z_um": 25,
+      "plate_thickness_um": 6000.0
+    },
+    "TARGET_SOURCE": "manual",
+    "MULTI_CASE_CONFIG": {
+      "enabled": true,
+      "run_mode": "single",
+      "sequential_enabled": false,
+      "parallel_enabled": true,
+      "parallel_case_workers": 6,
+      "cases": [
+        {
+          "case_name": "C17_100d_z",
+          "matlab_target": "C:\\Users\\natur\\.codex\\visualizations\\2026\\10\\13\\01a133ca-4046-70e1-8e62-c98fa6a4fd93\\corrosion-sync\\网站\\engine\\实测目标\\20261012z100d\\matlab_target.mat"
+        }
+      ]
+    },
+    "ACTIVE_STAGE_TARGET_DATA": [
+      [
+        10,
+        2,
+        1,
+        3,
+        0.2,
+        0.3
+      ]
+    ],
+    "SINGLE_STAGE_TARGET_DATA": [
+      10,
+      2,
+      1,
+      3,
+      0.2,
+      0.3
+    ],
+    "STAGE_GA_CONFIG": {
+      "F": 2000,
+      "nind": 301,
+      "selected_count": 10,
+      "maxgen": 101,
+      "parallel_workers": 1
+    },
+    "SINGLE_STAGE_GA_CONFIG": {
+      "F": 2,
+      "nind": 4,
+      "selected_count": 1,
+      "maxgen": 3,
+      "parallel_workers": 2
+    },
+    "GA_CONFIG": {
+      "bits_per_param": 11,
+      "base_px": 0.5,
+      "base_pm": 0.5,
+      "decay_rate": 0.2,
+      "sigma_share": 0.3,
+      "seed": 1
+    },
+    "GA_PARAMETER_LOWER_BOUNDS": [
+      0.0,
+      0.0,
+      0.0,
+      5.0,
+      1.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "GA_PARAMETER_UPPER_BOUNDS": [
+      0.3,
+      1.0,
+      0.005,
+      35.0,
+      35.0,
+      0.1,
+      35.0,
+      0.5,
+      0.5,
+      15.0
+    ],
+    "CA_CONFIG": {
+      "alpha_passive": 0.8,
+      "initial_d": 3.0,
+      "initial_cl": 0.0,
+      "initial_enhancement_steps": 0,
+      "initial_enhancement_beta": 1.0,
+      "convex_height_limit": 30.0
+    },
+    "TAICHI_CONFIG": {
+      "use_taichi": false,
+      "arch": "cpu",
+      "allow_taichi_parallel": true,
+      "verbose": true
+    },
+    "POSTPROCESS_CONFIG": {
+      "gaussian_sigma": 2.0,
+      "interactive_window_size": 7,
+      "auto_plot_window_size": 15,
+      "conv2_window_size": 15,
+      "expand_factor": 1,
+      "min_prominence": 0.001,
+      "min_distance": 15,
+      "neighborhood": 12,
+      "watershed_threshold": 0.3,
+      "log_normalization": 1.04,
+      "ca_min_prominence": 0.05,
+      "ca_min_distance": 15
+    },
+    "MATLAB_CA_COMPARISON_CONFIG": {
+      "min_prominence": 0.05,
+      "min_distance": 15,
+      "dynamic_neighborhood": true,
+      "threshold_by_jicha": true,
+      "sjb_divisor": 10.0,
+      "depth_log_scale": "space_z",
+      "depth_log_normalization": 1.0,
+      "hist_bin_width": 0.1
+    },
+    "FIGURE_CONFIG": {
+      "interactive_figsize": [
+        14.0,
+        6.8
+      ],
+      "interactive_dpi": 160,
+      "distribution_figsize": [
+        7.2,
+        5.4
+      ],
+      "distribution_dpi": 160,
+      "parameter_heatmap_figsize": [
+        12.0,
+        6.0
+      ],
+      "parameter_line_figsize": [
+        12.0,
+        6.0
+      ],
+      "error_bar_figsize": [
+        11.0,
+        5.5
+      ],
+      "auto_heatmap_figsize": [
+        7.0,
+        5.6
+      ],
+      "auto_plot_dpi": 180,
+      "surface_dpi": 220,
+      "mesh_dpi": 260,
+      "surface_cmap": "jet",
+      "mesh_cmap": "jet",
+      "surface_elev": 23.0,
+      "surface_azim": -125.0,
+      "surface_antialiased": true,
+      "surface_linewidth": 0.0,
+      "paper_fig8_figsize": [
+        11.0,
+        6.5
+      ],
+      "paper_fig9_figsize": [
+        9.2,
+        4.8
+      ],
+      "paper_fig10_figsize": [
+        10.5,
+        5.3
+      ],
+      "surface_panel_size": [
+        4.2,
+        3.4
+      ],
+      "mesh_panel_size": [
+        2.65,
+        2.55
+      ]
+    },
+    "FRACTURE_CONFIG": {
+      "y0": 0.495,
+      "fixed_k_sp": null,
+      "fixed_eta_sp": null,
+      "minimum_experiment_samples": 10,
+      "curve_points": 501,
+      "curve_drop_ratio": 0.1,
+      "curve_sustain_points": 3
+    },
+    "PATH_CONFIG": {
+      "inputs": "D:\\research\\DATA\\Corrosion modelling\\任务输入目录1",
+      "outputs": "D:\\research\\DATA\\Corrosion modelling\\任务结果目录1",
+      "auto_plots": "D:\\research\\DATA\\Corrosion modelling\\自动图片目录1",
+      "morphology_outputs": "D:\\research\\DATA\\Corrosion modelling\\形貌参数结果目录1",
+      "curve_outputs": "D:\\research\\DATA\\Corrosion modelling\\曲线结果目录1",
+      "fracture_test_data": "D:\\research\\DATA\\Corrosion modelling\\断裂试验输入文件1.csv",
+      "material_test_data": "D:\\research\\DATA\\Corrosion modelling\\材料试验输入文件1.csv",
+      "long_term_corrosion_data": "D:\\research\\DATA\\Corrosion modelling\\长期腐蚀输入文件1.csv",
+      "curve_metadata": "D:\\research\\DATA\\Corrosion modelling\\曲线元信息文件1.csv",
+      "curves_dir": "D:\\research\\DATA\\Corrosion modelling\\曲线输入目录1"
+    },
+    "mode": "pycharm"
+  },
+  "targets": [
+    [
+      10,
+      2,
+      1,
+      3,
+      0.2,
+      0.3
+    ]
+  ],
+  "run_mode": "single",
+  "reading_seconds": 0.09298719999969762,
+  "target_options": {
+    "variable": null,
+    "orientation": "auto"
+  },
+  "target_source": null,
+  "resource_estimate": {
+    "estimated": true,
+    "guaranteed_upper_bound": false,
+    "run_mode": "single",
+    "cells": 120,
+    "workers": 2,
+    "configured_workers": 2,
+    "stages": 1,
+    "memory_bytes": 268456816,
+    "memory_gib": 0.25,
+    "state_bytes": 2160,
+    "working_memory_bytes": 19200,
+    "retained_population_bytes": 0,
+    "phase_peak_bytes": {
+      "population_evaluation": 268456816,
+      "checkpoint_or_export": 268446256,
+      "plotting": 268439776
+    },
+    "retained_during_evaluation_bytes": 0,
+    "estimated_evaluations": 8,
+    "estimated_cell_updates": 1920,
+    "time_seconds": null,
+    "recommendations": [
+      "此为运行前各阶段内存粗估，不是保证上界；临时数组、IPC复制、JIT/GPU和Python/绘图开销随环境变化。",
+      "先用小网格和少代数测量耗时，再扩大计算；无法仅凭配置可靠预测总时长。",
+      "评估次数按原range(1,maxgen)最大代数估算；提前停止会减少次数，最优状态重算可能增加计算。",
+      "PyCharm模式使用 NumPy ProcessPool，当前配置为 2 个进程；内存不足时优先降低 parallel_workers。"
+    ]
+  },
+  "case_name": "阶段内恢复 · 独立验收"
+}

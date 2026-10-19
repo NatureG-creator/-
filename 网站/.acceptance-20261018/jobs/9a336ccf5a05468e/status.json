@@ -1,0 +1,15 @@
+{
+  "id": "9a336ccf5a05468e",
+  "kind": "morphology_analysis",
+  "state": "completed",
+  "created_at": 1792234800,
+  "updated_at": 1792300808.5893586,
+  "pid": null,
+  "phase": "queued",
+  "case_name": "acceptance.npz · 精细形貌分析",
+  "display_name": "acceptance.npz · 精细形貌分析",
+  "task_io": {
+    "name": "",
+    "export_directory": ""
+  }
+}

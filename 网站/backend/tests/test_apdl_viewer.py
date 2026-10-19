@@ -51,28 +51,42 @@ class ViewerTests(unittest.TestCase):
             before = {p.name: p.read_bytes() for p in output.iterdir()}
             process = Mock(pid=1234)
             process.poll.return_value = None
-            with patch.object(apdl_viewer, 'mapdl_capabilities', return_value={'available': True, 'executable': 'ansys.exe'}), patch.object(apdl_viewer.subprocess, 'Popen', return_value=process) as launch:
+            with patch.object(apdl_viewer, 'mapdl_capabilities', return_value={'available': True, 'executable': 'ansys252.exe'}), patch.object(apdl_viewer.subprocess, 'Popen', return_value=process) as launch:
                 result = apdl_viewer.open_viewer(service, '0123456789abcdef', {'view': 'stress'})
             command = launch.call_args.args[0]
             self.assertIn('-g', command)
+            self.assertIn('-i', command)
+            self.assertEqual(command[command.index('-i') + 1], 'viewer.inp')
             self.assertNotIn('-b', command)
             session = Path(result['session_directory'])
             startup = (session/'viewer.inp').read_text()
             macro = startup+'\n'+'\n'.join(p.read_text() for p in session.glob('*.mac'))
             self.assertIn('PLNSOL,S,EQV', macro)
             self.assertIn('SET,LAST', macro)
+            self.assertIn('/PLOPTS,LEG1,1', macro)
+            self.assertIn('../../jobs/0123456789abcdef/outputs/corrosion', startup)
             self.assertIn('/CLEAR,NOSTART', macro)
             self.assertNotIn('/CLEAR,START', macro)
-            self.assertIn('/MREP,v_stress', startup)
+            self.assertNotIn('/MREP', startup)
             self.assertIn("*ABBR,STRESS,'/INPUT,v_stress,mac'", startup)
             self.assertIn('/EDGE,1,0', (session/'v_mesh.mac').read_text())
             self.assertIn('/EDGE,1,1', (session/'v_model.mac').read_text())
             for line in macro.splitlines():
                 self.assertNotIn(line.split(',')[0].upper(), ['SOLVE', 'SAVE', '/SOLU', 'UPGEOM', '/EXIT'])
             self.assertEqual(json.loads((session/'session.json').read_text(encoding='utf-8'))['pid'], 1234)
-            self.assertEqual((session/'start.ans').read_text(), '/INPUT,viewer,inp\n')
-            self.assertNotIn('-i', command)
             self.assertEqual(before, {p.name: p.read_bytes() for p in output.iterdir()})
+
+    def test_unicode_runtime_path_writes_complete_result_macros(self):
+        with tempfile.TemporaryDirectory(prefix='中文运行目录') as temp:
+            service, output = self.fixture(temp)
+            process = Mock(pid=1235)
+            process.poll.return_value = None
+            with patch.object(apdl_viewer, 'mapdl_capabilities', return_value={'available': True, 'executable': 'ansys252.exe'}), patch.object(apdl_viewer.subprocess, 'Popen', return_value=process):
+                result = apdl_viewer.open_viewer(service, '0123456789abcdef', {'view': 'plastic_strain'})
+            session = Path(result['session_directory'])
+            self.assertIn('PLNSOL,U,SUM', (session/'v_displacement.mac').read_text(encoding=apdl_viewer._apdl_text_encoding()))
+            self.assertIn('PLNSOL,EPPL,EQV', (session/'v_plastic_strain.mac').read_text(encoding=apdl_viewer._apdl_text_encoding()))
+            self.assertIn('../../jobs/0123456789abcdef/outputs/corrosion', (session/'viewer.inp').read_text(encoding=apdl_viewer._apdl_text_encoding()))
 
     def test_unavailable_or_invalid_view_never_launches(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -217,4 +217,5 @@ def precheck_checkpoint(folder: Path, fingerprint: str, *,
             "recovery_source": store.recovery_source,
             "generation": None if state is None else state.get("generation"),
             "completed_individuals": 0 if state is None else state.get("next_individual", 0),
+            "backend": None if state is None else state.get("backend"),
             "completed": False if state is None else state.get("completed", False)}
