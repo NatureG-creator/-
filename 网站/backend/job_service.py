@@ -579,6 +579,17 @@ class JobService:
                         state.update(state="interrupted", error="任务进程已退出，可检查保存的进度后恢复",
                                      updated_at=time.time())
                     _atomic_json(folder / "status.json", state)
+            elif process is not None:
+                # The worker writes its terminal status immediately before
+                # returning. Reap it here so Windows releases worker.log
+                # before callers archive or remove a completed task.
+                try:
+                    if process.poll() is None:
+                        process.wait(timeout=2)
+                    if process.poll() is not None:
+                        self.processes.pop(job_id, None)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
             # Observe the worker tree rather than reporting a configured constant.

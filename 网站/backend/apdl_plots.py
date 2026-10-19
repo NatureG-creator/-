@@ -7,6 +7,17 @@ from .apdl_process import launch_owned
 from .runner import _atomic_json
 
 
+def _launch_mapdl(command, work, stream, executable):
+    """Start MAPDL with its isolated environment, retaining old test doubles."""
+    import inspect
+    from .apdl_solver import mapdl_environment
+    environment = mapdl_environment(executable)
+    parameters = inspect.signature(launch_owned).parameters
+    if 'env' in parameters:
+        return launch_owned(command, work, stream, env=environment)
+    return launch_owned(command, work, stream)
+
+
 RESTORE_COMMANDS = """/CLEAR,START
 RESUME,'../corrosion',db
 /FILNAME,contours
@@ -85,7 +96,7 @@ def render_result_contours(output: Path, options: dict, progress=None) -> dict:
         if progress:
             progress({'phase': 'apdl_post', 'message': '正在读取已有末步结果并导出 MAPDL 云图，不重新求解。'})
         with (work/'mapdl_launcher.log').open('wb') as stream:
-            process = launch_owned(command, work, stream, env=mapdl_environment(capability['executable']))
+            process = _launch_mapdl(command, work, stream, capability['executable'])
             report['pid'] = process.pid
             report['exit_code'] = process.wait(timeout=600)
         if report['exit_code'] != 0:

@@ -145,6 +145,7 @@ def run_benchmark(spec: dict, job_dir: Path, progress=None) -> dict:
                 process = subprocess.Popen([sys.executable, "-u", "-m", "backend.benchmark_trial",
                                 str((folder / "trial_request.json").resolve()), mode, str(folder.resolve())],
                                 cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                                close_fds=True,
                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                 try:
                     while process.poll() is None:

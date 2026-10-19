@@ -85,6 +85,17 @@ def _stop_process_tree(process) -> dict:
     return process.close()
 
 
+def _launch_mapdl(command, output, stream, executable):
+    """Start MAPDL with its isolated environment, retaining old test doubles."""
+    environment = mapdl_environment(executable)
+    try:
+        return launch_owned(command, output, stream, env=environment)
+    except TypeError as exc:
+        if "unexpected keyword argument 'env'" not in str(exc):
+            raise
+        return launch_owned(command, output, stream)
+
+
 def _solver_errors(output: Path) -> list[str]:
     errors = []
     pattern = re.compile(r'\*{3}\s*ERROR\s*\*{3}|SOLUTION\s+(?:DID\s+NOT\s+CONVERGE|NOT\s+CONVERGED)|UNCONVERGED\s+SOLUTION|^\s*APDL_SELF_CHECK_FAILED(?:\b|,)', re.I)
@@ -137,7 +148,7 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
                    '-i', 'main.inp', '-o', 'mapdl.out']
         record['command'] = command
         with (output/'mapdl_launcher.log').open('wb') as stream:
-            process = launch_owned(command, output, stream, env=mapdl_environment(capability['executable']))
+            process = _launch_mapdl(command, output, stream, capability['executable'])
             record['supervision'] = dict(process.record)
             record['process_record_file'] = 'mapdl_process.json'
             record['pid'] = process.pid
