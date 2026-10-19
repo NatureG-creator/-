@@ -94,6 +94,7 @@ class VisualizationServiceTests(unittest.TestCase):
         result = inspect_simulation_stage(service, {"job_id": job_id, "stage": 2})
         self.assertEqual(result["shape"], [3, 4])
         self.assertEqual(result["maximum_mm"], 0.02)
+        self.assertEqual(result["max_position_preview_index"], [0, 0])
         self.assertEqual(result["rule"].startswith("复用 export_apdl_mat.surface_from_ca_state"), True)
 
 

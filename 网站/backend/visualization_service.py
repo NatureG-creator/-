@@ -176,7 +176,9 @@ def inspect_upload(service, payload):
                     "maximum": max(point[2] for point in sample_points), "mean": float(np.mean(finite_z)),
                     "preview_finite_count": len(sample_points), "preview": sample_points, "mode": "scatter",
                     "reading_seconds": pointcloud["reading_seconds"],
-                    "visualization_note": "颜色表示 Z 高程；坐标抽样仅用于网页预览，不修改原始点云。"}
+                    "visualization_note": "XY 平面显示抽样点云；颜色表示 Z 高程，单位 mm。坐标抽样仅用于网页预览，不修改原始点云。",
+                    "plot_kind": "scatter", "unit": "mm",
+                    "interpretation": "每个点是一个 XYZ 测量点；颜色用于识别高度变化，不代表腐蚀深度。"}
         array, has_header = _inspect_table(path)
         source_shape = list(array.shape)
         sample, preview_shape, stage, finite = _sample(array, None, variable)
@@ -192,9 +194,10 @@ def inspect_upload(service, payload):
             "mean": float(np.mean(finite)), "preview_finite_count": int(finite.size),
             "preview": [[float(value) if np.isfinite(value) else None for value in row] for row in sample],
             "sample_stride": max(1, math.ceil(math.sqrt(math.prod(preview_shape) / MAX_PREVIEW_CELLS))),
-            "mode": "matrix",
+            "mode": "matrix", "plot_kind": "matrix", "unit": "原始数据单位",
             "header_detected": has_header, "reading_seconds": round(time.perf_counter() - started, 6),
-            "visualization_note": "三维数组展示第 1 层 Z 切片；四维数组展示所选阶段的第 1 层 Z 切片。抽样仅用于网页预览，不修改原始数据。"}
+            "visualization_note": "这是数值矩阵预览，不自动解释为腐蚀深度。三维数组展示第 1 层切片；四维数组展示所选阶段切片。",
+            "interpretation": "颜色只表示所选变量的数值大小；如需物理形貌，请使用腐蚀演化阶段或 XYZ 点云入口。"}
 
 
 def _simulation_source(service, job_id):
@@ -272,10 +275,17 @@ def inspect_simulation_stage(service, payload):
     stride = max(1, math.ceil(math.sqrt(rows * columns / MAX_PREVIEW_CELLS)))
     sample = np.asarray(surface[::stride, ::stride], dtype=np.float64)
     finite = sample[np.isfinite(sample)]
+    max_index = [int(index) for index in np.unravel_index(int(np.nanargmax(surface)), surface.shape)]
+    preview_max_index = [min(int(sample.shape[0] - 1), int(round(max_index[0] / stride))),
+                         min(int(sample.shape[1] - 1), int(round(max_index[1] / stride)))]
     return {"job_id": job_id, "job_name": job.get("display_name") or job.get("case_name") or job_id,
             "stage": stage, "stage_count": len(stages), "variable": variable,
             "shape": [int(rows), int(columns)], "preview_shape": list(sample.shape),
             "minimum_mm": float(np.min(finite)), "maximum_mm": float(np.max(finite)),
             "mean_mm": float(np.mean(finite)), "preview": sample.tolist(), "sample_stride": stride,
             "reading_seconds": round(time.perf_counter() - started, 6),
+            "plot_kind": "surface_depth", "unit": "mm",
+            "x_range_mm": [0.0, float(max(columns - 1, 0) * float(geometry.get("space_xy_um") or info.get("geometry", {}).get("space_xy_um") or 1.0) / 1000.0)],
+            "y_range_mm": [0.0, float(max(rows - 1, 0) * float(geometry.get("space_xy_um") or info.get("geometry", {}).get("space_xy_um") or 1.0) / 1000.0)],
+            "max_position_index": max_index, "max_position_preview_index": preview_max_index,
             "rule": "复用 export_apdl_mat.surface_from_ca_state：沿 Z 找到第一层金属，换算正向腐蚀深度；不改变模拟或提取规则。"}

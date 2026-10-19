@@ -148,3 +148,5 @@ footer{margin-top:60px;border-top:0;padding:28px 0 38px;font-size:12px;color:#71
   #history-panel .history-item{grid-template-columns:18px minmax(0,1fr)}
   #history-panel .history-actions{grid-column:2;justify-content:flex-start}
 }
+
+.apdl-orientation{margin-top:16px;padding:14px;background:#fafcf6;border:1px solid #e0e8d7;border-radius:8px}.apdl-orientation svg{width:100%;max-height:360px;display:block}.apdl-orientation figcaption{font-size:10px;color:#768b6b;padding-top:8px}.visual-depth{display:block;width:100%;min-width:520px;max-height:440px}.visual-depth text{font:11px sans-serif;fill:#617b68}.plot-caption{display:flex;gap:12px;align-items:baseline;margin-bottom:10px;color:#526c50;font-size:12px}.plot-caption span{font-size:11px;color:#768b6b}

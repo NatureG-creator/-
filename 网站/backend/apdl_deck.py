@@ -45,16 +45,29 @@ def _boundaries(geometry: dict) -> str:
         return int(geometry['nodes'][matches[0],0])
     first, last = _number(axial_coords[0]), _number(axial_coords[-1])
     delta = _number(o['target_displacement_mm'])
+    axial_span = float(axial_coords[-1]-axial_coords[0])
+    if o['boundary_mode'] == 'clamped_grips':
+        grip_fixed = float(o.get('grip_length_fixed_mm', 0.))
+        grip_loaded = float(o.get('grip_length_loaded_mm', 0.))
+        if grip_fixed*2 > axial_span + 1e-9 or grip_loaded*2 > axial_span + 1e-9 or grip_fixed+grip_loaded > axial_span + 1e-9:
+            raise ValueError('夹持长度超过轴向跨度或两端重叠；请减小 grip_length_fixed_mm / grip_length_loaded_mm。')
     lines = [
         f'! {direction} tension; all input coordinates and displacements are in mm.',
         'CSYS,0', 'SELTOL,'+_number(geometry['stats'].get('grip_tolerance_mm', axial_spacing*.01)),
-        f'NSEL,S,LOC,{axis},{first}', 'CM,GRIP_FIXED,NODE', f'D,ALL,{axial_dof},0',
+        f'NSEL,S,LOC,{axis},{first}',
     ]
+    if o['boundary_mode'] == 'clamped_grips' and float(o.get('grip_length_fixed_mm', 0.)) > 0:
+        lines.append(f'NSEL,A,LOC,{axis},{first},{_number(float(axial_coords[0])+float(o["grip_length_fixed_mm"]))}')
+    lines += ['CM,GRIP_FIXED,NODE', f'D,ALL,{axial_dof},0']
     if o['boundary_mode'] == 'clamped_grips':
         lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
-    lines += [f'NSEL,S,LOC,{axis},{last}', 'CM,GRIP_LOADED,NODE', f'D,ALL,{axial_dof},{delta}']
+    grip_loaded_sel = ([f'NSEL,S,LOC,{axis},{_number(float(axial_coords[-1])-float(o["grip_length_loaded_mm"]))},{last}',
+                        f'NSEL,A,LOC,{axis},{last}']
+                       if o['boundary_mode'] == 'clamped_grips' and float(o.get('grip_length_loaded_mm', 0.)) > 0
+                       else [f'NSEL,S,LOC,{axis},{last}'])
+    lines += grip_loaded_sel+['CM,GRIP_LOADED,NODE', f'D,ALL,{axial_dof},{delta}']
     if o['boundary_mode'] == 'clamped_grips':
-        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
+        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0', 'ALLSEL,ALL']
     elif o['boundary_mode'] == 'legacy_recommended':
         corner_a, corner_b = corner(-1, 0), corner(-1, 0, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',

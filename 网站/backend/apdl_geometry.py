@@ -26,6 +26,8 @@ DEFAULTS = {
     'plastic_curve': None, 'allow_negative_slope': False,
     'max_substeps': 450, 'min_substeps': 1,
     'mesh_type': 'solid185_hex',
+    'grip_length_fixed_mm': 0.,
+    'grip_length_loaded_mm': 0.,
 }
 MODES = {'flat', 'single_top', 'single_bottom', 'double_independent', 'double_symmetric'}
 MESH_TYPES = {'solid185_hex', 'solid187_tetra', 'solid285_tetra'}
@@ -71,6 +73,11 @@ def normalise_options(options: dict) -> dict:
         raise ValueError('tensile_direction 只支持 X 或 Y。')
     if not isinstance(result['mesh_type'], str) or result['mesh_type'] not in MESH_TYPES:
         raise ValueError('mesh_type 只支持 solid185_hex、solid187_tetra 或 solid285_tetra。')
+    for key in ('grip_length_fixed_mm', 'grip_length_loaded_mm'):
+        value = result[key]
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value < 0:
+            raise ValueError(f'{key} 必须是有限且不小于 0 的数值。')
+        result[key] = float(value)
     if not -1 < result['poisson_ratio'] < .5:
         raise ValueError('poisson_ratio 必须满足 -1 < nu < 0.5。')
     if not 0 <= result['tangent_MPa'] < result['E_MPa']:
