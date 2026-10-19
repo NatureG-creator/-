@@ -28,7 +28,24 @@ test('结果卡区分求解后处理和未核验RST，不把未核验显示成�
 test('默认弹性平板可直接建模且不附带无关表面',()=>{
  const draft=apdlDefaults(),p=buildApdlPayload(draft,'build');
  assert.equal(p.options.corrosion_mode,'flat');assert.equal(p.options.E_MPa,206000);assert.equal(p.options.tensile_direction,'X');
+ assert.equal(p.options.grip_length_fixed_mm,0);assert.equal(p.options.grip_length_loaded_mm,0);
  assert.equal(p.run_mode,'build');assert.equal(p.top_source,undefined);assert.equal(p.bottom_source,undefined);
+});
+test('夹持长度旧配置缺失或为空时回退为0，负数和非有限值仍拒绝',()=>{
+ const draft=apdlDefaults();
+ draft.options.grip_length_fixed_mm=null;draft.options.grip_length_loaded_mm='';
+ let payload=buildApdlPayload(draft,'build');
+ assert.equal(payload.options.grip_length_fixed_mm,0);assert.equal(payload.options.grip_length_loaded_mm,0);
+ for(const key of ['grip_length_fixed_mm','grip_length_loaded_mm']){
+  for(const value of ['0','5.5']){
+   const valid=apdlDefaults();valid.options[key]=value;
+   assert.equal(buildApdlPayload(valid,'build').options[key],Number(value));
+  }
+  for(const value of [-1,Number.NaN,Number.POSITIVE_INFINITY,'abc']){
+   const invalid=apdlDefaults();invalid.options[key]=value;
+   assert.throws(()=>buildApdlPayload(invalid,'build'),new RegExp(key));
+  }
+ }
 });
 test('拉伸方向可切换为Y并随任务参数提交',()=>{
  const draft=apdlDefaults();draft.options.tensile_direction='Y';

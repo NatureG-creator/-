@@ -119,6 +119,15 @@ class APDLGeometryTests(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 normalise_options(options)
 
+    def test_grip_lengths_are_nonnegative_finite_values(self):
+        defaults = normalise_options({})
+        self.assertEqual(defaults['grip_length_fixed_mm'], 0.)
+        self.assertEqual(defaults['grip_length_loaded_mm'], 0.)
+        for key in ('grip_length_fixed_mm', 'grip_length_loaded_mm'):
+            for value in (-1, float('nan'), float('inf'), True, ''):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    normalise_options({key: value})
+
     def test_resource_limit_is_checked_before_grid_allocation(self):
         with self.assertRaisesRegex(ValueError, '节点|单元'):
             build_geometry(None, None, {'corrosion_mode': 'flat', 'nx': 100000,
