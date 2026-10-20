@@ -69,6 +69,12 @@ test('局部腐蚀配置提交完整板尺寸和可选的网格对齐偏移',()=
  draft.options.patch_offset_x_mm='NaN';assert.throws(()=>buildApdlPayload(draft),/有限数值/);
  draft.options.corrosion_mode='flat';assert.equal(buildApdlPayload(draft).options.local_corrosion,false);
 });
+test('局部腐蚀方向变换提交旋转和翻转选项',()=>{
+ const d=apdlDefaults();d.options.corrosion_mode='single_top';d.options.local_corrosion=true;d.options.patch_rotation_deg='90';d.options.patch_flip_x=true;d.options.patch_flip_y=true;
+ d.top.origin='upload';d.top.source_kind='measured';d.top.upload_id='upload-test';d.top.mapping.dx_mm='.5';d.top.mapping.dy_mm='.25';
+ const p=buildApdlPayload(d);assert.equal(p.options.patch_rotation_deg,90);assert.equal(p.options.patch_flip_x,true);assert.equal(p.options.patch_flip_y,true);
+ for(const value of [90.5,45,'abc',true]){const invalid=apdlDefaults();invalid.options.corrosion_mode='single_top';invalid.options.local_corrosion=true;invalid.options.patch_rotation_deg=value;invalid.top.origin='upload';invalid.top.source_kind='measured';invalid.top.upload_id='u';invalid.top.mapping={dx_mm:.5,dy_mm:.25};assert.throws(()=>buildApdlPayload(invalid),/旋转角度|patch_rotation_deg/);}
+});
 test('夹持长度旧配置缺失或为空时回退为0，负数和非有限值仍拒绝',()=>{
  const draft=apdlDefaults();
  draft.options.grip_length_fixed_mm=null;draft.options.grip_length_loaded_mm='';

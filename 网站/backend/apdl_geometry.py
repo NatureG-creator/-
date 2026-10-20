@@ -31,6 +31,7 @@ DEFAULTS = {
     'surface_grid_mode': 'strict',
     'mapping_dx_mm': None, 'mapping_dy_mm': None,
     'local_corrosion': False, 'patch_offset_x_mm': None, 'patch_offset_y_mm': None,
+    'patch_rotation_deg': 0, 'patch_flip_x': False, 'patch_flip_y': False,
 }
 MODES = {'flat', 'single_top', 'single_bottom', 'double_independent', 'double_symmetric'}
 MESH_TYPES = {'solid185_hex', 'solid187_tetra', 'solid285_tetra'}
@@ -72,6 +73,13 @@ def normalise_options(options: dict) -> dict:
             if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value < 0:
                 raise ValueError(f'{key} 必须是有限且不小于 0 的数值或留空居中。')
             result[key] = float(value)
+    rotation = result['patch_rotation_deg']
+    if isinstance(rotation, (bool, np.bool_)) or not isinstance(rotation, numbers.Integral) or rotation not in (0, 90, 180, 270):
+        raise ValueError('patch_rotation_deg 必须是 0、90、180 或 270 度。')
+    result['patch_rotation_deg'] = int(rotation)
+    for key in ('patch_flip_x', 'patch_flip_y'):
+        if not isinstance(result[key], bool):
+            raise ValueError(f'{key} 必须是布尔值。')
     if not isinstance(result['corrosion_mode'], str) or result['corrosion_mode'] not in MODES:
         raise ValueError('corrosion_mode 无效。')
     if result['surface_grid_mode'] not in ('strict', 'common_xy'):
@@ -157,6 +165,8 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     mode = o['corrosion_mode']
     if o['local_corrosion'] and mode == 'flat':
         raise ValueError('局部腐蚀区域需要选择单面或双面腐蚀模式。')
+    if not o['local_corrosion'] and (o['patch_rotation_deg'] or o['patch_flip_x'] or o['patch_flip_y']):
+        raise ValueError('腐蚀区域旋转和翻转只适用于局部腐蚀模式。')
     if mode == 'flat':
         nx, ny = o['nx'], o['ny']
         _counts(nx, ny, o['layers'], o['mesh_type'])
@@ -181,6 +191,17 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         if top.shape != bottom.shape:
             raise ValueError('正反面行列数不同，不允许静默重采样。')
         if o['local_corrosion']:
+            rotation = o['patch_rotation_deg']
+            if rotation:
+                top = np.rot90(top, k=rotation // 90)
+                bottom = np.rot90(bottom, k=rotation // 90)
+                o['dx_mm'], o['dy_mm'] = o['dy_mm'], o['dx_mm']
+            if o['patch_flip_x']:
+                top = np.fliplr(top)
+                bottom = np.fliplr(bottom)
+            if o['patch_flip_y']:
+                top = np.flipud(top)
+                bottom = np.flipud(bottom)
             patch_ny, patch_nx = top.shape
             intervals_x = o['length_mm']/o['dx_mm']
             intervals_y = o['width_mm']/o['dy_mm']
@@ -218,6 +239,7 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
                 'x_range_mm': [o['origin_x_mm']+offset_x, o['origin_x_mm']+offset_x+source_width],
                 'y_range_mm': [o['origin_y_mm']+offset_y, o['origin_y_mm']+offset_y+source_height],
                 'nx': patch_nx, 'ny': patch_ny, 'offset_x_mm': offset_x, 'offset_y_mm': offset_y,
+                'rotation_deg': rotation, 'flip_x': o['patch_flip_x'], 'flip_y': o['patch_flip_y'],
             }
             o.update(nx=nx, ny=ny)
         else:

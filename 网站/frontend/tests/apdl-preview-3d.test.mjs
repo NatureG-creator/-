@@ -52,3 +52,7 @@ test('local corrosion preview carries actual patch bounds and reports sampling s
  assert.match(previewSummary(m),/局部腐蚀区域/);
  assert.match(previewSummary(m),/2 × 2 个原始表面采样点/);
 });
+test('local corrosion preview reports applied rotation and flips',()=>{
+ const m=previewGeometry({...result({local_corrosion:true}),corrosion_region:{x_range_mm:[-5,5],y_range_mm:[25,45],nx:2,ny:2,rotation_deg:90,flip_x:true,flip_y:true}});
+ assert.match(previewSummary(m),/旋转 90°，沿 X 翻转，沿 Y 翻转/);
+});

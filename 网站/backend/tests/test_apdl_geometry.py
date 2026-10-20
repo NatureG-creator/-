@@ -105,6 +105,29 @@ class APDLGeometryTests(unittest.TestCase):
                     None if override.get('corrosion_mode') == 'flat' else depth,
                     dict(options, **override))
 
+    def test_local_patch_rotation_swaps_non_square_axes_and_transforms_both_faces(self):
+        top = np.array([[.1, .2, .3], [.4, .5, .6]], dtype=float)
+        bottom = top + .1
+        g = build_geometry(top, bottom, {
+            'corrosion_mode': 'double_independent', 'local_corrosion': True,
+            'length_mm': 4, 'width_mm': 4, 'dx_mm': 1, 'dy_mm': 2,
+            'patch_rotation_deg': 90, 'patch_flip_x': True, 'patch_flip_y': True,
+            'layers': 2,
+        })
+        expected = np.flipud(np.fliplr(np.rot90(top)))
+        np.testing.assert_array_equal(g['top_depth'][1:4, 0:2], expected)
+        np.testing.assert_array_equal(g['bottom_depth'][1:4, 0:2], expected + .1)
+        self.assertEqual(g['options']['dx_mm'], 2)
+        self.assertEqual(g['options']['dy_mm'], 1)
+        self.assertEqual(g['corrosion_region']['rotation_deg'], 90)
+        self.assertTrue(g['corrosion_region']['flip_x'])
+        self.assertTrue(g['corrosion_region']['flip_y'])
+
+    def test_local_patch_rotation_rejects_non_integer_and_boolean_angles(self):
+        for angle in (90.0, True, False, 45, '90'):
+            with self.subTest(angle=angle), self.assertRaises(ValueError):
+                normalise_options({'patch_rotation_deg': angle})
+
     def test_local_corrosion_switch_is_strict_and_default_path_stays_source_sized(self):
         with self.assertRaisesRegex(ValueError, '布尔值'):
             normalise_options({'local_corrosion': 1})

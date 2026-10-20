@@ -37,7 +37,7 @@ export function previewSummary(m){
  <p><strong>蓝色固定区</strong><br>${axis} ∈ [${range(m.fixed)}] mm<br>${m.dof}=0${m.clamped?`，${m.tdof}=0，UZ=0`:'；其余自由度由角点约束消除刚体运动。'}</p>
  <p><strong>橙色加载区</strong><br>${axis} ∈ [${range(m.loaded)}] mm<br>${m.dof}=+${fmt(m.o.target_displacement_mm)} mm${m.clamped?`，${m.tdof}=0，UZ=0`:'；横向收缩自由。'}</p>
  </div>${m.corners.length?`<p class="help-line">角点附加约束：${m.corners.map(c=>`${c.name} (${c.point.map(fmt).join(', ')}) mm：${esc(c.rule)}`).join('；')}。</p>`:''}
- ${m.region&&m.o.local_corrosion?`<p class="help-line"><strong>局部腐蚀区域：</strong>X ${range(m.region.x_range_mm)} mm；Y ${range(m.region.y_range_mm)} mm；${fmt(m.region.nx)} × ${fmt(m.region.ny)} 个原始表面采样点。图中红框为腐蚀区域边界，框外保持未腐蚀。</p>`:''}<p class="help-line">约束区域覆盖另两个方向的试件节点；范围框表示坐标选择包络，实际选点遵循命令流与选择容差。${m.clamped?'零夹持长度表示端面。':'蓝色端面仅施加轴向约束，并非整面锁死。'}箭头表示正向<strong>位移控制</strong>，不是力值。</p>`;
+ ${m.region&&m.o.local_corrosion?`<p class="help-line"><strong>局部腐蚀区域：</strong>X ${range(m.region.x_range_mm)} mm；Y ${range(m.region.y_range_mm)} mm；${fmt(m.region.nx)} × ${fmt(m.region.ny)} 个原始表面采样点；旋转 ${fmt(m.region.rotation_deg||0)}°${m.region.flip_x?'，沿 X 翻转':''}${m.region.flip_y?'，沿 Y 翻转':''}。图中红框为变换后腐蚀区域边界，框外保持未腐蚀。</p>`:''}<p class="help-line">约束区域覆盖另两个方向的试件节点；范围框表示坐标选择包络，实际选点遵循命令流与选择容差。${m.clamped?'零夹持长度表示端面。':'蓝色端面仅施加轴向约束，并非整面锁死。'}箭头表示正向<strong>位移控制</strong>，不是力值。</p>`;
 }
 
 export function mountApdl3DPreview(container,result){
