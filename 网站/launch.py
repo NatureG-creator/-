@@ -17,6 +17,7 @@ from pathlib import Path
 from backend.service_identity import source_revision
 
 ROOT = Path(__file__).resolve().parent
+DEFAULT_RUNTIME = Path(os.environ.get("CORROSION_RUNTIME_DIR", r"D:\research\CorrosionWebsiteData"))
 
 
 def service_at(port: int) -> bool:
@@ -31,8 +32,8 @@ def service_at(port: int) -> bool:
 
 
 def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=False):
-    runtime = Path(runtime) if runtime is not None else ROOT / ".runtime"
-    runtime.mkdir(exist_ok=True)
+    runtime = Path(runtime) if runtime is not None else DEFAULT_RUNTIME
+    runtime.mkdir(parents=True, exist_ok=True)
     marker = runtime / "service.json"
     ports = [preferred_port]
     if marker.exists() and not fixed_port:
@@ -65,6 +66,10 @@ def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=F
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     environment = os.environ.copy()
     environment["PYTHONIOENCODING"] = "utf-8"
+    temp_dir = runtime / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    environment["TEMP"] = str(temp_dir)
+    environment["TMP"] = str(temp_dir)
     with (runtime / "server.log").open("a", encoding="utf-8") as log:
         process = subprocess.Popen([sys.executable, "-u", str(ROOT / "start_server.py"),
                                     "--port", str(port), "--runtime", str(runtime)], cwd=ROOT, env=environment,
@@ -78,18 +83,20 @@ def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=F
                 webbrowser.open(url)
             return url
         if process.poll() is not None:
-            raise RuntimeError("服务启动失败，请查看 .runtime/server.log")
+            raise RuntimeError(f"服务启动失败，请查看 {runtime / 'server.log'}")
         time.sleep(.25)
-    raise RuntimeError("服务启动超过25秒，请查看 .runtime/server.log")
+    raise RuntimeError(f"服务启动超过25秒，请查看 {runtime / 'server.log'}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--port", type=int, default=8537)
+    parser.add_argument("--runtime", type=Path, default=None)
     options = parser.parse_args()
     try:
-        print(launch(open_browser=not options.no_browser, preferred_port=options.port))
+        print(launch(open_browser=not options.no_browser, preferred_port=options.port,
+                     runtime=options.runtime))
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1)

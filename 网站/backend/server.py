@@ -22,6 +22,7 @@ from .system_info import ROOT, VERSION, capabilities, json_record
 from .targets import inspect_target
 
 FRONTEND = ROOT / "frontend"
+DEFAULT_RUNTIME = Path(os.environ.get("CORROSION_RUNTIME_DIR", r"D:\research\CorrosionWebsiteData"))
 
 
 class JobServer(JobService, ThreadingHTTPServer):
@@ -428,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
 def make_server(host="127.0.0.1", port=8523, runtime=None):
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("研究任务服务仅允许本机访问")
-    return JobServer(host, port, runtime or ROOT / ".runtime")
+    return JobServer(host, port, runtime or DEFAULT_RUNTIME)
 
 
 if __name__ == "__main__":

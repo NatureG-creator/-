@@ -339,10 +339,13 @@ def precheck_apdl(service,payload):
     warnings=list(geometry.get('warnings',[]))
     for diagnostic in diagnostics.values():
         warnings.extend(diagnostic.get('warnings',[]))
-    preview={}
+    # Keep both physical edges; stride slicing can omit the final row/column.
+    rows=np.linspace(0,len(geometry['y'])-1,min(80,len(geometry['y'])),dtype=int)
+    cols=np.linspace(0,len(geometry['x'])-1,min(80,len(geometry['x'])),dtype=int)
+    preview={'x_mm':geometry['x'][cols].tolist(),'y_mm':geometry['y'][rows].tolist()}
     for name in ('top_depth','bottom_depth','remaining'):
         array=geometry[name]
-        preview[name]=array[::max(1,math.ceil(array.shape[0]/80)),::max(1,math.ceil(array.shape[1]/80))].tolist()
+        preview[name]=array[np.ix_(rows,cols)].tolist()
     return dict(options=spec['options'],stats=geometry['stats'],warnings=warnings,diagnostics=diagnostics,
                 faces={key:face['metadata'] for key,face in spec['faces'].items()},preview=preview,
                 units='N-mm-MPa',run_mode=spec['run_mode'],registration_confirmed=spec['registration_confirmed'],

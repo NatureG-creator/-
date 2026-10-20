@@ -424,11 +424,14 @@ class JobService:
             try:
                 benchmark = current.get("kind") in {"benchmark", "diagnostics"}
                 origin = current.get("kind") == "origin_plot"
+                finite_element = current.get("kind") in {"finite_element", "apdl_tension"}
                 # Benchmarks reserve both server slots; two concurrent benchmarks
                 # must not each hold one slot and wait forever for the other.
                 with self.origin_gate if origin else self.benchmark_gate if benchmark else nullcontext():
                     if origin:
                         self._wait_for_origin_cleanup(job_id, token)
+                    if finite_element and not self._wait_for_finite_element_turn(job_id, token):
+                        return
                     with ExitStack() as slots:
                         for _ in range(0 if origin else 2 if benchmark else 1):
                             slots.enter_context(self.compute_slots)
@@ -437,7 +440,7 @@ class JobService:
                                 return
                             admitted = json_record(self.runtime / "jobs" / job_id / "status.json", {})
                             admitted.update(queue_reason=None, scheduler_state="admitted",
-                                            updated_at=time.time())
+                                            queue_position=None, updated_at=time.time())
                             _atomic_json(self.runtime / "jobs" / job_id / "status.json", admitted)
                             process = self._start_process(job_id)
                         if process is not None:
@@ -459,6 +462,44 @@ class JobService:
                         self.pending_jobs.discard(job_id)
 
         threading.Thread(target=scheduled, daemon=True, name=f"job-{job_id}").start()
+
+    def _finite_element_queue(self):
+        active = []
+        for folder in (self.runtime / "jobs").iterdir():
+            if not folder.is_dir():
+                continue
+            status = json_record(folder / "status.json", {})
+            if (status.get("kind") in {"finite_element", "apdl_tension"} and
+                    (status.get("state") in {"running", "stopping", "stop_failed"} or
+                     (status.get("state") == "queued" and folder.name in self._launching_jobs))):
+                created_at = status.get("created_at", 0)
+                try:
+                    created_at = float(created_at)
+                except (TypeError, ValueError):
+                    created_at = float("inf")
+                active.append((created_at, folder.name, status))
+        return sorted(active, key=lambda item: (item[0], item[1]))
+
+    def _wait_for_finite_element_turn(self, job_id, token):
+        while True:
+            with self._job_lock:
+                if self._launching_jobs.get(job_id) != token:
+                    return False
+                current = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+                if current.get("state") != "queued":
+                    return False
+                queue = self._finite_element_queue()
+                position = next((index + 1 for index, item in enumerate(queue)
+                                 if item[1] == job_id), None)
+                if position is None or position == 1:
+                    return True
+                queue_reason = f"等待前序有限元任务完成（队列第 {position} 位）"
+                if (current.get("queue_position") != position or
+                        current.get("queue_reason") != queue_reason):
+                    current.update(queue_position=position, queue_reason=queue_reason,
+                                   updated_at=time.time())
+                    _atomic_json(self.runtime / "jobs" / job_id / "status.json", current)
+            time.sleep(.1)
 
     def _wait_for_origin_cleanup(self, job_id, token):
         # An inherited worker or a failed verified cleanup keeps the next job
