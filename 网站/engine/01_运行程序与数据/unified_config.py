@@ -84,6 +84,7 @@ STAGE_GA_CONFIG = {
     "selected_count": 10,
     "maxgen": 101,
     "parallel_workers": 10,
+    "reuse_process_pool": False,
 }
 
 # 第一步保留原入口中的快速示例设置。
@@ -93,6 +94,7 @@ SINGLE_STAGE_GA_CONFIG = {
     "selected_count": 4,
     "maxgen": 3,
     "parallel_workers": 8,
+    "reuse_process_pool": False,
 }
 
 GA_CONFIG = {
@@ -129,7 +131,7 @@ CA_CONFIG = {
 # ==================== 5. Taichi 参数 ====================
 TAICHI_CONFIG = {
     "use_taichi": True,          # 高速版入口也读取此开关。
-    "arch": "cpu",              # cpu 或 gpu。
+    "arch": "cpu",              # Taichi仅允许CPU。
     "allow_taichi_parallel": True,  # 是否同时启用 Taichi 和进程池。
     "verbose": True,             # 高速版阶段、代数和个体进度输出。
 }

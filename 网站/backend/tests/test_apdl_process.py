@@ -47,13 +47,27 @@ class OwnedProcessTests(unittest.TestCase):
     def test_normal_completion_persists_identity_before_real_command(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)
-            code = "import json;from pathlib import Path;r=json.loads(Path('mapdl_process.json').read_text());assert r['state']=='grouped';assert r['launcher_create_time'];Path('checked').write_text('ok')"
+            code = "import json;from pathlib import Path;r=json.loads(Path('mapdl_process.json').read_text(encoding='utf-8'));assert r['state']=='grouped';assert r['launcher_create_time'];Path('checked').write_text('ok')"
             with (output/'launcher.log').open('wb') as stream:
                 owner = controlled.launch_owned([sys.executable, '-c', code], output, stream)
                 try:
                     self.assertEqual(owner.wait(timeout=10), 0)
                     self.assertTrue((output/'checked').exists())
                     self.assertTrue(owner.close()['verified_empty'])
+                finally:
+                    owner.close()
+
+    def test_child_receives_explicit_environment(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            marker = output/'env.txt'
+            code = "import os;from pathlib import Path;Path('env.txt').write_text(os.environ['APDL_TEST_ENV'])"
+            with (output/'launcher.log').open('wb') as stream:
+                owner = controlled.launch_owned([sys.executable, '-c', code], output, stream,
+                                                env={**os.environ, 'APDL_TEST_ENV': 'injected'})
+                try:
+                    self.assertEqual(owner.wait(timeout=10), 0)
+                    self.assertEqual(marker.read_text(), 'injected')
                 finally:
                     owner.close()
 

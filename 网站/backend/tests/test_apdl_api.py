@@ -14,6 +14,84 @@ class ApdlApiTests(unittest.TestCase):
     setUp=fe_api.FiniteElementApiTests.setUp
     tearDown=fe_api.FiniteElementApiTests.tearDown
     request=fe_api.FiniteElementApiTests.request
+    def test_common_xy_precheck_frozen_worker_and_report_agree(self):
+        from backend.apdl_service import sha256
+        import zipfile
+        faces={}
+        for label,shape,step,origin in [('top',(5,7),.5,0.),('bottom',(3,4),.75,.25)]:
+            x=origin+np.arange(shape[1])*step
+            y=origin+np.arange(shape[0])*step
+            depth=.1+.1*x[None,:]+.2*y[:,None]
+            stream=io.BytesIO();np.savetxt(stream,depth,delimiter=',');data=stream.getvalue()
+            upload=self.server.upload(label+'.csv',io.BytesIO(data),len(data))
+            faces[label+'_source']={'upload_id':upload['id'],'mapping':{'layout':'yx',
+                'dx_mm':step,'dy_mm':step,'origin_x_mm':origin,'origin_y_mm':origin}}
+        payload={'options':{'corrosion_mode':'double_independent','surface_grid_mode':'common_xy'},
+                 'registration_confirmed':True,**faces}
+        code,preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200,preview)
+        self.assertEqual(preview['faces']['top']['shape'],[5,7])
+        self.assertEqual(preview['faces']['bottom']['shape'],[3,4])
+        self.assertEqual((preview['stats']['nx'],preview['stats']['ny']),(4,3))
+        self.assertEqual(preview['options']['dx_mm'],.75)
+        self.assertTrue(preview['surface_mapping']['sources']['top']['cropped'])
+        payload['registration_signature']=preview['registration_signature']
+        with patch.object(self.server,'launch'):
+            code,job=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,201,job)
+        run_job(job['id'],self.server.runtime)
+        detail=self.server.get_job(job['id'])
+        self.assertEqual(detail['state'],'completed',detail.get('error'))
+        folder=self.server.runtime/'jobs'/job['id']
+        summary=json.loads((folder/'outputs'/'summary.json').read_text(encoding='utf-8'))
+        mapping=summary['provenance']['surface_mapping']
+        self.assertEqual(mapping,preview['surface_mapping'])
+        self.assertTrue(any('双线性' in w for w in summary['warnings']))
+        with np.load(folder/'outputs'/'surface_inputs.npz') as stored:
+            np.testing.assert_array_equal(stored['top_depth'],preview['preview']['top_depth'])
+            np.testing.assert_array_equal(stored['x'],preview['preview']['x_mm'])
+            np.testing.assert_array_equal(stored['y'],preview['preview']['y_mm'])
+            np.testing.assert_allclose(stored['top_depth'],stored['bottom_depth'],atol=2e-16)
+        for label in ('top','bottom'):
+            self.assertEqual(sha256(folder/'inputs'/(label+'.csv')),preview['faces'][label]['sha256'])
+        with zipfile.ZipFile(folder/'outputs'/'apdl_tension_input_bundle.zip') as archive:
+            self.assertEqual(json.loads(archive.read('surface_mapping.json')),mapping)
+        code,draft=self.request(f'/api/apdl/jobs/{job["id"]}/reload-config',{})
+        self.assertEqual(code,200,draft)
+        self.assertEqual(draft['options']['surface_grid_mode'],'common_xy')
+        self.assertIsNone(draft['options']['mapping_dx_mm'])
+        self.assertIsNone(draft['options']['mapping_dy_mm'])
+        self.assertFalse(draft['registration_confirmed'])
+        restored={'options':draft['options'],'registration_confirmed':True}
+        for label in ('top','bottom'):
+            restored[label+'_source']={k:draft[label][k] for k in ('upload_id','source_kind','mapping')}
+        code,rechecked=self.request('/api/apdl/precheck',restored)
+        self.assertEqual(code,200,rechecked)
+        self.assertEqual(rechecked['surface_mapping'],mapping)
+        payload['options']['mapping_dx_mm']=1.
+        with patch.object(self.server,'launch'):
+            code,error=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,400)
+        self.assertIn('预检',error['error'])
+        payload['options']['surface_grid_mode']='strict'
+        code,error=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,400)
+        self.assertIn('严格模式',error['error'])
+
+    def test_coordinate_pair_strict_and_common_xy(self):
+        top=self._upload_coordinate_triplet('top')
+        bottom=self._upload_coordinate_triplet('bottom')
+        payload={'options':{'corrosion_mode':'double_independent'},'registration_confirmed':True,
+                 'top_source':{'source_kind':'coordinates','coordinate_uploads':top,'coordinate_direction':'front'},
+                 'bottom_source':{'source_kind':'coordinates','coordinate_uploads':bottom,'coordinate_direction':'back'}}
+        code,result=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200,result)
+        payload['bottom_source']['coordinate_uploads']=self._upload_coordinate_triplet('shift',x_shift=.01)
+        payload['options'].update(surface_grid_mode='common_xy',mapping_dx_mm=.1)
+        code,result=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['surface_mapping']['origin_x_mm'],.01)
+
     def _upload_coordinate_triplet(self, prefix='face', x_shift=0.0):
         x,y=np.meshgrid([0.0+x_shift,.3+x_shift],[0.0,.3])
         z=np.array([[5.0,4.8],[4.9,5.0]])

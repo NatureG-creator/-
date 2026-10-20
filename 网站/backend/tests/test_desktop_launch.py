@@ -13,6 +13,16 @@ spec.loader.exec_module(launcher)
 
 
 class DesktopLaunchTests(unittest.TestCase):
+    def test_default_runtime_is_used_when_no_runtime_is_selected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory) / "website-data"
+            with patch.object(launcher, "DEFAULT_RUNTIME", runtime), \
+                 patch.object(launcher, "service_at", return_value=True) as health:
+                url = launcher.launch(open_browser=False, preferred_port=8534)
+            self.assertEqual(url, "http://127.0.0.1:8534/")
+            self.assertTrue(runtime.is_dir())
+            health.assert_called_once_with(8534)
+
     def test_reuses_service_marker_from_selected_data_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)
@@ -33,6 +43,10 @@ class DesktopLaunchTests(unittest.TestCase):
             command = process.call_args.args[0]
             self.assertEqual(command[-2:], ["--runtime", str(runtime)])
             self.assertEqual(command[2], str(ROOT / "start_server.py"))
+            environment = process.call_args.kwargs["env"]
+            self.assertEqual(environment["TEMP"], str(runtime / "temp"))
+            self.assertEqual(environment["TMP"], str(runtime / "temp"))
+            self.assertTrue((runtime / "temp").is_dir())
 
 
 if __name__ == "__main__":

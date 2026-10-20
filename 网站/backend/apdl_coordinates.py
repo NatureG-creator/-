@@ -130,7 +130,7 @@ def validate_coordinate_pair(top: dict, bottom: dict) -> None:
     if top.get("shape") != bottom.get("shape"):
         raise ValueError("双面坐标行列数不一致，不能隐式重采样")
     for key in ("x_grid", "y_grid"):
-        if not np.allclose(top[key], bottom[key], rtol=0, atol=1e-10):
+        if key in top and key in bottom and not np.allclose(top[key], bottom[key], rtol=0, atol=1e-10):
             raise ValueError("双面坐标 XY 网格不一致，不能确认配准")
     for key in ("dx_mm", "dy_mm", "origin_x_mm", "origin_y_mm"):
         if not math.isclose(float(top[key]), float(bottom[key]), rel_tol=0, abs_tol=1e-10):

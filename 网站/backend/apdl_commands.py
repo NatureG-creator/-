@@ -28,7 +28,7 @@ def _source(service, job_id):
 
 def _package(root):
     names = set(EDITABLE) | {'nodes.dat', 'elements.dat', 'mesh_quality.mac',
-        'mesh_self_check.mac', 'boundary_self_check.mac', 'run_apdl.cmd',
+        'mesh_self_check.mac', 'boundary_self_check.mac', 'run_apdl.cmd', 'plots.mac',
         'surface_inputs.npz', 'top_depth.csv', 'bottom_depth.csv',
         'remaining_thickness.csv', 'geometry_preview.png'}
     records = []

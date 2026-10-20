@@ -22,6 +22,7 @@ from .system_info import ROOT, VERSION, capabilities, json_record
 from .targets import inspect_target
 
 FRONTEND = ROOT / "frontend"
+DEFAULT_RUNTIME = Path(os.environ.get("CORROSION_RUNTIME_DIR", r"D:\research\CorrosionWebsiteData"))
 
 
 class JobServer(JobService, ThreadingHTTPServer):
@@ -39,6 +40,17 @@ class JobServer(JobService, ThreadingHTTPServer):
 
 class Handler(BaseHTTPRequestHandler):
     server: JobServer
+
+    def log_message(self, format, *args):
+        try:
+            super().log_message(format, *args)
+        except (OSError, AttributeError):
+            # pythonw may have no usable console. Logging must not abort HTTP.
+            try:
+                with (self.server.runtime / 'http.log').open('a', encoding='utf-8') as log:
+                    log.write(self.log_date_time_string() + ' ' + (format % args) + '\n')
+            except OSError:
+                pass
 
     def _json(self, status, value):
         body = json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -134,6 +146,15 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/fitting/inspect":
             from .fitting_service import inspect_fitting
             return self._json(200, inspect_fitting(self.server, self._body()))
+        if method == "POST" and path == "/api/visualization/inspect":
+            from .visualization_service import inspect_upload
+            return self._json(200, inspect_upload(self.server, self._body()))
+        if method == "GET" and path == "/api/visualization/simulation-jobs":
+            from .visualization_service import simulation_sources
+            return self._json(200, simulation_sources(self.server))
+        if method == "POST" and path == "/api/visualization/simulation-stage":
+            from .visualization_service import inspect_simulation_stage
+            return self._json(200, inspect_simulation_stage(self.server, self._body()))
         if method == "POST" and path == "/api/fitting/precheck":
             from .fitting_service import precheck_fitting
             return self._json(200, precheck_fitting(self.server, self._body()))
@@ -144,6 +165,21 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())
+        if method == 'GET' and path == '/api/apdl/viewer/jobs':
+            from .apdl_viewer import viewer_jobs
+            return self._json(200, viewer_jobs(self.server))
+        if method == 'POST' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'jobs'] and parts[4] == 'viewer':
+            from .apdl_viewer import open_viewer
+            return self._json(200, open_viewer(self.server, parts[3], self._body()))
+        if method == 'POST' and len(parts) == 6 and parts[:3] == ['api', 'apdl', 'jobs'] and parts[4:] == ['viewer', 'render']:
+            from .apdl_viewer import render_view
+            return self._json(200, render_view(self.server, parts[3], self._body()))
+        if method == 'GET' and len(parts) == 4 and parts[:3] == ['api', 'apdl', 'viewers']:
+            session = self.server.runtime / 'apdl_viewers' / parts[3]
+            image = next(session.glob('*.png'), None)
+            if image is None:
+                raise FileNotFoundError('云图文件不存在')
+            return self._file(image)
         if method == 'POST' and path == '/api/apdl/table-inspect':
             from .apdl_materials import uploaded_table
             table, source, _ = uploaded_table(self.server, self._body())
@@ -161,6 +197,9 @@ class Handler(BaseHTTPRequestHandler):
             if parts[4] == 'commands':
                 from .apdl_commands import command_snapshot
                 return self._json(200, command_snapshot(self.server, parts[3]))
+            if parts[4] == 'raw-diagnostics':
+                from .apdl_raw_diagnostics import raw_apdl_diagnostics
+                return self._json(200, raw_apdl_diagnostics(self.server, parts[3]))
             if parts[4] == 'diagnosis':
                 from .apdl_commands import _source
                 from .apdl_analysis import diagnose_output
@@ -169,9 +208,16 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/apdl/matlab-convert":
             from .apdl_matlab import convert_uploaded_matrix
             return self._json(200, convert_uploaded_matrix(self.server, self._body()))
+        if method == "GET" and len(parts) == 5 and parts[:3] == ["api", "uploads", "inspect"] and parts[4] == "mat":
+            from .apdl_matlab import inspect_mat_variables
+            _, source = self.server.get_upload(parts[2])
+            return self._json(200, {"variables": inspect_mat_variables(source)})
         if method == "POST" and path == "/api/apdl/precheck":
             from .apdl_service import precheck_apdl
             return self._json(200,precheck_apdl(self.server,self._body()))
+        if len(parts)==5 and parts[:3]==['api','apdl','jobs'] and parts[4]=='reload-config' and method=='POST':
+            from .apdl_reload import reload_apdl_config
+            return self._json(200,reload_apdl_config(self.server,parts[3]))
         if method == "POST" and path == "/api/apdl/jobs":
             body=self._body()
             body['kind']='apdl_tension'
@@ -228,12 +274,14 @@ class Handler(BaseHTTPRequestHandler):
             source_config.PATH_CONFIG.clear()
             source_config.PATH_CONFIG.update({key: Path(value) for key, value in saved.items()})
             return self._json(200, {"PATH_CONFIG": saved, "created_directories": sorted(set(created))})
+        if method == 'POST' and path == '/api/jobs/delete-batch':
+            from .job_history import delete_jobs
+            body=self._body()
+            return self._json(200, delete_jobs(self.server, body.get('job_ids'), body.get('confirm_job_ids')))
         if method == "GET" and path == "/api/jobs":
-            folders = sorted((self.server.runtime / "jobs").iterdir(),
-                             key=lambda item: item.stat().st_mtime, reverse=True)
-            folders = [item for item in folders if item.is_dir() and (item / "status.json").is_file()
-                       and len(item.name) == 16 and all(char in "0123456789abcdef" for char in item.name)]
-            return self._json(200, [self.server.get_job(item.name) for item in folders[:100]])
+            # Existing data-source selectors still see hidden task results.
+            return self._json(200, self.server.list_jobs(
+                include_hidden=query.get('include_hidden', ['1'])[0] != '0'))
         if method == 'POST' and path == '/api/local-directory':
             from .task_io import choose_directory
             return self._json(200, choose_directory())
@@ -320,12 +368,18 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 3 and method == "GET":
                 return self._json(200, self.server.get_job(job_id))
             if len(parts) == 4 and method == "POST":
+                if parts[3] in {'hide', 'unhide'}:
+                    return self._json(200, self.server.set_job_hidden(job_id, parts[3] == 'hide'))
+                if parts[3] == 'delete':
+                    return self._json(200, self.server.delete_job(job_id, self._body().get('confirm_job_id')))
                 if parts[3] == 'io':
                     from .task_io import configure_job
                     return self._json(200, configure_job(self.server, job_id, self._body()))
                 if parts[3] == 'export':
                     from .task_io import export_job
-                    return self._json(200, export_job(self.server, job_id))
+                    from .job_history import history_guard
+                    with history_guard(self.server):
+                        return self._json(200, export_job(self.server, job_id))
                 operation = {"resume": self.server.resume, "stop": self.server.stop,
                              "transfer": self.server.transfer}.get(parts[3])
                 if operation:
@@ -375,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
 def make_server(host="127.0.0.1", port=8523, runtime=None):
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("研究任务服务仅允许本机访问")
-    return JobServer(host, port, runtime or ROOT / ".runtime")
+    return JobServer(host, port, runtime or DEFAULT_RUNTIME)
 
 
 if __name__ == "__main__":

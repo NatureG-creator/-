@@ -42,10 +42,11 @@ class APDLSolverTests(unittest.TestCase):
         g = build_geometry(None, None, setup)
         o, s = g['options'], g['stats']
         rows = []
+        axial_length = o['length_mm'] if o['tensile_direction'] == 'X' else o['width_mm']
         for time in (.5, 1):
             u = o['target_displacement_mm']*time
             force = s['analytic_stiffness_n_per_mm']*u
-            rows.append([time, u, force, -force, u/s['length_mm'], force/s['nominal_area_mm2']])
+            rows.append([time, u, force, -force, u/axial_length, force/s['nominal_area_mm2']])
         np.savetxt(folder/'force_displacement.csv', rows, delimiter=',')
         (folder/'corrosion.rst').write_bytes(b'TEST-FIXTURE-ONLY-NOT-A-REAL-ANSYS-RESULT')
         return g, np.asarray(rows)
@@ -54,9 +55,14 @@ class APDLSolverTests(unittest.TestCase):
         """Synthetic field for CSV contract tests only; it is not ANSYS evidence."""
         nodes = geometry['nodes']
         o, s = geometry['options'], geometry['stats']
-        ux = (nodes[:, 1]-nodes[:, 1].min())/s['length_mm']*o['target_displacement_mm']
-        nodal = np.column_stack((nodes, ux, np.zeros((len(nodes), 2)),
-                                 np.full(len(nodes), o['E_MPa']*o['target_displacement_mm']/s['length_mm']),
+        axis_index = 1 if o['tensile_direction'] == 'X' else 2
+        displacement_index = 0 if o['tensile_direction'] == 'X' else 1
+        axial_length = o['length_mm'] if o['tensile_direction'] == 'X' else o['width_mm']
+        axial_displacement = (nodes[:, axis_index]-nodes[:, axis_index].min())/axial_length*o['target_displacement_mm']
+        displacements = np.zeros((len(nodes), 3))
+        displacements[:, displacement_index] = axial_displacement
+        nodal = np.column_stack((nodes, displacements,
+                                 np.full(len(nodes), o['E_MPa']*o['target_displacement_mm']/axial_length),
                                  np.zeros(len(nodes))))
         np.savetxt(folder/'nodal_results.csv', nodal, delimiter=',', fmt='%.17g')
         return nodal
@@ -126,6 +132,20 @@ class APDLSolverTests(unittest.TestCase):
             self.assertAlmostEqual(result['analytic_reference']['stiffness_relative_error'], 0)
             self.assertAlmostEqual(result['final_load_n'], rows[-1, 2])
             self.assertTrue((out/'load_displacement.png').is_file())
+
+    def test_y_tension_result_uses_y_length_and_validates_uy_on_y_grips(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g, rows = self.fixture(out, length_mm=12, width_mm=6, nx=3, ny=2,
+                                   tensile_direction='Y')
+            self.write_nodal_fixture(out, g)
+            result = read_tension_results(out, g['stats'], g['options'], expected_nodes=g['nodes'])
+            self.assertEqual(result['tensile_direction'], 'Y')
+            self.assertEqual(result['axial_length_mm'], 6)
+            self.assertAlmostEqual(rows[-1, 4], rows[-1, 1]/6)
+            self.assertAlmostEqual(rows[-1, 5], rows[-1, 2]/72)
+            self.assertTrue(result['checks']['nodal_displacements'])
+            self.assertAlmostEqual(result['analytic_reference']['stiffness_n_per_mm'], 206000*72/6)
 
     def test_truncated_unbalanced_inconsistent_or_nonfinite_curve_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

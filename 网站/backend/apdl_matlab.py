@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import shutil
 import subprocess
 import time
@@ -35,24 +36,73 @@ def _matlab_string(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def _validate_mat_variable(path: Path, requested: str | None) -> str:
+def inspect_mat_variables(path: Path) -> list[dict]:
     if path.suffix.lower() != ".mat":
-        return ""
+        return []
     try:
         values = loadmat(path, variable_names=None)
     except (NotImplementedError, ValueError, OSError):
-        # MATLAB also supports v7.3/HDF5 MAT files. Let MATLAB validate those
-        # files instead of rejecting them in the Python preflight.
-        return str(requested or "")
-    candidates = [name for name in ("Z_filled", "F_filled")
-                  if name in values and getattr(values[name], "ndim", 0) == 2]
+        matlab = find_matlab()
+        if not matlab:
+            return []
+        expression = (
+            "s=whos('-file'," + _matlab_string(str(path.resolve())) + ");"
+            "for k=1:numel(s), if numel(s(k).size)==2 && "
+            "any(strcmp(s(k).class,{'double','single','uint8','uint16','uint32','uint64','int8','int16','int32','int64'})), "
+            "fprintf('%s\\t%d\\t%d\\n',s(k).name,s(k).size(1),s(k).size(2)); end; end;"
+        )
+        try:
+            completed = subprocess.run([matlab, "-batch", expression], capture_output=True,
+                                       text=True, encoding="utf-8", errors="replace", timeout=120, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        result = []
+        for line in completed.stdout.splitlines():
+            parts = line.strip().split('\t')
+            if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                result.append({"name": parts[0], "shape": [int(parts[1]), int(parts[2])]})
+        return result
+    result = []
+    for name, value in values.items():
+        if name.startswith("__") or getattr(value, "ndim", 0) != 2:
+            continue
+        if not getattr(value, "dtype", None) or value.dtype.kind not in "fiu":
+            continue
+        result.append({"name": name, "shape": [int(value.shape[0]), int(value.shape[1])]})
+    return result
+
+
+def _validate_mat_variable(path: Path, requested: str | None) -> str:
+    if path.suffix.lower() != ".mat":
+        return ""
+    candidates = [item["name"] for item in inspect_mat_variables(path)]
+    if not candidates and path.suffix.lower() == ".mat":
+        # The MATLAB converter can still inspect legacy MAT files when the
+        # lightweight upload inspector did not return variable metadata.
+        matlab = find_matlab()
+        if matlab:
+            expression = (
+                "s=whos('-file'," + _matlab_string(str(path.resolve())) + ");"
+                "for k=1:numel(s), if numel(s(k).size)==2 && "
+                "any(strcmp(s(k).class,{'double','single','uint8','uint16','uint32','uint64','int8','int16','int32','int64'})), "
+                "fprintf('%s\\t%d\\t%d\\n',s(k).name,s(k).size(1),s(k).size(2)); end; end;"
+            )
+            try:
+                completed = subprocess.run([matlab, "-batch", expression], capture_output=True,
+                                           text=True, encoding="utf-8", errors="replace", timeout=120, check=False)
+                candidates = [line.split('\t', 1)[0] for line in completed.stdout.splitlines()
+                              if line.count('\t') == 2]
+            except (OSError, subprocess.TimeoutExpired):
+                candidates = []
+    preferred = [name for name in ("Z_filled", "F_filled") if name in candidates]
+    candidates = preferred or candidates
     variable = str(requested or "")
     if variable:
         if variable not in candidates:
-            raise ValueError("MAT 中没有指定的二维变量 Z_filled 或 F_filled")
+            raise ValueError(f"MAT 中没有指定的二维变量：{variable}")
         return variable
     if len(candidates) != 1:
-        raise ValueError("MAT 需要明确选择唯一表面变量 Z_filled 或 F_filled")
+        raise ValueError("MAT 中存在多个二维数值变量，请先选择要转换的腐蚀 Z 矩阵")
     return candidates[0]
 
 
@@ -73,6 +123,14 @@ def convert_uploaded_matrix(service, payload: dict) -> dict:
     dy = _number(payload.get("dy_mm"), "dy_mm", positive=True)
     x_start = _number(payload.get("x_start_mm", 0), "x_start_mm")
     y_start = _number(payload.get("y_start_mm", 0), "y_start_mm")
+    conversion_mode = payload.get("conversion_mode", "surface_mm")
+    if conversion_mode not in ("surface_mm", "baseline_cells"):
+        raise ValueError("未知的矩阵转换模式")
+    direction = payload.get("coordinate_direction", "front")
+    if direction not in ("front", "back"):
+        raise ValueError("坐标方向必须是 front 或 back")
+    cell_thickness = (_number(payload.get("cell_thickness_mm", .025), "Z 向元胞厚度 / mm", positive=True)
+                      if conversion_mode == "baseline_cells" else .025)
     matlab = find_matlab()
     if not matlab:
         raise ValueError("未找到 MATLAB 可执行文件；请设置 MATLAB_BIN 或将 matlab.exe 加入 PATH")
@@ -86,7 +144,8 @@ def convert_uploaded_matrix(service, payload: dict) -> dict:
         f"addpath({_matlab_string(str(matlab_dir.resolve()))});"
         f"matlab_apdl_convert({_matlab_string(str(source.resolve()))},"
         f"{_matlab_string(str(output_root.resolve()))},{_matlab_string(variable)},"
-        f"{dx:.17g},{dy:.17g},{x_start:.17g},{y_start:.17g})"
+        f"{dx:.17g},{dy:.17g},{x_start:.17g},{y_start:.17g},"
+        f"{_matlab_string(conversion_mode)},{cell_thickness:.17g},{_matlab_string(direction)})"
     )
     started = time.perf_counter()
     try:
@@ -105,6 +164,7 @@ def convert_uploaded_matrix(service, payload: dict) -> dict:
     if any(not path.is_file() for path in output_paths.values()):
         raise ValueError("MATLAB 已退出，但没有生成完整的 DIANYUN_X/Y/Z.txt 文件")
     parsed = parse_coordinate_triplet(*(output_paths[axis] for axis in ("x", "y", "z")))
+    conversion = json.loads((output_root / "conversion_summary.json").read_text(encoding="utf-8"))
     files = {}
     try:
         for axis, path in output_paths.items():
@@ -115,6 +175,7 @@ def convert_uploaded_matrix(service, payload: dict) -> dict:
     return {
         "source_upload_id": upload_id,
         "variable": variable or None,
+        "conversion": conversion,
         "shape": parsed["shape"],
         "point_count": parsed["point_count"],
         "dx_mm": parsed["dx_mm"],

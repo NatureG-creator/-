@@ -40,7 +40,7 @@ class BenchmarkV2Tests(unittest.TestCase):
 
     def test_random_order_is_reproducible_and_keeps_baseline_pairing(self):
         from backend.benchmark import build_variants
-        value = request(["numpy_parallel", "taichi_cpu", "taichi_gpu"])
+        value = request(["numpy_parallel", "taichi_cpu"])
         value["options"].update(order_mode="random", seeds=[8, 9])
         spec = prepare_benchmark(value)
         self.assertEqual(build_variants(spec), build_variants(spec))

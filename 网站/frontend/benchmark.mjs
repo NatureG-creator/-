@@ -1,7 +1,7 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(4) : '—';
 const yes = value => value == null ? '—' : value ? '是' : '否';
-export const benchmarkModes = [['numpy_serial','NumPy 单进程'],['numpy_parallel','NumPy 多进程'],['taichi_cpu','Taichi CPU'],['taichi_gpu','Taichi GPU'],['taichi_cpu_parallel','Taichi CPU 多进程'],['taichi_gpu_parallel','Taichi GPU 多进程']];
+export const benchmarkModes = [['numpy_serial','NumPy 单进程'],['numpy_parallel','NumPy 多进程'],['taichi_cpu','Taichi CPU'],['taichi_cpu_parallel','Taichi CPU 多进程']];
 const fields = [['grid_w','X 向元胞数',2,1000],['grid_l','Y 向元胞数',2,1000],['grid_n','Z 向元胞层数',2,1000],['steps','CA 步数 F',1,10000],['population','种群数量',2,500],['selected_count','GA 选择数量（必须小于种群）',1,499],['workers','默认并行进程数',2,16],['repeats','预热后重复次数',1,7],['seed','默认随机种子',0,4294967295],['target_index','目标行',0,100000],['timeout_seconds','单方案超时 / 秒',10,1800],['threads_per_worker','每进程线程数',1,16],['cpu_budget','逻辑 CPU 预算',1,4096],['generations','短程 GA 最大代数',1,10]];
 export function quickOptions(seed=42, selectedCount=2) {
  return {grid_w:40,grid_l:40,grid_n:16,steps:8,population:6,selected_count:Math.min(selectedCount,5),workers:2,repeats:5,seed,target_index:0,timeout_seconds:180,modes:benchmarkModes.slice(0,4).map(x=>x[0]),pool_policies:['recreate'],worker_counts:[2],threads_per_worker:1,cpu_budget:2,workload:'population',generations:3,seeds:[],order_mode:'fixed',retain_detail:true};
@@ -50,9 +50,9 @@ export function applicationPolicy(row) {
  if(row.state!=='completed')return {allowed:false,reason:'仅有效完成方案可采用'};
  if(row.mode==='numpy_serial')return {allowed:true,mode:'strict',workers:1};
  if(row.mode==='numpy_parallel')return {allowed:false,reason:'当前正式严格模式仅单进程'};
- const cpu=row.mode?.startsWith('taichi_cpu'),gpu=row.mode?.startsWith('taichi_gpu'),arch=String(row.actual_arch||'').toLowerCase().replace(/^arch\./,'');
- if(!(cpu&&['cpu','x64','arm64'].includes(arch)||gpu&&['gpu','cuda','vulkan','metal','opengl'].includes(arch)))return {allowed:false,reason:'实际设备未匹配，不能采用'};
- return {allowed:true,mode:'fast',arch:cpu?'cpu':'gpu',workers:row.workers||1};
+ const cpu=row.mode?.startsWith('taichi_cpu'),arch=String(row.actual_arch||'').toLowerCase().replace(/^arch\./,'');
+ if(!(cpu&&['cpu','x64','arm64'].includes(arch)))return {allowed:false,reason:'仅允许采用实际运行于 CPU 的 Taichi 方案'};
+ return {allowed:true,mode:'fast',arch:'cpu',workers:row.workers||1};
 }
 export function rowSpeedup(row,rows) {
  if(!row.baseline_id || row.seed==null)return null;
@@ -75,7 +75,7 @@ export function renderBenchmarkResult(summary={}) {
 }
 export function renderDiagnostics(summary={}) {
  const labels={passed:'通过',unavailable:'不可用',failed:'失败',timeout:'超时'};
- return `<div class="card wide"><h3>本机运行环境诊断</h3><p>${esc(summary.scope_note||'安装、动态库加载及 CPU/GPU 实际运行分别检查。')}</p><table><thead><tr><th>检查</th><th>状态</th><th>实际设备 / 耗时</th><th>说明</th></tr></thead><tbody>${(summary.checks||[]).map(c=>`<tr><td>${esc(({import:"Python 包与原生扩展加载",cpu:"CPU 实际运行",gpu:"GPU 实际运行"})[c.name]||c.name)}</td><td>${esc(labels[c.state]||c.state)}</td><td>${esc(c.actual_arch||'—')} / ${num(c.elapsed_seconds)} s</td><td>${esc(c.message)}</td></tr>`).join('')}</tbody></table><p>${esc((summary.recommendations||[]).join('；'))}</p><details><summary>Python、软件包、硬件与原生依赖</summary><pre>${esc(JSON.stringify({python:summary.python,packages:summary.packages,hardware:summary.hardware,native_dependencies:summary.native_dependencies,configured_runtime:summary.configured_runtime},null,2))}</pre></details></div>`;
+ return `<div class="card wide"><h3>本机运行环境诊断</h3><p>${esc(summary.scope_note||'检查 Taichi 导入与 CPU 实际计算。')}</p><table><thead><tr><th>检查</th><th>状态</th><th>实际设备 / 耗时</th><th>说明</th></tr></thead><tbody>${(summary.checks||[]).map(c=>`<tr><td>${esc(({import:"Python 包与原生扩展加载",cpu:"CPU 实际运行"})[c.name]||c.name)}</td><td>${esc(labels[c.state]||c.state)}</td><td>${esc(c.actual_arch||'—')} / ${num(c.elapsed_seconds)} s</td><td>${esc(c.message)}</td></tr>`).join('')}</tbody></table><p>${esc((summary.recommendations||[]).join('；'))}</p><details><summary>Python、软件包、硬件与原生依赖</summary><pre>${esc(JSON.stringify({python:summary.python,packages:summary.packages,hardware:summary.hardware,native_dependencies:summary.native_dependencies,configured_runtime:summary.configured_runtime},null,2))}</pre></details></div>`;
 }
 export function bindBenchmarkResult(root,{summary,jobId,post,openJob,onApply}) {
  root.querySelectorAll('[data-benchmark-apply]').forEach(button=>button.onclick=()=>onApply?.(summary.rows[Number(button.dataset.benchmarkApply)],summary));

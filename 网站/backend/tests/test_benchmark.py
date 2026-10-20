@@ -26,7 +26,7 @@ class BenchmarkTests(unittest.TestCase):
         self.module = importlib.import_module("backend.benchmark")
 
     def test_freezes_inputs_without_changing_source_config(self):
-        value = request(["taichi_gpu", "numpy_parallel"])
+        value = request(["taichi_cpu", "numpy_parallel"])
         original = copy.deepcopy(value)
         spec = self.module.prepare_benchmark(value)
         self.assertEqual(value, original)
@@ -46,10 +46,9 @@ class BenchmarkTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.module.prepare_benchmark(value)
 
-    def test_gpu_fallback_is_never_reported_as_gpu(self):
+    def test_non_cpu_backend_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "CPU"):
-            self.module.verify_arch("gpu", "x64")
-        self.module.verify_arch("gpu", "cuda")
+            self.module.verify_arch("gpu", "cuda")
         self.module.verify_arch("cpu", "x64")
 
     def test_unavailable_backend_retains_dependency_failure_reason(self):
@@ -62,7 +61,7 @@ class BenchmarkTests(unittest.TestCase):
                 raise ImportError("missing runtime.dll")
             return original_import(name, *args, **kwargs)
         with patch("builtins.__import__", side_effect=load):
-            with self.assertRaisesRegex(BackendUnavailable, "runtime.dll"):
+            with self.assertRaisesRegex(BackendUnavailable, "CPU"):
                 initialize_backend("gpu")
 
     def test_difference_reports_all_state_arrays_and_shape_failures(self):

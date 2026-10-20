@@ -271,13 +271,21 @@ def _prepare(service,payload):
     faces,records,depths={},{},{}
     for label in labels:
         faces[label],records[label],depths[label]=_resolve_source(service,payload.get(label+'_source'),label)
+    surface_mapping=None
     if mode=='double_independent':
         if payload.get('registration_confirmed') is not True:
             raise ValueError('双面独立形貌需明确确认已配准到同一物理XY位置')
         a,b=faces['top']['metadata'],faces['bottom']['metadata']
-        if a['shape']!=b['shape'] or any(not math.isclose(a[key],b[key],rel_tol=0,abs_tol=1e-10) for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')):
-            raise ValueError('双面行列、间距或原点不匹配；不进行隐式重采样')
-        if a.get('source_kind')=='coordinates' and b.get('source_kind')=='coordinates':
+        if options['surface_grid_mode']=='common_xy':
+            from .apdl_surface_mapping import common_grid,map_surfaces,mapping_report
+            metadata={key:face['metadata'] for key,face in faces.items()}
+            surface_mapping=common_grid(metadata,options)
+            mapped=map_surfaces(depths,metadata,surface_mapping)
+            mapping_report(surface_mapping,depths,mapped)
+            depths=mapped
+        elif a['shape']!=b['shape'] or any(not math.isclose(a[key],b[key],rel_tol=0,abs_tol=1e-10) for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')):
+            raise ValueError('双面行列、间距或原点不匹配；严格模式不进行隐式重采样，请选择共同XY映射并核对物理配准')
+        elif a.get('source_kind')=='coordinates' and b.get('source_kind')=='coordinates':
             validate_coordinate_pair(
                 {'shape': a['shape'], 'dx_mm': a['dx_mm'], 'dy_mm': a['dy_mm'],
                  'origin_x_mm': a['origin_x_mm'], 'origin_y_mm': a['origin_y_mm'],
@@ -286,9 +294,12 @@ def _prepare(service,payload):
                  'origin_x_mm': b['origin_x_mm'], 'origin_y_mm': b['origin_y_mm'],
                  'xy_grid_sha256': b['xy_grid_sha256']})
     if faces:
-        first=next(iter(faces.values()))['metadata']
+        first=surface_mapping or next(iter(faces.values()))['metadata']
         options.update({key:first[key] for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')})
     geometry=build_geometry(depths.get('top'),depths.get('bottom'),options)
+    if surface_mapping:
+        from .apdl_surface_mapping import MAPPING_WARNING
+        geometry['warnings'].append(MAPPING_WARNING)
     preset_id=payload.get('preset_id')
     preset_provenance=None
     if preset_id:
@@ -299,11 +310,13 @@ def _prepare(service,payload):
     registration_signature=None
     if mode=='double_independent':
         identity={label:dict(metadata=face['metadata'],mapping=face['mapping']) for label,face in faces.items()}
+        identity['surface_mapping']=surface_mapping
         registration_signature=hashlib.sha256(json.dumps(identity,ensure_ascii=True,sort_keys=True,
                                                         allow_nan=False,separators=(',',':')).encode('utf-8')).hexdigest()
     spec=dict(kind='apdl_tension',run_mode=run_mode,options=geometry['options'],faces=faces,preset_id=preset_id,preset_provenance=preset_provenance,
               registration_confirmed=payload.get('registration_confirmed') is True,
               registration_signature=registration_signature,
+              surface_mapping=surface_mapping,
               precheck=geometry['stats'],reading_seconds=time.perf_counter()-started,
               case_name=str(payload.get('case_name',''))[:100])
     frozen_records=[]
@@ -339,14 +352,18 @@ def precheck_apdl(service,payload):
     warnings=list(geometry.get('warnings',[]))
     for diagnostic in diagnostics.values():
         warnings.extend(diagnostic.get('warnings',[]))
-    preview={}
+    # Keep both physical edges; stride slicing can omit the final row/column.
+    rows=np.linspace(0,len(geometry['y'])-1,min(80,len(geometry['y'])),dtype=int)
+    cols=np.linspace(0,len(geometry['x'])-1,min(80,len(geometry['x'])),dtype=int)
+    preview={'x_mm':geometry['x'][cols].tolist(),'y_mm':geometry['y'][rows].tolist()}
     for name in ('top_depth','bottom_depth','remaining'):
         array=geometry[name]
-        preview[name]=array[::max(1,math.ceil(array.shape[0]/80)),::max(1,math.ceil(array.shape[1]/80))].tolist()
+        preview[name]=array[np.ix_(rows,cols)].tolist()
     return dict(options=spec['options'],stats=geometry['stats'],warnings=warnings,diagnostics=diagnostics,
                 faces={key:face['metadata'] for key,face in spec['faces'].items()},preview=preview,
                 units='N-mm-MPa',run_mode=spec['run_mode'],registration_confirmed=spec['registration_confirmed'],
                 registration_signature=spec['registration_signature'],
+                surface_mapping=spec.get('surface_mapping'),
                 reading_seconds=spec['reading_seconds'])
 
 
@@ -417,10 +434,17 @@ def run_apdl_job(spec,job_dir,progress=None):
                         raise ValueError('APDL冻结来源已变化或路径越界')
                     depths[label],_=read_face(path,face['source_kind'],face['mapping'],face['inherited_geometry'])
         with stage('geometry','geometry_seconds','apdl_build'):
+            if spec.get('surface_mapping'):
+                from .apdl_surface_mapping import map_surfaces
+                depths=map_surfaces(depths,{key:face['metadata'] for key,face in spec['faces'].items()},spec['surface_mapping'])
             geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'])
+            if spec.get('surface_mapping'):
+                from .apdl_surface_mapping import MAPPING_WARNING
+                geometry['warnings'].append(MAPPING_WARNING)
         with stage('build','build_export_seconds','apdl_build'):
             provenance=dict(faces={key:face['metadata'] for key,face in spec['faces'].items()},runtime=runtime_provenance(),
-                            preset_id=spec.get('preset_id'),preset=spec.get('preset_provenance'))
+                            preset_id=spec.get('preset_id'),preset=spec.get('preset_provenance'),
+                            surface_mapping=spec.get('surface_mapping'))
             result.update(create_tension_bundle(geometry,output,provenance))
             result.update(build_state='built',timing=timing,stage_states=states)
         if spec['run_mode']=='solve':
@@ -431,6 +455,15 @@ def run_apdl_job(spec,job_dir,progress=None):
             result['solve_state']='postprocessing'
             with stage('postprocess','postprocess_seconds','apdl_post'):
                 result['results']=read_tension_results(output,geometry['stats'],spec['options'],expected_nodes=geometry['nodes'])
+                from .apdl_plots import render_result_contours
+                try:
+                    plots=render_result_contours(output,spec['options'],progress=progress)
+                except Exception as exc:
+                    plots=dict(state='failed',plots=[],error=f'{type(exc).__name__}: {exc}')
+                result['results']['contour_plots']=plots
+                result['results']['files'].extend(plots.get('files',[]))
+                if plots['state']!='completed':
+                    result['results']['warnings'].append('云图导出失败，已完成的求解与数值结果保留：'+plots.get('error','请检查云图日志。'))
             result['solve_state']='solved'
     except Exception as exc:
         result.update(error=str(exc),failure_stage=current_stage)

@@ -1,26 +1,33 @@
 <!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css"></head>
-<body>
+<body data-ui-shell="research-workbench">
 <a href="#workspace" class="skip-link">跳转到工作区</a>
 <aside class="sidebar">
   <a class="brand" href="#" aria-label="腐蚀研究工作台首页"><span class="brand-symbol" aria-hidden="true">C<span>↗</span></span><span>腐蚀研究工作台<small>CORROSION WORKSPACE</small></span></a>
   <div class="sidebar-label">研究流程</div>
   <nav class="tabs" aria-label="工作区导航">
-    <button class="tab active" data-panel="pointcloud-panel" aria-current="page"><span class="nav-icon">◈</span><span>实测点云<small>预处理与六指标</small></span><span class="nav-number">01</span></button>
-    <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
-    <button class="tab" data-panel="benchmark-panel"><span class="nav-icon">▥</span><span>性能对比<small>固定种群 · 后端验证</small></span><span class="nav-number">02+</span></button>
-    <button class="tab" data-panel="finite-element-panel"><span class="nav-icon">△</span><span>有限元耦合<small>建模 · 拉伸 · 结果校核</small></span><span class="nav-number">03</span></button>
-    <button class="tab" data-panel="fitting-panel"><span class="nav-icon">⌁</span><span>通用数据拟合<small>函数比较 · 科研绘图</small></span><span class="nav-number">04</span></button>
-    <button class="tab" data-panel="multivariate-panel"><span class="nav-icon">◇</span><span>双自变量拟合<small>响应面 · Origin XYZ</small></span><span class="nav-number">04+</span></button>
-    <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">05</span></button>
-    <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">06</span><span class="count" id="job-count">0</span></button>
+    <div class="nav-group" data-nav-group="采集与模拟"><span class="nav-group-title">采集与模拟</span>
+      <button class="tab active" data-panel="pointcloud-panel" aria-current="page"><span class="nav-icon">◈</span><span>实测点云<small>预处理与六指标</small></span><span class="nav-number">01</span></button>
+      <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
+    </div>
+    <div class="nav-group" data-nav-group="验证与拟合"><span class="nav-group-title">验证与拟合</span>
+      <button class="tab" data-panel="benchmark-panel"><span class="nav-icon">▥</span><span>性能对比<small>固定种群 · 后端验证</small></span><span class="nav-number">02+</span></button>
+      <button class="tab" data-panel="finite-element-panel"><span class="nav-icon">△</span><span>有限元耦合<small>建模 · 拉伸 · 结果校核</small></span><span class="nav-number">03</span></button>
+      <button class="tab" data-panel="fitting-panel"><span class="nav-icon">⌁</span><span>通用数据拟合<small>函数比较 · 科研绘图</small></span><span class="nav-number">04</span></button>
+      <button class="tab" data-panel="multivariate-panel"><span class="nav-icon">◇</span><span>双自变量拟合<small>响应面 · Origin XYZ</small></span><span class="nav-number">04+</span></button>
+    </div>
+    <div class="nav-group" data-nav-group="结果与记录"><span class="nav-group-title">结果与记录</span>
+      <button class="tab" data-panel="visualization-panel"><span class="nav-icon">▧</span><span>可视化中心<small>输入数据与结果图像</small></span><span class="nav-number">07</span></button>
+      <button class="tab" data-panel="results-panel"><span class="nav-icon">▤</span><span>任务与结果<small>过程 · 图表 · 导出</small></span><span class="nav-number">05</span></button>
+      <button class="tab" data-panel="history-panel"><span class="nav-icon">◷</span><span>运行记录<small>历史任务与恢复</small></span><span class="nav-number">06</span><span class="count" id="job-count">0</span></button>
+    </div>
   </nav>
   <div class="sidebar-bottom"><span class="sidebar-label">本机环境</span><div class="health"><span id="health-dot" aria-hidden="true"></span><span id="health-text">连接本地服务…</span></div><p id="capability">正在读取后端能力</p><small id="footer-version">本地计算 · 独立任务目录</small></div>
 </aside>
 <div class="main-shell">
 <header class="topbar"><div><span class="eyebrow">RESEARCH / WORKBENCH</span><p id="page-label">实测点云与形貌指标</p></div><div class="top-actions"><span class="local-badge"><i></i>本地工作区</span><button id="sync-button" class="button secondary">↑ 同步网站源码</button></div></header>
-<main id="workspace">
+<main id="workspace" data-layout="product-performs">
   <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
   <section class="hero-band"><div><div class="kicker">数据有来源，计算可追溯</div><h1>让每一次腐蚀计算<br class="hero-break">都有清晰的来路。</h1><p>从扫描表面提取形貌指标，再用实测目标约束腐蚀演化。</p></div><div class="workflow" aria-label="研究工作流程"><div><span>01</span><strong>实测点云</strong><small>任意扫描尺寸</small></div><b aria-hidden="true">→</b><div><span>02</span><strong>六项指标</strong><small>参考面与单位校核</small></div><b aria-hidden="true">→</b><div><span>03</span><strong>CA–GA 演化</strong><small>目标 · 参数 · 误差</small></div></div></section>
   <section id="pointcloud-panel" class="panel active" aria-labelledby="pointcloud-heading">
@@ -55,11 +62,15 @@
   <section id="benchmark-panel" class="panel" aria-label="性能对比"></section>
   <section id="fitting-panel" class="panel" aria-label="通用数据拟合"></section>
   <section id="multivariate-panel" class="panel" aria-label="双自变量拟合"></section>
+  <section id="visualization-panel" class="panel" aria-labelledby="visualization-heading">
+    <div class="section-heading"><div><div class="section-overline">07 / VISUALIZATION</div><h2 id="visualization-heading">可视化中心</h2><p>从同一个入口预览实测数据、腐蚀阶段形貌和 APDL 求解云图；所有预览都保留来源与单位信息。</p></div><span class="badge neutral">只读预览</span></div>
+    <div id="visualization-root"></div>
+  </section>
   <section id="finite-element-panel" class="panel" aria-label="腐蚀钢板与 APDL 单轴拉伸">
     <div id="apdl-root"></div>
     <details class="card apdl-legacy"><summary><strong>兼容：原有限元表面导出</strong><small>保留 MAT / CSV / 坐标输入包工作流</small></summary><div class="apdl-legacy-body">
     <div class="section-heading"><div><div class="section-overline">03 / FINITE ELEMENT COUPLING</div><h2 id="finite-element-heading">腐蚀形貌 → APDL 输入包</h2><p>选择已完成的 CA–GA 或实测表面任务，生成可追溯的 MAT、CSV、坐标和 ZIP 输入包。</p></div><span class="badge" id="fe-capability">本地导出器</span></div>
-    <div class="card"><div class="field"><label for="fe-source-mode">选择输入来源</label><select id="fe-source-mode"><option value="task">使用已完成任务</option><option value="upload">从电脑导入文件</option></select></div><div id="fe-local-input" class="field" hidden><label for="fe-local-file">导入 MAT 实测表面 / NPZ 模拟结果</label><input id="fe-local-file" type="file" accept=".mat,.npz"><p class="help-line">MAT 必须包含二维 Z_filled / F_filled（mm）；NPZ 必须包含三维 perfect_a 或受支持的 a_sd。保持原网格、提取与单位规则。CSV / TXT 矩阵及三份 XYZ 坐标可在上方 APDL 建模区域导入。</p></div></div>
+    <div class="card"><div class="field"><label for="fe-source-mode">选择输入来源</label><select id="fe-source-mode"><option value="task">使用已完成任务</option><option value="upload">从电脑导入文件</option></select></div><div id="fe-local-input" class="field" hidden><label for="fe-local-file">导入 MAT 实测表面 / NPZ 模拟结果</label><input id="fe-local-file" type="file" accept=".mat,.npz"><p class="help-line">MAT 自动识别二维数值矩阵并读取行列数；若包含多个候选变量，请选择腐蚀 Z 矩阵。NPZ 必须包含三维 perfect_a 或受支持的 a_sd。保持原网格、提取与单位规则。CSV / TXT 矩阵及三份 XYZ 坐标可在上方 APDL 建模区域导入。</p></div></div>
     <div class="card settings-card"><div class="grid four"><div class="field"><label for="fe-source-job">已完成源任务</label><select id="fe-source-job"><option value="">正在读取运行记录…</option></select></div><div class="field"><label for="fe-source-kind">来源类型</label><select id="fe-source-kind"><option value="simulation">CA–GA 模拟形貌</option><option value="measured">实测表面 MAT</option></select></div><div class="field"><label for="fe-input-variable">输入变量（实测）</label><select id="fe-input-variable"><option value="">自动识别 Z_filled / F_filled</option><option value="Z_filled">Z_filled</option><option value="F_filled">F_filled</option></select></div><div class="field"><label for="fe-source-file">实测文件名（可选）</label><input id="fe-source-file" type="text" placeholder="默认扫描源任务 outputs/*.mat"></div></div><p id="fe-source-help" class="help-line">simulation 使用最终 perfect_a 的第一层金属提取规则；measured 保留原二维矩阵，不做隐式重采样。</p></div>
     <div class="card settings-card"><div class="card-heading"><div><h3>坐标、单位与输出规则</h3><p>这些参数只影响有限元输入文件的表达，不改变腐蚀模拟本身。</p></div><span class="badge neutral">原尺寸输出</span></div><div class="grid four"><div class="field"><label for="fe-output-variable">输出变量</label><select id="fe-output-variable"><option value="F_filled">F_filled · 反面</option><option value="Z_filled">Z_filled · 正面</option></select></div><div class="field"><label for="fe-space-z">Z 向元胞尺寸 / μm</label><input id="fe-space-z" type="number" min="0.000001" step="any" value="25"></div><div class="field"><label for="fe-grid-spacing">XY 网格间距 / mm</label><input id="fe-grid-spacing" type="number" min="0.000001" step="any" value="0.05"></div><div class="field"><label for="fe-precision">坐标精度</label><input id="fe-precision" type="text" value="%.6f"></div><div class="field"><label for="fe-origin-x">X 原点 / mm</label><input id="fe-origin-x" type="number" step="any" value="0"></div><div class="field"><label for="fe-origin-y">Y 原点 / mm</label><input id="fe-origin-y" type="number" step="any" value="0"></div></div></div>
     <div class="card precheck-card"><div class="card-heading"><div><h3>导出预检</h3><p>提交前锁定源任务、输入哈希、矩阵尺寸、深度范围和单位。</p></div><button id="refresh-fe-sources" class="button secondary">刷新源任务</button></div><div id="fe-preview" class="preview">请选择已完成源任务。</div></div>
@@ -67,7 +78,10 @@
     </div></details>
   </section>
   <section id="results-panel" class="panel" aria-labelledby="results-heading"><div class="section-heading"><div><div class="section-overline">03 / TASK & RESULTS</div><h2 id="results-heading">任务与结果</h2><p id="result-subtitle">选择运行记录或提交任务，查看真实计算进度。</p></div><span id="result-state" class="badge neutral">尚无任务</span></div><div id="job-empty" class="empty-state"><span class="empty-icon" aria-hidden="true">▤</span><h3>等待你的第一次计算</h3><p>结果、收敛记录和图像将在运行后显示。所有数值均来自实际任务。</p><button class="button secondary" data-goto="pointcloud-panel">从实测点云开始 →</button></div><div id="job-body" hidden><div class="card progress-card"><div class="progress-top"><strong id="progress-text">等待进度</strong><span id="elapsed-label" class="muted"></span></div><div class="progress-track"><div id="progress-bar"></div></div><div id="progress-detail" class="help-line"></div><div class="actions job-actions"><button id="refresh-job" class="button secondary">刷新任务</button><button id="stop-job" class="button danger" hidden>停止任务</button><button id="resume-job" class="button primary" hidden>从检查点恢复</button><button id="transfer-job" class="button primary" hidden>六指标转入模拟 →</button><button id="load-job-config" class="button ghost" hidden>载入本次配置</button></div><div id="job-message" class="message" role="status" aria-live="polite" hidden></div></div><div id="result-content" class="result-content"></div><details class="card log-card" open><summary>任务日志<span class="muted">原始输出 · 当前末尾</span></summary><pre id="job-log" tabindex="0">等待日志</pre></details></div></section>
-  <section id="history-panel" class="panel" aria-labelledby="history-heading"><div class="section-heading"><div><div class="section-overline">04 / RUN HISTORY</div><h2 id="history-heading">运行记录</h2><p>查看已完成、运行中与中断任务。恢复按钮以服务端检查点状态为准。</p></div><button id="refresh-history" class="button secondary">刷新记录</button></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
+  <section id="history-panel" class="panel" aria-labelledby="history-heading"><div class="section-heading"><div><div class="section-overline">04 / RUN HISTORY</div><h2 id="history-heading">运行记录</h2><p>隐藏保留成果与检查点；永久删除不可撤销。运行、导出或被引用的任务不能删除。</p></div><button id="refresh-history" class="button secondary">刷新记录</button></div>
+    <div class="actions"><label><input id="include-hidden-jobs" type="checkbox"> 包含已隐藏记录</label></div>
+    <details class="card"><summary>腐蚀模拟中断后，怎样继续？</summary><p>在下方找到原任务，点击“恢复”，或“查看”后使用恢复按钮。后端会核对配置、输入和检查点；续算时不能修改参数或随机种子。</p><ul><li><strong>严格复现模式：</strong>从完整检查点恢复阶段、代/个体和随机状态，未保存的工作重新计算。</li><li><strong>PyCharm NumPy 模式：</strong>新任务保存每代状态及当前代已完成个体评价。点击“恢复（阶段内）”，未保存个体按原种子重算。旧任务仅能复用已完成阶段；没有检查点的历史任务无法补回进度。</li><li><strong>Taichi 模式：</strong>目前不支持续算。没有恢复按钮时，可能尚无完整检查点或运行模式不支持；“载入本次配置”后运行是新任务。</li></ul><p>隐藏的任务可勾选“包含已隐藏记录”找回；永久删除会同时清除续算所需的检查点。</p></details>
+    <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-</main></div><script type="module" src="/app.js?v=20261017-apdl-command-tools"></script>
+</main></div><script type="module" src="/app.js?v=20261019-third-batch"></script>
 </body></html>

@@ -123,19 +123,19 @@ def run_diagnostics(output_dir: Path, timeout_seconds=30):
     output_dir.mkdir(parents=True, exist_ok=True)
     timeout = max(0.1, min(float(timeout_seconds), 30.0))
     packages = {name:_package(name) for name in ('taichi','numpy')}
-    checks = [_run_probe(name, output_dir, timeout) for name in ('import','cpu','gpu')]
+    checks = [_run_probe(name, output_dir, timeout) for name in ('import','cpu')]
     native = inspect_native_dependencies()
     recommendations = []
     if not packages['taichi']['installed']:
         recommendations.append(f'当前解释器未检测到 Taichi：{sys.executable}。请先核对网站实际使用的 Python 环境，再在该环境安装依赖。')
     if checks[0]['state'] != 'passed':
-        recommendations.append('先查看 import.log 中完整异常，并核对报告的 Python 路径、位数与 Taichi 版本；原生扩展未导入前，CPU/GPU 结果不能用于性能比较。')
+        recommendations.append('先查看 import.log 中完整异常，并核对报告的 Python 路径、位数与 Taichi 版本；原生扩展未导入前，CPU 结果不能用于性能比较。')
         if native['missing']:
             recommendations.append('直接依赖检查未在所查路径找到：'+ '、'.join(native['missing']) +'。这些是缺失候选，请核对对应官方运行库/软件来源及传递依赖，勿从陌生网站下载 DLL。')
         else:
             recommendations.append('尚未定位具体缺失 DLL；需要结合完整加载错误检查传递依赖、二进制兼容性与运行库，不能据此认定 MSVC 缺失。')
-    if checks[2]['state'] != 'passed':
-        recommendations.append('GPU 未通过最小计算验证。导入成功后，可核对显卡驱动与后端支持；当前可先使用已通过验证的 CPU 模式。')
-    result = {'kind':'diagnostics', 'configured_runtime':configured_runtime_status(), 'created_at':datetime.now(timezone.utc).isoformat(), 'python':{'executable':sys.executable, 'version':platform.python_version(), 'bits':struct.calcsize('P')*8}, 'packages':packages, 'hardware':{'logical_cpu_count':os.cpu_count() or 1, 'machine':platform.machine(), 'platform':platform.platform()}, 'checks':checks, 'native_dependencies':native, 'recommendations':recommendations, 'scope_note':'诊断仅执行独立子进程中的导入与 8 个整数的最小 kernel，不代表腐蚀算法正确性或性能。各项独立超时最多 30 秒；GPU 回退 CPU 不计为 GPU 成功。'}
+    if checks[1]['state'] != 'passed':
+        recommendations.append('Taichi CPU 未通过最小计算验证；查看 cpu.log 后再运行腐蚀性能基准。')
+    result = {'kind':'diagnostics', 'configured_runtime':configured_runtime_status(), 'created_at':datetime.now(timezone.utc).isoformat(), 'python':{'executable':sys.executable, 'version':platform.python_version(), 'bits':struct.calcsize('P')*8}, 'packages':packages, 'hardware':{'logical_cpu_count':os.cpu_count() or 1, 'machine':platform.machine(), 'platform':platform.platform()}, 'checks':checks, 'native_dependencies':native, 'recommendations':recommendations, 'scope_note':'诊断仅执行独立子进程中的 Taichi 导入与 CPU 最小 kernel，不代表腐蚀算法正确性或性能。各项独立超时最多 30 秒。'}
     (output_dir/'diagnostics.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     return result

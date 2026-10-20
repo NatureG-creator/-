@@ -135,12 +135,15 @@ def _build_kernels():
     return boundary_update_kernel, boundary_mask_kernel
 
 
-def init_taichi(arch: str = "gpu") -> bool:
+def init_taichi(arch: str = "cpu") -> bool:
     """Enable Taichi acceleration; return `False` when unavailable.
 
-    可调项：`arch`，常用 `"gpu"` 或 `"cpu"`。
+    Taichi仅使用CPU架构。
     """
     global _INITIALIZED, _BOUNDARY_UPDATE_KERNEL, _BOUNDARY_MASK_KERNEL, _LAST_INIT_ERROR
+    if arch.lower() != "cpu":
+        _LAST_INIT_ERROR = "当前仅允许 Taichi CPU 架构"
+        return False
     if ti is None:
         _LAST_INIT_ERROR = "taichi package is not importable in the current interpreter"
         return False
@@ -149,9 +152,8 @@ def init_taichi(arch: str = "gpu") -> bool:
     cache_dir = Path(tempfile.gettempdir()) / f"corrosion_taichi_cache_{os.getpid()}"
     cache_dir.mkdir(parents=True, exist_ok=True)
     try:  # pragma: no cover - hardware/backend dependent.
-        backend = ti.gpu if arch.lower() == "gpu" else ti.cpu
         ti.init(
-            arch=backend,
+            arch=ti.cpu,
             default_fp=ti.f32,
             default_ip=ti.i32,
             offline_cache=False,
@@ -159,17 +161,7 @@ def init_taichi(arch: str = "gpu") -> bool:
         )
     except Exception as exc:
         _LAST_INIT_ERROR = f"taichi.init() failed for requested backend: {exc!r}"
-        try:
-            ti.init(
-                arch=ti.cpu,
-                default_fp=ti.f32,
-                default_ip=ti.i32,
-                offline_cache=False,
-                offline_cache_file_path=str(cache_dir),
-            )
-        except Exception as exc:
-            _LAST_INIT_ERROR = f"taichi.init() fallback to CPU also failed: {exc!r}"
-            return False
+        return False
     try:
         _BOUNDARY_UPDATE_KERNEL, _BOUNDARY_MASK_KERNEL = _build_kernels()
     except Exception as exc:

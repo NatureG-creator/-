@@ -24,6 +24,7 @@ LABELS = {
     "space_xy_um": "面内元胞尺寸 / μm", "space_z_um": "厚度方向元胞尺寸 / μm",
     "plate_thickness_um": "原始钢板厚度 / μm", "nind": "种群数量", "F": "CA 步数",
     "selected_count": "每代保留个体数", "maxgen": "最大代数", "parallel_workers": "内部并行进程数",
+    "reuse_process_pool": "跨 GA 代复用进程池",
     "seed": "随机种子", "bits_per_param": "每个参数的二进制位数", "base_px": "初始交叉概率",
     "base_pm": "初始变异概率", "decay_rate": "概率衰减率", "sigma_share": "适应度共享尺度",
     "use_taichi": "启用 Taichi", "arch": "Taichi 架构", "allow_taichi_parallel": "允许 Taichi 与并行共用",
@@ -66,6 +67,8 @@ HELP = {
     "GA_PARAMETER_UPPER_BOUNDS": "10个GA参数的上界，与下界按同一顺序一一对应；扩大区间会改变搜索空间，需要重新验证拟合结果。",
     "TARGET_SOURCE": "matlab表示从上传MAT中选定六指标变量，manual表示手工输入六指标。网站任务以实际上传选择或手工表格冻结目标，不读取引擎中的本地源路径。",
     "GA_CONFIG.seed": "随机种子控制初始种群、交叉、变异与个体随机种子。严格模式在同一引擎和环境下支持随机数状态恢复；更改种子会创建不同寻优轨迹。",
+    "STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
+    "SINGLE_STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
 }
 
 

@@ -247,7 +247,7 @@ class OwnedExecution:
     terminate = close
 
 
-def launch_owned(command, output: Path, stream) -> OwnedExecution:
+def launch_owned(command, output: Path, stream, env=None) -> OwnedExecution:
     output = Path(output).resolve()
     if (output/RECORD_NAME).exists():
         raise ValueError('已有监管执行记录，拒绝复用输出目录。')
@@ -260,7 +260,7 @@ def launch_owned(command, output: Path, stream) -> OwnedExecution:
         process = subprocess.Popen([sys.executable, '-u', str(LAUNCHER), '--output', str(output),
                                     '--execution-id', token], cwd=str(output), stdin=subprocess.PIPE,
                                    stdout=stream, stderr=subprocess.STDOUT, close_fds=True,
-                                   start_new_session=os.name != 'nt', shell=False)
+                                   start_new_session=os.name != 'nt', shell=False, env=env)
         group.assign(process)
         record = {'version': 1, 'state': 'grouped', 'platform': os.name, 'execution_id': token,
                   'group_name': name, 'output_dir': str(output), 'launcher_path': str(LAUNCHER),
@@ -269,7 +269,10 @@ def launch_owned(command, output: Path, stream) -> OwnedExecution:
                   'command': list(command)}
         _persist(output, record)
         owner = OwnedExecution(process, group, output, record)
-        process.stdin.write((json.dumps({'go': token, 'command': list(command)})+'\n').encode('utf-8'))
+        request = {'go': token, 'command': list(command)}
+        if env is not None:
+            request['env'] = dict(env)
+        process.stdin.write((json.dumps(request)+'\n').encode('utf-8'))
         process.stdin.flush()
         process.stdin.close()
         return owner

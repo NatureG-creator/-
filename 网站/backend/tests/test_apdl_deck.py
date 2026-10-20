@@ -71,6 +71,39 @@ class APDLDeckTests(unittest.TestCase):
             self.assertIn('CE,1,0,3,UZ,3,3,UY,-0.5', text)
             self.assertNotIn('D,3,UZ,0', text)
 
+    def test_y_tension_uses_y_grips_dofs_reaction_strain_and_cross_section(self):
+        from backend.apdl_deck import _boundaries, _post
+        from backend.apdl_macros import diagnostic_macros
+        g = build_geometry(None, None, {'corrosion_mode': 'flat', 'length_mm': 12,
+            'width_mm': 6, 'nx': 3, 'ny': 2, 'layers': 2,
+            'tensile_direction': 'Y', 'boundary_mode': 'clamped_grips'})
+        boundary = _boundaries(g)
+        self.assertIn('NSEL,S,LOC,Y,0', boundary)
+        self.assertIn('NSEL,S,LOC,Y,6', boundary)
+        self.assertIn('D,ALL,UY,0.10000000000000001', boundary)
+        self.assertIn('D,ALL,UX,0', boundary)
+        self.assertNotIn('NSEL,S,LOC,X', boundary)
+        post = _post(g)
+        self.assertIn('RF,FY', post)
+        self.assertIn('U,Y', post)
+        self.assertIn('engstrain=uax/6', post)
+        self.assertIn('nomstress=fl/72', post)
+        checks = diagnostic_macros(g)['boundary_self_check.mac']
+        self.assertIn('NSEL,U,LOC,Y,0', checks)
+        self.assertIn('NSEL,U,LOC,Y,6', checks)
+        self.assertIn('ac_nf,NE,9', checks)
+        self.assertIn('ac_nl,NE,9', checks)
+
+    def test_y_tension_sloped_fixed_end_uses_xz_rotation_constraint(self):
+        from backend.apdl_deck import _boundaries
+        g = build_geometry(None, np.array([[0, .5], [0, .5]]), {
+            'corrosion_mode': 'single_bottom', 'dx_mm': 2, 'dy_mm': 3,
+            'tensile_direction': 'Y'})
+        text = _boundaries(g)
+        self.assertIn('NSEL,S,LOC,Y,0', text)
+        self.assertIn('D,ALL,UY,0', text)
+        self.assertIn('CE,1,0,2,UX,-0.5,2,UZ,2', text)
+
     def test_clamped_grips_and_elastic_eqpl(self):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
@@ -124,3 +157,33 @@ class APDLDeckTests(unittest.TestCase):
             self.assertIn('SOLCONTROL,ON', (out/'solve.mac').read_text())
             self.assertIn('LNSRCH,1', (out/'solve.mac').read_text())
             self.assertIn('EPPL,EQV', (out/'post.mac').read_text())
+
+    def test_tetra_bundle_uses_solid187_and_ten_node_connectivity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g = self.geometry(mesh_type='solid187_tetra')
+            create_tension_bundle(g, out, {})
+            self.assertIn('ET,1,SOLID187', (out/'main.inp').read_text())
+            records = (out/'elements.dat').read_text().splitlines()
+            self.assertEqual(len(records[0].split(',')), 10)  # EN + id + eight nodes
+            self.assertEqual(records[1].split(',')[0], 'EMORE')
+            self.assertEqual(len(records[1].split(',')), 3)
+
+    def test_tetra_grip_constraints_follow_coordinates_after_node_renumbering(self):
+        from backend.apdl_deck import _boundaries
+        g = self.geometry(mesh_type='solid187_tetra', boundary_mode='legacy_recommended')
+        g['nodes'][:,0] = np.arange(len(g['nodes']), 0, -1)
+        x, y = g['x'][0], g['y'][-1]
+        for z, dofs in ((g['bottom_depth'][-1,0], ('UY',)),
+                        (g['options']['thickness_mm']-g['top_depth'][-1,0], ('UY','UZ'))):
+            row = g['nodes'][np.all(g['nodes'][:,1:] == [x,y,z], axis=1)][0]
+            for dof in dofs:
+                self.assertIn(f'D,{int(row[0])},{dof},0', _boundaries(g))
+
+    def test_solid285_bundle_uses_four_node_connectivity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g = self.geometry(mesh_type='solid285_tetra')
+            create_tension_bundle(g, out, {})
+            self.assertIn('ET,1,SOLID285', (out/'main.inp').read_text())
+            self.assertEqual(len((out/'elements.dat').read_text().splitlines()[0].split(',')), 6)

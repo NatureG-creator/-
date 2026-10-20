@@ -1,6 +1,7 @@
 """Small stdin-gated launcher; it never opens/inherits the management job handle."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -20,8 +21,11 @@ def main():
             or record.get('state') != 'grouped' or record.get('command') != request.get('command')):
         return 125
     # Windows children inherit job membership, while close_fds excludes management handles.
+    child_env = request.get('env')
+    if child_env is not None and not isinstance(child_env, dict):
+        return 125
     process = subprocess.Popen(request['command'], cwd=args.output, stdin=subprocess.DEVNULL,
-                               shell=False, close_fds=True)
+                               shell=False, close_fds=True, env=child_env or os.environ.copy())
     return process.wait()
 
 

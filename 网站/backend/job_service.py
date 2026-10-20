@@ -21,6 +21,7 @@ from .pointcloud_runner import POINT_EXTENSIONS, inspect_xyz
 from .runner import _atomic_json
 from .system_info import ROOT, find_matlab, json_record, process_alive, sha256
 from .targets import inspect_target, load_targets
+from .job_history import history_guarded
 
 UPLOAD_EXTENSIONS = POINT_EXTENSIONS | {".mat", ".xlsx", ".tsv", ".npz"}
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
@@ -197,11 +198,12 @@ class JobService:
                         "info": spec["initial_state_info"], "stage_number": spec["stage_number"]}
         return self.create_job(value, benchmark_snapshot=snapshot, retry_of=job_id)
 
+    @history_guarded
     def create_job(self, payload: dict, *, launch=True, benchmark_snapshot=None, retry_of=None):
         if not isinstance(payload, dict):
             raise ValueError("任务请求必须是对象")
         kind = payload.get("kind")
-        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot"}:
+        if kind not in {"simulation", "pointcloud", "finite_element", "benchmark", "diagnostics", "apdl_tension", "fitting", "origin_plot", "morphology_analysis", "morphology_export"}:
             raise ValueError("任务类型无效")
         from .task_io import validate_task_io
         io_settings = validate_task_io(payload, self.runtime)
@@ -221,7 +223,13 @@ class JobService:
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
         started = time.perf_counter()
-        if kind == "origin_plot":
+        if kind == "morphology_export":
+            from .morphology_service import prepare_export
+            spec, morphology_source = prepare_export(self, payload)
+        elif kind == "morphology_analysis":
+            from .morphology_service import prepare_morphology
+            spec, morphology_source = prepare_morphology(self, payload)
+        elif kind == "origin_plot":
             from .origin_plotting import prepare_origin
             source_id = self.validate_id(payload.get("source_job_id"))
             source_state = self.get_job(source_id)
@@ -349,6 +357,12 @@ class JobService:
         job_dir.mkdir()
         try:
             (job_dir / "inputs").mkdir()
+            if kind == "morphology_export":
+                from .morphology_service import freeze_export
+                freeze_export(spec, morphology_source, job_dir)
+            if kind == "morphology_analysis":
+                from .morphology_service import freeze_morphology
+                freeze_morphology(spec, morphology_source, job_dir)
             if kind == "origin_plot":
                 from .origin_plotting import freeze_origin
                 freeze_origin(spec, origin_source, job_dir)
@@ -378,9 +392,11 @@ class JobService:
                     raise ValueError("有限元导出源文件冻结失败")
             _atomic_json(job_dir / "spec.json", spec)
             _atomic_json(job_dir / "task_io.json", io_settings)
+            reserved_slots = 2 if kind in {"benchmark", "diagnostics"} else 1
             status = {"id": job_id, "kind": kind, "state": "queued", "created_at": time.time(),
                       "updated_at": time.time(), "pid": None, "phase": "queued",
-                      "case_name": spec.get("case_name", "")}
+                      "case_name": spec.get("case_name", ""), "scheduler_slots": reserved_slots,
+                      "queue_reason": "等待本机计算槽位"}
             _atomic_json(job_dir / "status.json", status)
         except Exception:
             shutil.rmtree(job_dir)
@@ -408,17 +424,24 @@ class JobService:
             try:
                 benchmark = current.get("kind") in {"benchmark", "diagnostics"}
                 origin = current.get("kind") == "origin_plot"
+                finite_element = current.get("kind") in {"finite_element", "apdl_tension"}
                 # Benchmarks reserve both server slots; two concurrent benchmarks
                 # must not each hold one slot and wait forever for the other.
                 with self.origin_gate if origin else self.benchmark_gate if benchmark else nullcontext():
                     if origin:
                         self._wait_for_origin_cleanup(job_id, token)
+                    if finite_element and not self._wait_for_finite_element_turn(job_id, token):
+                        return
                     with ExitStack() as slots:
                         for _ in range(0 if origin else 2 if benchmark else 1):
                             slots.enter_context(self.compute_slots)
                         with self._job_lock:
                             if self._launching_jobs.get(job_id) != token:
                                 return
+                            admitted = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+                            admitted.update(queue_reason=None, scheduler_state="admitted",
+                                            queue_position=None, updated_at=time.time())
+                            _atomic_json(self.runtime / "jobs" / job_id / "status.json", admitted)
                             process = self._start_process(job_id)
                         if process is not None:
                             process.wait()
@@ -439,6 +462,44 @@ class JobService:
                         self.pending_jobs.discard(job_id)
 
         threading.Thread(target=scheduled, daemon=True, name=f"job-{job_id}").start()
+
+    def _finite_element_queue(self):
+        active = []
+        for folder in (self.runtime / "jobs").iterdir():
+            if not folder.is_dir():
+                continue
+            status = json_record(folder / "status.json", {})
+            if (status.get("kind") in {"finite_element", "apdl_tension"} and
+                    (status.get("state") in {"running", "stopping", "stop_failed"} or
+                     (status.get("state") == "queued" and folder.name in self._launching_jobs))):
+                created_at = status.get("created_at", 0)
+                try:
+                    created_at = float(created_at)
+                except (TypeError, ValueError):
+                    created_at = float("inf")
+                active.append((created_at, folder.name, status))
+        return sorted(active, key=lambda item: (item[0], item[1]))
+
+    def _wait_for_finite_element_turn(self, job_id, token):
+        while True:
+            with self._job_lock:
+                if self._launching_jobs.get(job_id) != token:
+                    return False
+                current = json_record(self.runtime / "jobs" / job_id / "status.json", {})
+                if current.get("state") != "queued":
+                    return False
+                queue = self._finite_element_queue()
+                position = next((index + 1 for index, item in enumerate(queue)
+                                 if item[1] == job_id), None)
+                if position is None or position == 1:
+                    return True
+                queue_reason = f"等待前序有限元任务完成（队列第 {position} 位）"
+                if (current.get("queue_position") != position or
+                        current.get("queue_reason") != queue_reason):
+                    current.update(queue_position=position, queue_reason=queue_reason,
+                                   updated_at=time.time())
+                    _atomic_json(self.runtime / "jobs" / job_id / "status.json", current)
+            time.sleep(.1)
 
     def _wait_for_origin_cleanup(self, job_id, token):
         # An inherited worker or a failed verified cleanup keeps the next job
@@ -502,6 +563,18 @@ class JobService:
             self.processes[job_id] = process
             return process
 
+    def list_jobs(self, *, include_hidden=True, limit=100):
+        from .job_history import list_jobs
+        return list_jobs(self, include_hidden=include_hidden, limit=limit)
+
+    def set_job_hidden(self, job_id, hidden):
+        from .job_history import set_hidden
+        return set_hidden(self, job_id, hidden)
+
+    def delete_job(self, job_id, confirmation):
+        from .job_history import delete_job
+        return delete_job(self, job_id, confirmation)
+
     def get_job(self, job_id):
         self.validate_id(job_id)
         folder = self.runtime / "jobs" / job_id
@@ -547,8 +620,34 @@ class JobService:
                         state.update(state="interrupted", error="任务进程已退出，可检查保存的进度后恢复",
                                      updated_at=time.time())
                     _atomic_json(folder / "status.json", state)
+            elif process is not None:
+                # The worker writes its terminal status immediately before
+                # returning. Reap it here so Windows releases worker.log
+                # before callers archive or remove a completed task.
+                try:
+                    if process.poll() is None:
+                        process.wait(timeout=2)
+                    if process.poll() is not None:
+                        self.processes.pop(job_id, None)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
             state["files"] = self.job_files(job_id)
             state["spec"] = json_record(folder / "spec.json", {})
+            # Observe the worker tree rather than reporting a configured constant.
+            state['actual_process_count']=None
+            try:
+                import psutil
+                if state.get('pid') and process_alive(state['pid']):
+                    worker=psutil.Process(state['pid'])
+                    state['actual_process_count']=1+sum(child.is_running() for child in worker.children(recursive=True))
+                else:
+                    state['actual_process_count']=0
+            except ImportError:
+                pass
+            except (OSError, psutil.Error):
+                pass
+            from .job_history import hidden
+            state['history_hidden'] = hidden(folder)
             from .task_io import job_io
             state['task_io'] = job_io(folder, state['spec'])
             state['display_name'] = state['task_io']['name']
@@ -568,6 +667,21 @@ class JobService:
                              state["spec"].get("config", {}).get("mode") in {"strict", "pycharm"} and
                              state["state"] in {"failed", "interrupted"} and (checkpoint_exists or stage_exports),
                 "validated": False}
+            if state.get("kind") == "simulation":
+                snapshots = []
+                for progress_path in sorted((folder / "checkpoints").glob("stage_*/progress.json")):
+                    try:
+                        saved = json_record(progress_path, {}).get("state", {})
+                    except (OSError, ValueError):
+                        continue
+                    if saved.get("backend") == "pycharm":
+                        snapshots.append({"stage": int(progress_path.parent.name.split("_")[-1]),
+                                          "generation": saved.get("generation"),
+                                          "completed_individuals": saved.get("next_individual", 0),
+                                          "generation_completed": saved.get("last_generation", 0),
+                                          "completed": saved.get("completed", False)})
+                if snapshots:
+                    state["checkpoint"].update(backend="pycharm", saved=snapshots[-1])
             state["progress"] = {key: state.get(key) for key in (
                 "stage", "generation", "maxgen", "completed_individuals", "total_individuals", "phase",
                 "stages_completed", "total_stages", "benchmark_mode", "label",
@@ -589,6 +703,7 @@ class JobService:
             files.append({"name": "benchmark_bundle.zip", "on_demand": True})
         return files
 
+    @history_guarded
     def resume(self, job_id):
         with self._job_lock:
             state = self.get_job(job_id)
@@ -606,7 +721,7 @@ class JobService:
             if not checked.get("available"):
                 raise ValueError("任务尚未保存完整检查点，请使用原配置新建任务")
             state = {key: value for key, value in state.items() if key not in {
-                "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}}
+                "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing", "history_hidden"}}
             state.update(state="queued", error=None, pid=None, updated_at=time.time())
             _atomic_json(self.runtime / "jobs" / job_id / "status.json", state)
             self.launch(job_id)
@@ -617,7 +732,7 @@ class JobService:
             state = self.get_job(job_id)
             process = self.processes.get(job_id)
             job_dir=self.runtime / "jobs" / job_id
-            excluded={"files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing"}
+            excluded={"files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing", "history_hidden"}
             def persist():
                 from .job_status import update_job_status
                 persisted={key:value for key,value in state.items() if key not in excluded}
@@ -671,7 +786,7 @@ class JobService:
                         state['error']+=f'；任务停止状态未能持久化：{write_error}'
                         exc.add_note(f'任务停止状态保存失败：{write_error}')
                     raise ValueError(state['error']) from exc
-                state.update(state="interrupted", error="用户停止任务，完整个体进度已保留",
+                state.update(state="interrupted", error="用户停止任务；已写入磁盘的检查点保留，能否恢复请以检查点检查为准",
                              updated_at=time.time())
                 state.pop('stop_error',None)
                 if state.get('kind')=='apdl_tension':

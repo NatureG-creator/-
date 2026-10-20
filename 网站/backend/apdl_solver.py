@@ -57,9 +57,43 @@ def mapdl_capabilities() -> dict:
             'candidates': found, 'license_state': 'unchecked', 'warnings': warnings}
 
 
+def mapdl_environment(executable: str | Path) -> dict:
+    """Build an ANSYS-only child environment without changing system PATH."""
+    exe = Path(executable).resolve()
+    bin_dir = exe.parent
+    root = bin_dir.parent.parent.parent
+    search_dirs = [
+        bin_dir,
+        bin_dir / 'BLAS' / 'INTEL', bin_dir / 'BLAS' / 'AMD',
+        bin_dir / 'GPU' / 'SIM', bin_dir / 'GPU' / 'NVIDIA',
+        bin_dir / 'MPI' / 'StubMPI', bin_dir / 'MPI' / 'MSMPI', bin_dir / 'MPI' / 'IntelMPI',
+        root / 'tp' / 'IntelCompiler' / '2023.1.0' / 'winx64',
+        root / 'tp' / 'IntelMKL' / '2024.2.3' / 'winx64',
+        root / 'licensingclient' / 'winx64',
+    ]
+    existing = os.environ.get('PATH', '')
+    additions = [str(path) for path in search_dirs if path.is_dir()]
+    env = dict(os.environ)
+    env['AWP_ROOT' + root.name.lstrip('v')] = str(root)
+    env['ANSYS' + root.name.lstrip('v') + '_DIR'] = str(root / 'ansys')
+    env['PATH'] = os.pathsep.join(dict.fromkeys(additions + [existing]))
+    return env
+
+
 def _stop_process_tree(process) -> dict:
     """Stop a controlled group, including grandchildren after launcher exit."""
     return process.close()
+
+
+def _launch_mapdl(command, output, stream, executable):
+    """Start MAPDL with its isolated environment, retaining old test doubles."""
+    environment = mapdl_environment(executable)
+    try:
+        return launch_owned(command, output, stream, env=environment)
+    except TypeError as exc:
+        if "unexpected keyword argument 'env'" not in str(exc):
+            raise
+        return launch_owned(command, output, stream)
 
 
 def _solver_errors(output: Path) -> list[str]:
@@ -114,7 +148,7 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
                    '-i', 'main.inp', '-o', 'mapdl.out']
         record['command'] = command
         with (output/'mapdl_launcher.log').open('wb') as stream:
-            process = launch_owned(command, output, stream)
+            process = _launch_mapdl(command, output, stream, capability['executable'])
             record['supervision'] = dict(process.record)
             record['process_record_file'] = 'mapdl_process.json'
             record['pid'] = process.pid
@@ -207,7 +241,8 @@ def _write_curve_plot(path: Path, curve: np.ndarray) -> None:
         plt.close(fig)
 
 
-def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: list) -> np.ndarray | None:
+def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: list,
+                            tensile_direction: str = 'X') -> np.ndarray | None:
     """Read the actual bundle's N,id,x,y,z commands, never infer a replacement mesh."""
     supplied = expected_nodes is not None
     try:
@@ -225,7 +260,10 @@ def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: 
         ids = nodes[:, 0]
         if np.any(ids < 1) or np.any(ids != np.floor(ids)) or len(np.unique(ids)) != count:
             raise ValueError('预期网格节点编号必须是唯一正整数')
-        if np.ptp(nodes[:, 1]) <= 0:
+        if tensile_direction not in {'X', 'Y'}:
+            raise ValueError('tensile_direction 只支持 X 或 Y')
+        axis_index = 1 if tensile_direction == 'X' else 2
+        if np.ptp(nodes[:, axis_index]) <= 0:
             raise ValueError('预期网格的加载方向长度必须为正')
         return nodes[np.argsort(ids)]
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
@@ -235,7 +273,8 @@ def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: 
         return None
 
 
-def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement: float) -> None:
+def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement: float,
+                          tensile_direction: str = 'X') -> None:
     ordered = nodal[np.argsort(nodal[:, 0])]
     if not np.array_equal(ordered[:, 0], expected[:, 0]):
         raise ValueError('节点结果编号与实际输入网格不一致。')
@@ -243,13 +282,18 @@ def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement:
     # with maximum relative rounding of 5e-5 (unlike Python's %13.5E).
     if not np.allclose(ordered[:, 1:4], expected[:, 1:4], rtol=5.1e-5, atol=1e-10):
         raise ValueError('节点结果初始坐标与实际输入网格不一致，超出E13.5五有效位导出精度容差。')
-    x = expected[:, 1]
-    fixed = x == x.min()
-    loaded = x == x.max()
-    if not np.allclose(ordered[fixed, 4], 0., rtol=0., atol=1e-10):
-        raise ValueError('固定端节点UX位移与零位移边界不一致。')
-    if not np.allclose(ordered[loaded, 4], displacement, rtol=5.1e-5, atol=1e-10):
-        raise ValueError('加载端节点UX位移与末步曲线及目标加载位移不一致，超出E13.5五有效位导出精度容差。')
+    if tensile_direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    axis_index = 1 if tensile_direction == 'X' else 2
+    displacement_index = 4 if tensile_direction == 'X' else 5
+    axis = expected[:, axis_index]
+    fixed = axis == axis.min()
+    loaded = axis == axis.max()
+    dof = 'UX' if tensile_direction == 'X' else 'UY'
+    if not np.allclose(ordered[fixed, displacement_index], 0., rtol=0., atol=1e-10):
+        raise ValueError(f'固定端节点{dof}位移与零位移边界不一致。')
+    if not np.allclose(ordered[loaded, displacement_index], displacement, rtol=5.1e-5, atol=1e-10):
+        raise ValueError(f'加载端节点{dof}位移与末步曲线及目标加载位移不一致，超出E13.5五有效位导出精度容差。')
 
 
 def read_tension_results(output: Path, stats: dict, options: dict | None = None, *, expected_nodes=None) -> dict:
@@ -268,7 +312,8 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
         raise ValueError('缺少非空 corrosion.rst，不能把CSV视为已验证求解结果。')
     curve = _read_csv(output/'force_displacement.csv', 6)
     time_values, displacement, loaded, fixed, strain, stress = curve.T
-    length, area = float(stats['length_mm']), float(stats['nominal_area_mm2'])
+    length = float(o['length_mm'] if o['tensile_direction'] == 'X' else o['width_mm'])
+    area = float(stats['nominal_area_mm2'])
     if not math.isfinite(length) or not math.isfinite(area) or length <= 0 or area <= 0:
         raise ValueError('用于验收的标距和名义面积必须为正的有限数值。')
     if np.any(time_values < 0) or np.any(time_values > 1+1e-6) or np.any(np.diff(time_values) <= 0):
@@ -292,7 +337,8 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
     rst_validation = {'state': 'unverified',
                       'reason': '仅确认corrosion.rst非空；尚未读取RST结果集并与CSV交叉核验，不能据此证明真实数值结果完整或一致。'}
     warnings = [rst_validation['reason']]
-    reference_nodes = _result_reference_nodes(output, expected_nodes, int(stats['node_count']), warnings)
+    reference_nodes = _result_reference_nodes(output, expected_nodes, int(stats['node_count']), warnings,
+                                               o['tensile_direction'])
     nodal_coordinates = None
     nodal_displacements = None
     nodal_summary = None
@@ -308,7 +354,8 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
         if len(ids) != int(stats['node_count']) or not np.array_equal(np.sort(ids), expected_ids):
             raise ValueError('节点结果的编号、唯一性或节点数量与输入网格不一致。')
         if reference_nodes is not None:
-            _check_nodal_geometry(nodal, reference_nodes, float(displacement[-1]))
+            _check_nodal_geometry(nodal, reference_nodes, float(displacement[-1]),
+                                  o['tensile_direction'])
             nodal_coordinates = nodal_displacements = True
         if np.any(nodal[:, 7:] < -1e-8):
             raise ValueError('等效应力或等效塑性应变不应为负。')
@@ -351,6 +398,7 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
         warnings.append(f'曲线预览失败但数值结果已保留：{type(exc).__name__}: {exc}')
     return {**({'diagnostics': reports['diagnostics']} if reports is not None else {}),
             'solve_state': 'solved', 'point_count': len(curve), 'curve': curve.tolist(),
+            'tensile_direction': o['tensile_direction'], 'axial_length_mm': length,
             'validation_state': 'needs_review',
             'curve_columns': ['time', 'displacement_mm', 'loaded_reaction_n', 'fixed_reaction_n',
                               'engineering_strain', 'nominal_stress_mpa'],

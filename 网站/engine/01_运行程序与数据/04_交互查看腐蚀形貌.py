@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 # ==================== 在这里输入要读取的 .npz 结果文件 ====================
 # 可以只写同一文件夹内的文件名，也可以改成完整绝对路径。
 INPUT_RESULT_FILE = ROOT / "E:/CODEX文件/python腐蚀代码/腐蚀代码7_高速版_MATLAB实测接口/01_运行程序与数据/结果文件/step2_stage_moni_result10z.npz"
+ANALYSIS_MODE = "ga"  # ga：GA同口径验收；detail：原精细形貌分析。PyCharm可直接修改这里。
 
 import numpy as np
 from scipy.stats import norm
@@ -88,20 +89,19 @@ def load_primary_state(result_path: Path) -> tuple[np.ndarray, dict[str, np.ndar
     - `a_output` -> Python 结果文件中的 `perfect_a` 或 `a`
     - `a_sd{end}` -> Python 结果文件中的 `a_sd[-1]`
     """
-    with np.load(result_path, allow_pickle=True) as npz:
-        data = {key: npz[key] for key in npz.files}
-
-    if "perfect_a" in data and np.asarray(data["perfect_a"]).ndim == 3:
-        return np.asarray(data["perfect_a"], dtype=float), data
-    if "a" in data and np.asarray(data["a"]).ndim == 3:
-        return np.asarray(data["a"], dtype=float), data
-    if "a_sd" in data:
-        raw = np.asarray(data["a_sd"], dtype=object)
-        if raw.ndim >= 4:
-            return np.asarray(raw[-1], dtype=float), data
-        if raw.size:
-            return np.asarray(raw.reshape(-1)[-1], dtype=float), data
-    raise KeyError("结果文件中没有识别到 `perfect_a`、`a` 或 `a_sd`，无法生成交互形貌图。")
+    with np.load(result_path, allow_pickle=False) as npz:
+        for key in ("perfect_a", "a"):
+            if key in npz:
+                state = npz[key]
+                if state.ndim == 3:
+                    metadata = {name: npz[name] for name in ("space_xy_um", "space_z_um") if name in npz}
+                    return np.asarray(state, dtype=float), metadata
+        if "a_sd" in npz:
+            raw = npz["a_sd"]
+            state = raw[-1] if raw.ndim == 4 else raw
+            if state.ndim == 3:
+                return np.asarray(state, dtype=float), {}
+    raise ValueError("需要数值三维 perfect_a / a 或数值 a_sd；不加载 pickle 对象数组。")
 
 
 def convert_ca_distribution_values(
@@ -317,15 +317,17 @@ def main(argv: list[str] | None = None) -> int:
         default=str(INPUT_RESULT_FILE),
         help="指定 .npz 结果文件；默认读取文件开头的 INPUT_RESULT_FILE",
     )
-    parser.add_argument("--space-z", type=float, default=float(GEOMETRY_CONFIG["space_z_um"]), help="论文元胞 Z 向尺寸，单位 μm")
-    parser.add_argument("--space-xy", type=float, default=float(GEOMETRY_CONFIG["space_xy_um"]), help="论文元胞 X/Y 向尺寸，单位 μm")
-    parser.add_argument("--window-size", type=int, default=int(POSTPROCESS_CONFIG["interactive_window_size"]), help="moving_avg_3d 平滑窗口，对应 MATLAB 的 5")
-    parser.add_argument("--expand-factor", type=int, default=int(POSTPROCESS_CONFIG["expand_factor"]), help="expandMatrix 放大倍数，对应 MATLAB 的 N")
+    parser.add_argument("--space-z", type=float, default=None, help="论文元胞 Z 向尺寸，单位 μm")
+    parser.add_argument("--space-xy", type=float, default=None, help="论文元胞 X/Y 向尺寸，单位 μm")
+    parser.add_argument("--window-size", type=int, default=None, help="moving_avg_3d 平滑窗口，对应 MATLAB 的 5")
+    parser.add_argument("--expand-factor", type=int, default=None, help="expandMatrix 放大倍数，对应 MATLAB 的 N")
+    parser.add_argument("--analysis-mode", choices=("ga", "detail"), default=ANALYSIS_MODE, help="ga：GA 同口径验收（默认）；detail：保留原精细形貌分析")
+    parser.add_argument("--physical-layers", type=int, default=None, help="原模拟 grid_n；旧文件未知时沿用末层附加层口径，并在报告提示")
     # 第四步对应 MATLAB `郭\\untitled.m`，不是 CA.m 的 GA 后处理参数。
-    parser.add_argument("--min-prominence", type=float, default=float(POSTPROCESS_CONFIG["min_prominence"]), help="极值点 MinProminence")
-    parser.add_argument("--min-distance", type=int, default=int(POSTPROCESS_CONFIG["min_distance"]), help="极值点 MinDistance")
-    parser.add_argument("--neighborhood", type=int, default=int(POSTPROCESS_CONFIG["neighborhood"]), help="极值点 Neighborhood 的边长")
-    parser.add_argument("--threshold", type=float, default=float(POSTPROCESS_CONFIG["watershed_threshold"]), help="分水岭边界阈值，对应 MATLAB yuzhi")
+    parser.add_argument("--min-prominence", type=float, default=None, help="极值点 MinProminence")
+    parser.add_argument("--min-distance", type=int, default=None, help="极值点 MinDistance")
+    parser.add_argument("--neighborhood", type=int, default=None, help="极值点 Neighborhood 的边长")
+    parser.add_argument("--threshold", type=float, default=None, help="分水岭边界阈值，对应 MATLAB yuzhi")
     parser.add_argument("--log-normalization", type=float, default=float(POSTPROCESS_CONFIG["log_normalization"]), help="正数 C，对数归一化因子，只缩放横坐标")
     parser.add_argument("--hist-bin-width", type=float, default=float(MATLAB_CA_COMPARISON_CONFIG["hist_bin_width"]), help="对数及归一化对数图的柱宽")
     parser.add_argument("--raw-bin-width-um", type=float, default=None, help="原始坑深图的柱宽，单位 μm；留空自动分箱")
@@ -342,146 +344,59 @@ def main(argv: list[str] | None = None) -> int:
     result_path = Path(args.result) if args.result else discover_latest_result()
     print("=== 第四步开始：交互式腐蚀形貌查看 ===")
     print(f"读取结果文件: {result_path}")
-    print(f"元胞尺寸: {args.space_xy} x {args.space_xy} x {args.space_z} μm")
 
     a_state, data = load_primary_state(result_path)
-    stats = compute_surface_data(
-        a_state=a_state,
-        space=args.space_z,
-        space_xy_um=args.space_xy,
-        window_size=args.window_size,
-        expand_factor=args.expand_factor,
-        min_prominence=args.min_prominence,
-        min_distance=args.min_distance,
-        neighborhood=args.neighborhood,
-        threshold=args.threshold,
-    )
-
-    samples = prepare_depth_samples(stats['pit_depth_cells'],args.space_z,args.log_normalization)
-    boundary_fallback_count = sum(np.asarray(coords).size == 0 for coords in stats['boundary_coords'])
-    report = make_report(samples,dict(
-        source_npz=str(result_path.resolve()),source_type='CA/导入的三维元胞结果',
-        surface_shape=list(a_state.shape),window_size=args.window_size,
-        gaussian_sigma=float(POSTPROCESS_CONFIG['gaussian_sigma']),
-        min_prominence=args.min_prominence,min_distance=args.min_distance,
-        neighborhood=int(stats['effective_neighborhood']),threshold=stats['effective_threshold'],
-        log_bin_width=args.hist_bin_width,raw_bin_width_um=args.raw_bin_width_um,
-        boundary_fallback_count=boundary_fallback_count,
-        pit_depth_definition='原提取算法：非空边界坑 (baseline_at_max-min(baseline)+1)*space_z_um；空边界默认 1 层',
-    ))
-    print(f"识别坑数={report['extracted_count']}，有效正深度样本={report['valid_count']}，无效样本={report['invalid_count']}")
-    print(f"空边界默认值坑数={boundary_fallback_count}；这些属于原提取算法的回退值，不能视为已核实的真实坑深。")
-    print(f"对数柱宽={args.hist_bin_width}，原始深度柱宽={args.raw_bin_width_um or '自动'} μm，归一化因子 C={args.log_normalization}")
-    for key,label in [('raw_depth_um','H / μm'),('log_depth','ln(H / 1 μm)'),('normalized_log_depth','ln(H / 1 μm) / C')]:
-        summary = report[key]
-        print(f"{label}: n={summary['count']}, 均值={summary['mean']}, 标准差={summary['std']}; {summary['normality_note']}")
-    print('C 只缩放对数值，不能增加坑数或使非正态分布变成正态。')
-
+    from morphology_analysis import analyze_surface, export_analysis, MODE_LABELS
+    pp = dict(POSTPROCESS_CONFIG)
+    overrides = {"window_size":"interactive_window_size", "expand_factor":"expand_factor",
+                 "min_prominence":"min_prominence", "min_distance":"min_distance",
+                 "neighborhood":"neighborhood", "threshold":"watershed_threshold"}
+    if args.analysis_mode == "ga" and any(getattr(args,key) is not None for key in overrides):
+        parser.error("GA 同口径模式使用评价参数；若需自定义提取参数，请使用 --analysis-mode detail")
+    for key, setting in overrides.items():
+        if getattr(args,key) is not None:
+            pp[setting] = getattr(args,key)
+    for axis in ("xy", "z"):
+        key = f"space_{axis}_um"
+        value = getattr(args,f"space_{axis}")
+        saved = float(data[key]) if key in data else None
+        if saved is not None and value is not None and not np.isclose(saved,value,rtol=0,atol=1e-12):
+            parser.error(f"{key} 与 NPZ 保存尺寸不一致，不能覆盖")
+        setattr(args,f"space_{axis}", saved if saved is not None else value if value is not None else float(GEOMETRY_CONFIG[key]))
+    pp["log_normalization"] = args.log_normalization
+    print(f"元胞尺寸: {args.space_xy} x {args.space_xy} x {args.space_z} μm")
+    result = analyze_surface(a_state, mode=args.analysis_mode, space_xy_um=args.space_xy,
+        space_z_um=args.space_z, physical_layers=args.physical_layers, postprocess=pp)
+    result["metadata"]["configuration_provenance"] = "当前 unified_config.py 复算；旧 NPZ 未冻结完整后处理配置，不能认定为原过程完全重放"
+    result["metadata"]["source_npz"] = str(result_path.resolve())
+    import hashlib
+    digest = hashlib.sha256()
+    with result_path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024*1024), b""):
+            digest.update(block)
+    result["metadata"]["source_sha256"] = digest.hexdigest()
+    result["metadata"]["log_bin_width"] = args.hist_bin_width
     if args.no_show:
         import matplotlib
-        matplotlib.use('Agg')
+        matplotlib.use("Agg")
     configure_matplotlib()
-    output_dir = Path(args.output_dir) / result_path.stem
-    csv_path,json_path = export_diagnostics(samples,report,output_dir)
-    figure = None
-    comparison = None
-    surface_figure = None
-    ratio_figure = None
-    if args.plot_mode == "paper":
-        surface_figure = plot_surface_and_contour(
-            surface_um=np.asarray(stats["baseline_um"], dtype=float),
-            max_locs=np.asarray(stats["max_locs"], dtype=int),
-            space=args.space_xy,
-            title=result_path.stem,
-        )
-        surface_figure.savefig(output_dir/'surface_and_contour.png', dpi=int(FIGURE_CONFIG['interactive_dpi']))
-        surface_figure.savefig(output_dir/'surface_and_contour.pdf')
-        surface_figure.savefig(output_dir/'surface_and_contour.svg')
-
-        figure = plot_single_depth_distribution(
-            samples,
-            log_bin_width=args.hist_bin_width,
-            dpi=int(FIGURE_CONFIG['distribution_dpi']),
-        )
-        figure.savefig(output_dir/'pit_depth_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
-        figure.savefig(output_dir/'pit_depth_distribution.pdf')
-        figure.savefig(output_dir/'pit_depth_distribution.svg')
-
-        ratio_figure = plot_single_ratio_distribution(
-            np.asarray(stats['jsb'], dtype=float),
-            bin_width=args.hist_bin_width,
-            dpi=int(FIGURE_CONFIG['distribution_dpi']),
-        )
-        ratio_figure.savefig(output_dir/'ratio_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
-        ratio_figure.savefig(output_dir/'ratio_distribution.pdf')
-        ratio_figure.savefig(output_dir/'ratio_distribution.svg')
-        print(f'三张论文式图已保存到: {output_dir}')
-    elif args.plot_mode == "single":
-        figure = plot_single_depth_distribution(
-            samples,
-            log_bin_width=args.hist_bin_width,
-            dpi=int(FIGURE_CONFIG['distribution_dpi']),
-        )
-        figure.savefig(output_dir/'pit_depth_distribution.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
-        figure.savefig(output_dir/'pit_depth_distribution.pdf')
-        figure.savefig(output_dir/'pit_depth_distribution.svg')
-        print(f'单张腐蚀坑深度分布图已保存到: {output_dir / "pit_depth_distribution.png"}')
-    else:
-        comparison = plot_depth_comparison(
-            samples,
-            log_bin_width=args.hist_bin_width,
-            raw_bin_width_um=args.raw_bin_width_um,
-            dpi=int(FIGURE_CONFIG['distribution_dpi']),
-        )
-        comparison.savefig(output_dir/'pit_depth_comparison.png', dpi=int(FIGURE_CONFIG['distribution_dpi']))
-        comparison.savefig(output_dir/'pit_depth_comparison.pdf')
-        comparison.savefig(output_dir/'pit_depth_comparison.svg')
-        print(f'三联分布诊断图已保存到: {output_dir / "pit_depth_comparison.png"}')
-    print(f'分布诊断已保存到: {output_dir}')
-
-    print(f"平均腐蚀深度 Average_depth = {stats['average_depth']:.6g} μm")
-    print(f"不均匀腐蚀深度 jicha = {stats['jicha']:.6g} μm ({stats['jicha_cells']:.6g} 个元胞层)")
-    print(f"MATLAB 对齐参数: Neighborhood={int(stats['effective_neighborhood'])}, yuzhi={stats['effective_threshold']:.3g}")
-    print(f"边界/平均深度 bj_depth = {stats['bj_depth']:.6g} μm")
-    if "perfect_result_sd" in data:
-        perfect_result = np.asarray(data["perfect_result_sd"], dtype=float).reshape(-1)
-        if perfect_result.size >= 4:
-            wucha = 0.1 * perfect_result[0] + 0.3 * perfect_result[1] + 0.2 * perfect_result[2] + 0.4 * perfect_result[3]
-            print(f"加权误差 wucha = {wucha:.6g}")
-
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    from uuid import uuid4
+    output_dir = Path(args.output_dir) / result_path.stem / f"{args.analysis_mode}_{stamp}_{uuid4().hex[:6]}"
+    figures = export_analysis(result, output_dir, source_name=result_path.name,
+                              plot_mode=args.plot_mode, dpi=int(FIGURE_CONFIG["distribution_dpi"]), raw_bin_width_um=args.raw_bin_width_um)
+    print(f"模式：{MODE_LABELS[args.analysis_mode]}；有效蚀坑数：{result['report']['valid_count']}")
+    print(f"实际提取参数：{result['metadata']}")
+    print(f"坑深对数：{result['report']['log_depth']}")
+    print(f"径深比对数：{result['report']['log_ratio']}")
+    print("红线为正态参考曲线；有曲线不表示数据通过正态检验。")
+    print(f"结果保存到：{output_dir}")
     import matplotlib.pyplot as plt
-    if not args.no_show:
-        if args.plot_mode == "paper":
-            print("已打开三张论文式图：形貌图、坑深分布图和径深比对数分布图。")
-        elif args.plot_mode == "full":
-            title = result_path.stem
-            plot_surface_and_contour(
-                surface_um=np.asarray(stats["baseline_um"], dtype=float),
-                max_locs=np.asarray(stats["max_locs"], dtype=int),
-                space=args.space_xy,
-                title=title,
-            )
-            plot_distribution(
-                np.asarray(stats["jsb"], dtype=float),
-                "径深比对数转换量：数据分布与参考正态拟合",
-                xlabel="ln(1 / (sjb / 缩放因子))",
-                bin_width=args.hist_bin_width,
-            )
-            print("已打开完整交互窗口：3D 图可旋转，等高线图可点击读数。")
-        elif args.plot_mode == "comparison":
-            print("已打开三联分布图：第一幅为原始坑深标准图，另外两幅对数分布图保留。")
-        else:
-            print("已打开单张原始腐蚀坑深度直方图和正态拟合曲线。")
-        plt.show()
-    else:
-        if figure is not None:
+    if args.no_show:
+        for figure in figures:
             plt.close(figure)
-        if comparison is not None:
-            plt.close(comparison)
-        if surface_figure is not None:
-            plt.close(surface_figure)
-        if ratio_figure is not None:
-            plt.close(ratio_figure)
+    else:
+        plt.show()
 
     elapsed = time.perf_counter() - start_time
     print(f"第四步交互查看总耗时: {format_elapsed_time(elapsed)}")

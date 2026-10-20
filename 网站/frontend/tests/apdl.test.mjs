@@ -3,6 +3,42 @@ import assert from 'node:assert/strict';
 import * as apdl from '../apdl.mjs';
 import {apdlDefaults,buildApdlPayload,availableSurfaceFiles,renderApdlResult,createFaceUploadManager,applyApdlPreset} from '../apdl.mjs';
 
+test('MATLAB转换明确区分毫米矩阵与元胞层数，间距独立于Z厚度',()=>{
+ const source={origin:'upload',upload_id:'raw',mapping:{dx_mm:'.25',dy_mm:'.3'},mat_info:{variable:'baseline'}};
+ const ordinary=apdl.matlabConversionPayload(source,'top');
+ assert.equal(ordinary.conversion_mode,'surface_mm');assert.equal(ordinary.cell_thickness_mm,undefined);
+ source.conversion_mode='baseline_cells';
+ let body=apdl.matlabConversionPayload(source,'top');
+ assert.equal(body.cell_thickness_mm,.025);assert.equal(body.dx_mm,.25);assert.equal(body.dy_mm,.3);assert.equal(body.coordinate_direction,'front');
+ source.cell_thickness_mm='.05';body=apdl.matlabConversionPayload(source,'bottom');
+ assert.equal(body.cell_thickness_mm,.05);assert.equal(body.coordinate_direction,'back');
+ for(const value of ['',0,-1,'NaN',Infinity]){source.cell_thickness_mm=value;assert.throws(()=>apdl.matlabConversionPayload(source,'top'),/元胞厚度/);}
+ source.conversion_mode='wrong';assert.throws(()=>apdl.matlabConversionPayload(source,'top'),/未知/);
+});
+
+test('MATLAB转换控件说明单位、转置和适用范围，转换结果显示尺寸及深度',()=>{
+ const html=apdl.renderMatlabConversionControls({},'top-');
+ for(const text of ['data-conversion="conversion_mode"','data-conversion="cell_thickness_mm"','25 μm','X/Y 点距独立','转置','只影响下方 MATLAB'])assert.ok(html.includes(text),text);
+ const summary=apdl.renderMatlabConversionSummary({conversion_mode:'baseline_cells',input_shape:[200,80],shape:[80,200],input_range:[6,28],z_range_mm:[-.7,-.15],max_relative_depth_mm:.55,cell_thickness_mm:.025});
+ for(const text of ['200 × 80 → 80 × 200','最大相对深度 0.55 mm','Z 元胞厚度 0.025 mm'])assert.ok(summary.includes(text),text);
+ assert.equal(apdl.renderMatlabConversionSummary(null),'');
+});
+
+test('旧服务或未确认元胞尺寸和方向的转换不能切换为坐标来源',()=>{
+ const request={conversion_mode:'baseline_cells',cell_thickness_mm:.025,coordinate_direction:'back'};
+ assert.throws(()=>apdl.validateMatlabConversion({shape:[200,80]},request),/未采用生成坐标/);
+ for(const wrong of [{conversion_mode:'surface_mm'},{coordinate_direction:'front'},{cell_thickness_mm:.05}])assert.throws(()=>apdl.validateMatlabConversion({conversion:{...request,...wrong}},request),/重启网站服务/);
+ assert.doesNotThrow(()=>apdl.validateMatlabConversion({conversion:{...request}},request));
+});
+
+test('原生云图说明显示单位、真实变形和节点平均含义，出图失败不显示求解失败',()=>{
+ const html=renderApdlResult({solve_state:'solved',results:{contour_plots:{state:'completed',elapsed_seconds:11,plots:[{label:'总位移',unit:'mm'},{label:'节点平均等效应力',unit:'MPa'},{label:'节点平均等效塑性应变',unit:'1'}]}}});
+ for(const text of ['MAPDL 原生云图','真实比例 1 倍','节点平均','积分点峰值','MPa','末步'])assert.ok(html.includes(text),text);
+ const failed=renderApdlResult({solve_state:'solved',results:{contour_plots:{state:'failed',error:'<graphics>'}}});
+ assert.match(failed,/MAPDL 求解完成/);assert.match(failed,/云图导出失败/);assert.match(failed,/&lt;graphics&gt;/);
+ assert.doesNotMatch(failed,/MAPDL 求解失败/);
+});
+
 test('结果卡区分求解后处理和未核验RST，不把未核验显示成不适用',()=>{
  const pending=renderApdlResult({run_mode:'build',build_state:'pending',stage_states:{geometry:'running'}});
  assert.match(pending,/正在生成几何与网格/);assert.doesNotMatch(pending,/APDL 输入包已生成/);
@@ -19,8 +55,34 @@ test('结果卡区分求解后处理和未核验RST，不把未核验显示成�
 
 test('默认弹性平板可直接建模且不附带无关表面',()=>{
  const draft=apdlDefaults(),p=buildApdlPayload(draft,'build');
- assert.equal(p.options.corrosion_mode,'flat');assert.equal(p.options.E_MPa,206000);
+ assert.equal(p.options.corrosion_mode,'flat');assert.equal(p.options.E_MPa,206000);assert.equal(p.options.tensile_direction,'X');
+ assert.equal(p.options.grip_length_fixed_mm,0);assert.equal(p.options.grip_length_loaded_mm,0);
  assert.equal(p.run_mode,'build');assert.equal(p.top_source,undefined);assert.equal(p.bottom_source,undefined);
+});
+test('夹持长度旧配置缺失或为空时回退为0，负数和非有限值仍拒绝',()=>{
+ const draft=apdlDefaults();
+ draft.options.grip_length_fixed_mm=null;draft.options.grip_length_loaded_mm='';
+ let payload=buildApdlPayload(draft,'build');
+ assert.equal(payload.options.grip_length_fixed_mm,0);assert.equal(payload.options.grip_length_loaded_mm,0);
+ for(const key of ['grip_length_fixed_mm','grip_length_loaded_mm']){
+  for(const value of ['0','5.5']){
+   const valid=apdlDefaults();valid.options[key]=value;
+   assert.equal(buildApdlPayload(valid,'build').options[key],Number(value));
+  }
+  for(const value of [-1,Number.NaN,Number.POSITIVE_INFINITY,'abc']){
+   const invalid=apdlDefaults();invalid.options[key]=value;
+   assert.throws(()=>buildApdlPayload(invalid,'build'),new RegExp(key));
+  }
+ }
+});
+test('拉伸方向可切换为Y并随任务参数提交',()=>{
+ const draft=apdlDefaults();draft.options.tensile_direction='Y';
+ const payload=buildApdlPayload(draft,'build');
+ assert.equal(payload.options.tensile_direction,'Y');
+});
+test('Y向结果卡按Y跨度显示轴向标距和横向跨度',()=>{
+ const html=renderApdlResult({solve_state:'solved',options:{tensile_direction:'Y'},stats:{length_mm:20,width_mm:100,nominal_area_mm2:120}});
+ assert.match(html,/拉伸方向：全局 Y；轴向标距 100 mm，横向跨度 20 mm/);
 });
 test('模拟继承真实间距，阶段使用整数',()=>{
  const d=apdlDefaults();d.options.corrosion_mode='single_top';d.top={source_kind:'simulation',source_job_id:'abc',source_stage:'2',mapping:{dx_mm:'0.3',dy_mm:'0.3',layout:'auto'}};
@@ -129,4 +191,40 @@ test('预检只转传后端签名，任何草稿修改拒绝陈旧结果',()=>{
  assert.equal(state.acceptPrecheck({registration_signature:'backend-signature'},version,payload),payload);assert.equal(payload.registration_signature,'backend-signature');
  state.update('control','case_name','新名称');assert.equal(state.precheck,null);assert.throws(()=>state.acceptPrecheck({registration_signature:'old'},version,{}),/配置发生变化/);
  const flat={};state.acceptPrecheck({},state.revision,flat);assert.equal(flat.registration_signature,undefined);
+});
+test('旧服务未确认Y向时阻止生成避免静默按X向求解',()=>{
+ const state=draftState(),payload={options:{tensile_direction:'Y'}};
+ assert.throws(()=>state.acceptPrecheck({options:{tensile_direction:'X'}},state.revision,payload),/服务端未确认所选拉伸方向/);
+ assert.throws(()=>state.acceptPrecheck({},state.revision,payload),/服务端未确认所选拉伸方向/);
+});
+
+
+test('共同XY映射默认严格、间距自动或手动，隐藏输入不影响单面',()=>{
+ const d=apdlDefaults();assert.equal(d.options.surface_grid_mode,'strict');
+ d.options.corrosion_mode='double_independent';d.registration_confirmed=true;
+ d.top={source_kind:'measured',upload_id:'top',mapping:{dx_mm:.5,dy_mm:.5}};
+ d.bottom={source_kind:'measured',upload_id:'bottom',mapping:{dx_mm:.75,dy_mm:.75}};
+ d.options.surface_grid_mode='common_xy';d.options.mapping_dx_mm='1.2';d.options.mapping_dy_mm='';
+ let p=buildApdlPayload(d);assert.equal(p.options.mapping_dx_mm,1.2);assert.equal(p.options.mapping_dy_mm,null);
+ for(const value of ['0','-1','NaN','abc']){d.options.mapping_dx_mm=value;assert.throws(()=>buildApdlPayload(d),/mapping_dx_mm/);}
+ d.options.corrosion_mode='single_top';assert.equal(buildApdlPayload(d).options.mapping_dx_mm,null);
+ const restored=apdl.loadedApdlDraft({...d,options:{...d.options,surface_grid_mode:'common_xy',mapping_dx_mm:1.2}});
+ assert.equal(restored.options.mapping_dx_mm,1.2);assert.equal(restored.options.surface_grid_mode,'common_xy');
+});
+test('共同网格模式或目标间距变化取消配准，旧服务不允许静默忽略共同映射',()=>{
+ for(const [key,value] of [['surface_grid_mode','common_xy'],['mapping_dx_mm',.5],['mapping_dy_mm',.6]]){
+  const state=apdl.createApdlDraftState();state.draft.registration_confirmed=true;state.update('option',key,value);assert.equal(state.draft.registration_confirmed,false);
+ }
+ const state=apdl.createApdlDraftState(),payload={options:{corrosion_mode:'double_independent',surface_grid_mode:'common_xy',mapping_dx_mm:.5}};
+ assert.throws(()=>state.acceptPrecheck({options:{}},state.revision,payload),/未确认共同XY映射/);
+ const valid={options:{surface_grid_mode:'common_xy'},surface_mapping:{mode:'common_xy',extrapolation:false,dx_mm:.5}};
+ assert.equal(state.acceptPrecheck(valid,state.revision,payload),payload);
+ valid.surface_mapping.dx_mm=.6;assert.throws(()=>state.acceptPrecheck(valid,state.revision,payload),/手动目标间距/);
+});
+test('映射报告在预检和历史结果说明原始范围、裁剪与深度变化并转义',()=>{
+ const mapping={mode:'common_xy',x_count:4,y_count:3,dx_mm:.75,dy_mm:.75,overlap_x_range_mm:[.25,2.5],overlap_y_range_mm:[.25,1.75],target_x_range_mm:[.25,2.5],target_y_range_mm:[.25,1.75],sources:{top:{shape:[5,7],cropped:true,x_range_mm:[0,3],y_range_mm:[0,2],dx_mm:.5,dy_mm:.5,original_min_depth_mm:0,original_max_depth_mm:.8,mapped_min_depth_mm:.1,mapped_max_depth_mm:.7},'<unsafe>':{}}};
+ const html=apdl.renderApdlSurfaceMapping(mapping);
+ for(const text of ['共同XY映射记录','物理交集','实际目标网格','已裁剪','禁止外推','surface_mapping.json','窄坑','&lt;unsafe&gt;'])assert.ok(html.includes(text),text);
+ assert.doesNotMatch(html,/<unsafe>/);assert.equal(apdl.renderApdlSurfaceMapping(null),'');
+ assert.match(renderApdlResult({provenance:{surface_mapping:mapping}}),/共同XY映射记录/);
 });

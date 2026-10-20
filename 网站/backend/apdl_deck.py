@@ -9,6 +9,7 @@ import zipfile
 import numpy as np
 
 from .apdl_diagnostics import diagnostics_for_geometry
+from .apdl_plots import contour_commands
 from .apdl_macros import (DIAGNOSTICS_SCHEMA_VERSION, diagnostic_macros,
                           material_coverage_commands, output_commands)
 
@@ -23,71 +24,124 @@ def _ascii(path: Path, text: str) -> None:
 
 def _boundaries(geometry: dict) -> str:
     o = geometry['options']
-    first, last = _number(geometry['x'][0]), _number(geometry['x'][-1])
+    direction = o.get('tensile_direction', 'X')
+    if direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    axis, axial_dof = ('X', 'UX') if direction == 'X' else ('Y', 'UY')
+    transverse_dof = 'UY' if direction == 'X' else 'UX'
+    axial_coords = geometry['x'] if direction == 'X' else geometry['y']
+    transverse_coords = geometry['y'] if direction == 'X' else geometry['x']
+    axial_spacing = o['dx_mm'] if direction == 'X' else o['dy_mm']
+
+    def corner(transverse_index, axial_index, top=False):
+        row, col = ((transverse_index, axial_index) if direction == 'X'
+                    else (axial_index, transverse_index))
+        z = (o['thickness_mm']-geometry['top_depth'][row, col]
+             if top else geometry['bottom_depth'][row, col])
+        target = [geometry['x'][col], geometry['y'][row], z]
+        matches = np.flatnonzero(np.all(geometry['nodes'][:,1:] == target, axis=1))
+        if len(matches) != 1:
+            raise ValueError('边界角点坐标不能唯一映射到网格节点。')
+        return int(geometry['nodes'][matches[0],0])
+    first, last = _number(axial_coords[0]), _number(axial_coords[-1])
     delta = _number(o['target_displacement_mm'])
+    axial_span = float(axial_coords[-1]-axial_coords[0])
+    if o['boundary_mode'] == 'clamped_grips':
+        grip_fixed = float(o.get('grip_length_fixed_mm', 0.))
+        grip_loaded = float(o.get('grip_length_loaded_mm', 0.))
+        if grip_fixed*2 > axial_span + 1e-9 or grip_loaded*2 > axial_span + 1e-9 or grip_fixed+grip_loaded > axial_span + 1e-9:
+            raise ValueError('夹持长度超过轴向跨度或两端重叠；请减小 grip_length_fixed_mm / grip_length_loaded_mm。')
     lines = [
-        '! X tension; all input coordinates and displacements are in mm.',
-        'CSYS,0', 'SELTOL,'+_number(o['dx_mm']*.01),
-        'NSEL,S,LOC,X,'+first, 'CM,GRIP_FIXED,NODE', 'D,ALL,UX,0',
+        f'! {direction} tension; all input coordinates and displacements are in mm.',
+        'CSYS,0', 'SELTOL,'+_number(geometry['stats'].get('grip_tolerance_mm', axial_spacing*.01)),
+        f'NSEL,S,LOC,{axis},{first}',
     ]
+    if o['boundary_mode'] == 'clamped_grips' and float(o.get('grip_length_fixed_mm', 0.)) > 0:
+        lines.append(f'NSEL,A,LOC,{axis},{first},{_number(float(axial_coords[0])+float(o["grip_length_fixed_mm"]))}')
+    lines += ['CM,GRIP_FIXED,NODE', f'D,ALL,{axial_dof},0']
     if o['boundary_mode'] == 'clamped_grips':
-        lines += ['D,ALL,UY,0', 'D,ALL,UZ,0']
-    lines += ['NSEL,S,LOC,X,'+last, 'CM,GRIP_LOADED,NODE', 'D,ALL,UX,'+delta]
+        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
+    grip_loaded_sel = ([f'NSEL,S,LOC,{axis},{_number(float(axial_coords[-1])-float(o["grip_length_loaded_mm"]))},{last}',
+                        f'NSEL,A,LOC,{axis},{last}']
+                       if o['boundary_mode'] == 'clamped_grips' and float(o.get('grip_length_loaded_mm', 0.)) > 0
+                       else [f'NSEL,S,LOC,{axis},{last}'])
+    lines += grip_loaded_sel+['CM,GRIP_LOADED,NODE', f'D,ALL,{axial_dof},{delta}']
     if o['boundary_mode'] == 'clamped_grips':
-        lines += ['D,ALL,UY,0', 'D,ALL,UZ,0']
+        lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
     elif o['boundary_mode'] == 'legacy_recommended':
-        corner_a = 1+(o['ny']-1)*o['nx']
-        corner_b = corner_a+o['layers']*o['nx']*o['ny']
+        corner_a, corner_b = corner(-1, 0), corner(-1, 0, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',
-                  f'D,{corner_b},UY,0', f'D,{corner_b},UZ,0', f'D,{corner_a},UY,0']
+                  f'D,{corner_b},{transverse_dof},0', f'D,{corner_b},UZ,0',
+                  f'D,{corner_a},{transverse_dof},0']
     else:
-        # A=(xmin,ymin,bottomA), B=(xmin,ymax,bottomB).
-        # A removes Y/Z translation; dy*UZ_B-dz*UY_B=0 removes only X rotation.
-        corner_b = 1+(o['ny']-1)*o['nx']
-        dz = float(geometry['bottom_depth'][-1, 0]-geometry['bottom_depth'][0, 0])
-        dy = float(geometry['y'][-1]-geometry['y'][0])
-        lines += ['ALLSEL,ALL', 'D,1,UY,0', 'D,1,UZ,0']
+        # One corner removes transverse/Z translation; the second removes only
+        # rotation about the loading axis while preserving Poisson contraction.
+        corner_a, corner_b = corner(0, 0), corner(-1, 0)
+        z_a = float(geometry['bottom_depth'][0, 0])
+        z_b = float(geometry['bottom_depth'][-1, 0] if direction == 'X'
+                    else geometry['bottom_depth'][0, -1])
+        dz = z_b-z_a
+        span = float(transverse_coords[-1]-transverse_coords[0])
+        lines += ['ALLSEL,ALL', f'D,{corner_a},{transverse_dof},0', f'D,{corner_a},UZ,0']
         if dz == 0:
             lines.append(f'D,{corner_b},UZ,0')
         else:
-            lines += ['! Rotation constraint permits isotropic Poisson contraction.',
-                      f'CE,1,0,{corner_b},UZ,{_number(dy)},{corner_b},UY,{_number(-dz)}']
+            lines.append('! Rotation constraint permits isotropic Poisson contraction.')
+            if direction == 'X':
+                lines.append(f'CE,1,0,{corner_b},UZ,{_number(span)},{corner_b},UY,{_number(-dz)}')
+            else:
+                lines.append(f'CE,1,0,{corner_b},UX,{_number(-dz)},{corner_b},UZ,{_number(span)}')
     return '\n'.join(lines+['ALLSEL,ALL', 'SELTOL'])
 
 
 def _post(geometry: dict) -> str:
     o = geometry['options']
+    direction = o.get('tensile_direction', 'X')
+    if direction not in {'X', 'Y'}:
+        raise ValueError('tensile_direction 只支持 X 或 Y。')
+    displacement_dof, reaction_dof = ('UX', 'FX') if direction == 'X' else ('UY', 'FY')
+    axial_length = o['length_mm'] if direction == 'X' else o['width_mm']
     lines = [
         '/POST1', 'RSYS,0', 'ALLSEL,ALL', 'SET,LAST',
         '*GET,nsets,ACTIVE,0,SET,NSET', '*CFOPEN,force_displacement,csv',
-        '! No header: time,ux,Floaded,Ffixed,engineering_strain,nominal_stress.',
+        f'! No header: time,{displacement_dof.lower()},Floaded,Ffixed,engineering_strain,nominal_stress.',
         '! Six E19.11 fields + commas fit the MAPDL 128 character output limit.',
         '*DO,iset,1,nsets', 'SET,,,,,,,iset', '*GET,tm,ACTIVE,0,SET,TIME',
         'CMSEL,S,GRIP_LOADED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'fl=0', 'usum=0',
-        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', '*GET,rr,NODE,nid,RF,FX',
-        '*GET,uu,NODE,nid,U,X', 'fl=fl+rr', 'usum=usum+uu', '*ENDDO',
-        'ux=usum/ncnt', 'CMSEL,S,GRIP_FIXED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'ff=0',
-        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', '*GET,rr,NODE,nid,RF,FX', 'ff=ff+rr', '*ENDDO',
-        'engstrain=ux/'+_number(o['length_mm']),
+        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', f'*GET,rr,NODE,nid,RF,{reaction_dof}',
+        f'*GET,uu,NODE,nid,U,{direction}', 'fl=fl+rr', 'usum=usum+uu', '*ENDDO',
+        'uax=usum/ncnt', 'CMSEL,S,GRIP_FIXED', '*GET,ncnt,NODE,0,COUNT', 'nid=0', 'ff=0',
+        '*DO,jj,1,ncnt', 'nid=NDNEXT(nid)', f'*GET,rr,NODE,nid,RF,{reaction_dof}', 'ff=ff+rr', '*ENDDO',
+        'engstrain=uax/'+_number(axial_length),
         'nomstress=fl/'+_number(geometry['stats']['nominal_area_mm2']),
-        '*VWRITE,tm,ux,fl,ff,engstrain,nomstress',
+        '*VWRITE,tm,uax,fl,ff,engstrain,nomstress',
         "(E19.11,5(',',E19.11))",
         '*ENDDO', '*CFCLOS', 'ALLSEL,ALL',
     ]
     if o['material_model'] == 'multilinear_iso':
         lines += material_coverage_commands()
     if o['export_full_field']:
+        lines += ['SET,LAST']
+        if o['material_model'] != 'elastic':
+            # Switching S/EPPL at every node repeatedly recomputes nodal averaging.
+            lines += [
+                '*GET,nn,NODE,0,COUNT', '*DIM,ns_values,ARRAY,nn', '*DIM,np_values,ARRAY,nn',
+                'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
+                '*GET,seqv,NODE,nid,S,EQV', 'ns_values(jj)=seqv', '*ENDDO',
+                'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
+                '*GET,eqpl,NODE,nid,EPPL,EQV', 'np_values(jj)=eqpl', '*ENDDO',
+            ]
         lines += [
-            'SET,LAST', '*CFOPEN,nodal_results,csv',
+            '*CFOPEN,nodal_results,csv',
             '! Final set; no header: id,x,y,z,ux,uy,uz,seqv,eqpl.',
             '! S/EPPL are averaged nodal results, not integration-point peaks.',
             '! Short field widths keep nine columns within 128 output characters.',
             '*GET,nn,NODE,0,COUNT', 'nid=0', '*DO,jj,1,nn', 'nid=NDNEXT(nid)',
             '*GET,xx,NODE,nid,LOC,X', '*GET,yy,NODE,nid,LOC,Y', '*GET,zz,NODE,nid,LOC,Z',
             '*GET,uu,NODE,nid,U,X', '*GET,vv,NODE,nid,U,Y', '*GET,ww,NODE,nid,U,Z',
-            '*GET,seqv,NODE,nid,S,EQV',
         ]
-        lines += ['*GET,eqpl,NODE,nid,EPPL,EQV'] if o['material_model'] != 'elastic' else ['eqpl=0']
+        lines += (['seqv=ns_values(jj)', 'eqpl=np_values(jj)']
+                  if o['material_model'] != 'elastic' else ['*GET,seqv,NODE,nid,S,EQV', 'eqpl=0'])
         lines += [
             '*VWRITE,nid,xx,yy,zz,uu,vv,ww,seqv,eqpl',
             "(F12.0,8(',',E13.5))",
@@ -109,10 +163,21 @@ def _write_preview(path: Path, geometry: dict) -> None:
             image = axis.imshow(geometry[key], extent=extent, origin='lower', aspect='auto')
             axis.set(title=title, xlabel='X (mm)', ylabel='Y (mm)')
             fig.colorbar(image, ax=axis)
-        middle = o['ny']//2
-        axes[2].plot(geometry['x'], o['thickness_mm']-geometry['top_depth'][middle], label='Top')
-        axes[2].plot(geometry['x'], geometry['bottom_depth'][middle], label='Bottom')
-        axes[2].set(title='Mid-width section (undeformed)', xlabel='X (mm)', ylabel='Z (mm)')
+        direction = o.get('tensile_direction', 'X')
+        if direction == 'X':
+            middle = o['ny']//2
+            axial_coords = geometry['x']
+            top_section = geometry['top_depth'][middle]
+            bottom_section = geometry['bottom_depth'][middle]
+        else:
+            middle = o['nx']//2
+            axial_coords = geometry['y']
+            top_section = geometry['top_depth'][:, middle]
+            bottom_section = geometry['bottom_depth'][:, middle]
+        axes[2].plot(axial_coords, o['thickness_mm']-top_section, label='Top')
+        axes[2].plot(axial_coords, bottom_section, label='Bottom')
+        axes[2].set(title=f'Midline section along {direction} (undeformed)',
+                    xlabel=f'{direction} (mm)', ylabel='Z (mm)')
         axes[2].legend()
         fig.savefig(path, dpi=150)
     finally:
@@ -132,12 +197,18 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
                         top_depth=geometry['top_depth'], bottom_depth=geometry['bottom_depth'],
                         remaining=geometry['remaining'], x=geometry['x'], y=geometry['y'])
     files.append('surface_inputs.npz')
+    if provenance.get('surface_mapping'):
+        (output_dir/'surface_mapping.json').write_text(
+            json.dumps(provenance['surface_mapping'], ensure_ascii=False, indent=2), encoding='utf-8')
+        files.append('surface_mapping.json')
     with (output_dir/'nodes.dat').open('w', encoding='ascii', newline='\n') as stream:
         for node in geometry['nodes']:
             stream.write(f'N,{int(node[0])},'+','.join(_number(v) for v in node[1:])+'\n')
     with (output_dir/'elements.dat').open('w', encoding='ascii', newline='\n') as stream:
         for element in geometry['elements']:
-            stream.write('EN,'+','.join(str(int(v)) for v in element)+'\n')
+            stream.write('EN,'+','.join(str(int(v)) for v in element[:9])+'\n')
+            if len(element) > 9:
+                stream.write('EMORE,'+','.join(str(int(v)) for v in element[9:])+'\n')
     files += ['nodes.dat', 'elements.dat']
     materials = f"MP,EX,1,{_number(o['E_MPa'])}\nMP,PRXY,1,{_number(o['poisson_ratio'])}"
     if o['material_model'] == 'bilinear_iso':
@@ -164,13 +235,18 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
     solve += ['SOLVE', 'FINISH', 'SAVE']
     _ascii(output_dir/'solve.mac', '\n'.join(solve))
     _ascii(output_dir/'post.mac', _post(geometry))
+    _ascii(output_dir/'plots.mac', contour_commands(o['material_model']))
+    files.append('plots.mac')
     for name, text in diagnostic_macros(geometry).items():
         _ascii(output_dir/name, text)
         files.append(name)
+    element_type = {'solid185_hex': 'SOLID185', 'solid187_tetra': 'SOLID187',
+                    'solid285_tetra': 'SOLID285'}[o['mesh_type']]
     _ascii(output_dir/'main.inp', '\n'.join([
         '! Generated geometry: N-mm-MPa. Inspect settings before research use.',
-        '/CLEAR,START', '/FILNAME,corrosion', '/PREP7', 'ET,1,SOLID185',
+        '/CLEAR,START', '/FILNAME,corrosion', '/PREP7', f'ET,1,{element_type}',
         '/INPUT,materials,mac', 'TYPE,1', 'MAT,1', 'SHPP,ON',
+        *(['SHPP,SILENT,ON'] if o['mesh_type'] != 'solid185_hex' else []),
         '/INPUT,nodes,dat', '/INPUT,elements,dat', 'ALLSEL,ALL',
         '/INPUT,mesh_quality,mac', '/INPUT,mesh_self_check,mac',
         '/INPUT,boundary,mac', '/INPUT,boundary_self_check,mac', 'FINISH', 'SAVE',
@@ -197,7 +273,7 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
         warnings.append(f'几何预览绘制失败，但数值和APDL输入已保留：{type(exc).__name__}: {exc}')
     readme = '''# 单轴拉伸 APDL 输入包
 
-本包是三维 SOLID185 输入，单位统一为 N、mm、MPa。腐蚀深度正值向板内，数据为 depth[row_y, col_x]。
+本包是三维 SOLID185、SOLID187 或 SOLID285 输入，单位统一为 N、mm、MPa。腐蚀深度正值向板内，数据为 depth[row_y, col_x]。
 正面 Z=t0-top_depth，反面 Z=bottom_depth；剩余厚度=t0-top_depth-bottom_depth。
 网格生成阶段不再插值、裁剪或修补形貌；来源阶段的显式裁剪、参考面与坐标变换见manifest.json。
 
@@ -205,16 +281,18 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
 `run_apdl.cmd "C:\\Program Files\\ANSYS Inc\\vXXX\\ansys\\bin\\winx64\\ANSYSXXX.exe"`
 也可在 MAPDL 中读取 main.inp。需要本机合法可用的 MAPDL 和对应许可证。
 
-poisson_free 模板：两端仅约束UX，固定端角A去除UY/UZ平移，横向角B用UZ约束或几何约束方程去除绕X转动。
-clamped_grips 模板：两端UY/UZ为0，模拟夹持。模型不自动增加未腐蚀夹持段。
-legacy_recommended 模板保留原GitHub主宏的角点约束：固定端y最大处，正面角UY/UZ=0、反面角UY=0。
+拉伸方向由 options.tensile_direction 选择 X 或 Y（默认 X）。相应两端选择全局 X/Y 端面并施加 UX/UY；位移、反力、标距和名义截面积随方向同步变化。
+poisson_free 模板：两端仅约束所选轴向位移，固定端角点去除横向/Z平移，第二角点用几何约束方程去除绕拉伸轴转动，保持泊松收缩可行。
+clamped_grips 模板：两端横向/Z位移为0，模拟夹持。模型不自动增加未腐蚀夹持段。
+legacy_recommended 模板保留原GitHub主宏的角点约束，并按所选拉伸轴映射到对应固定端。
 双线性等向硬化参数为屈服应力与屈服后切线模量；多线性等向硬化输入[塑性应变,应力MPa]，不包含断裂或材料失效。
 多线性曲线要求首应变0、应变严格递增；负斜率需要明确允许并输出TBEO,NEGSLOPE,1，不擅自平滑原曲线。
-初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。
+初始节点/单元、材料、边界、求解和后处理分文件，均可独立审阅。SOLID187/SOLID285使用全局一致六分四面体，公共面一致、厚度层正确连接，不自动加密；SOLID187增加共享边中节点，以EN前8节点加EMORE后2节点导入。两种阶次不能假定结果相同，需网格收敛验证。
+四面体表面采用固定00-11对角线三角化，保留全部原始采样坐标与深度；实际体积与双线性参考体积及二者之差见stats。原始点距不是允许放大的显示比例。
 
 diagnostics_precheck.json 仅包含输入推导的材料覆盖估算、Python网格几何预警和保存策略。
 diagnostics_schema_version=2；三个诊断宏及预检报告的SHA256记录于manifest.json。
-导入前SHPP,ON启用原默认单元形状检查；mesh_quality.mac保留CHECK并输出SHPP,STATUS/SUMMARY。
+导入前SHPP,ON启用默认单元形状阈值。六面体保留CHECK；四面体用SHPP,SILENT,ON汇总大量重复警告，并以SHPP,SUMMARY记录数量、ESCHECK,ESEL,ERR筛选形状错误，非零则退出。没有提高/NERR上限或放宽几何阈值。无形状错误也不代表质量优秀，长宽比警告仍需收敛验证。
 mesh_self_check.mac验证实际节点/单元数量和连续编号范围，boundary_self_check.mac验证两端组件数量、端面位置及互不重叠。
 失败输出APDL_SELF_CHECK_FAILED并退出，不继续SOLVE；两阶段原始记录不等于科研结果验收。
 
@@ -225,7 +303,7 @@ RST保存策略与export_full_field末步节点CSV导出独立；稀疏元素场
 
 真实求解后才生成以下CSV（无表头）：
 force_displacement.csv：6列 time, displacement_mm, loaded_reaction_N, fixed_reaction_N, engineering_strain, nominal_stress_MPa。
-名义应力分母为原始 width*thickness，反力按约束节点求和保留符号；平衡检查看两端反力之和。
+名义应力分母为拉伸轴横向尺寸*thickness，反力按约束节点求和保留符号；平衡检查看两端反力之和。
 nodal_results.csv（可选）：9列 id,x_mm,y_mm,z_mm,ux_mm,uy_mm,uz_mm,seqv_MPa,eqpl。
 SEQV/EPPL为平均节点值，不代表积分点峰值；弹性模型eqpl固定为0。
 apdl_self_check.csv：6列stage,node_count,element_count,fixed_count,loaded_count,passed；阶段1为网格，固定/加载数量均为-1；阶段2为边界实际数量。
@@ -239,6 +317,10 @@ MAPDL *VWRITE输出行上限128字符；曲线采用E19.11，节点编号F12.0�
 flat解析EA/L与EAδ/L只是小变形、弹性、自由泊松伸缩参考；非线性或夹持工况不保证满足此参考。
 SAVE模型及RESCONTROL重启动文件不代表任意断电点可自动恢复；重启需保留MAPDL完整文件集并人工核对。
 输入包生成成功不代表求解已经成功，任何CSV、RST结果均必须由真实MAPDL生成。
+plots.mac 为独立原生云图宏：已有求解结果时，先 RESUME,corrosion,db，再 /POST1、FILE,corrosion,rst、SET,LAST 后 /INPUT,plots,mac。
+网站标准参数求解成功后自动在 contour_plots 子目录恢复已有 DB/RST 出图，不重新求解。独立运行 main.inp 后，可手动执行上述后处理。
+输出末步总位移(mm)、节点平均等效应力(MPa)，弹塑性工况另输出节点平均等效塑性应变(无量纲)；真实变形比例1倍，FULL平均，不能当作积分点峰值。
+云图导出失败与物理解算状态分别记录，不修改材料曲线、几何、边界或加载。
 '''
     (output_dir/'README_zh.md').write_text(readme, encoding='utf-8')
     files.append('README_zh.md')

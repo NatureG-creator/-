@@ -240,7 +240,7 @@ def validate_simulation_config(config: dict) -> dict:
         if not 0 <= config[group][key] <= 1:
             raise ValueError(f"{group}.{key} 必须在[0,1]范围内")
     for group, key, choices in (
-        ("TAICHI_CONFIG", "arch", {"cpu", "gpu"}),
+        ("TAICHI_CONFIG", "arch", {"cpu"}),
         ("MATLAB_CA_COMPARISON_CONFIG", "depth_log_scale", {"space_z", "raw"}),
     ):
         if config[group][key] not in choices:
@@ -266,6 +266,12 @@ def validate_simulation_config(config: dict) -> dict:
             raise ValueError("严格可复现模式要求 use_taichi=false")
         if config["STAGE_GA_CONFIG"]["parallel_workers"] != 1:
             raise ValueError("严格可复现模式要求 parallel_workers=1")
+        if config["STAGE_GA_CONFIG"]["reuse_process_pool"] or config["SINGLE_STAGE_GA_CONFIG"]["reuse_process_pool"]:
+            raise ValueError("严格可复现模式不使用跨代进程池")
+    for group in ("STAGE_GA_CONFIG", "SINGLE_STAGE_GA_CONFIG"):
+        if config[group]["reuse_process_pool"]:
+            if config[group]["parallel_workers"] < 2:
+                raise ValueError(f"{group}.reuse_process_pool 要求 parallel_workers 大于1")
     if config["mode"] == "pycharm" and config["TAICHI_CONFIG"]["use_taichi"]:
         raise ValueError("PyCharm模式要求 use_taichi=false")
     seed = config["GA_CONFIG"]["seed"]

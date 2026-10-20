@@ -5,17 +5,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 class DiagnosticsTests(unittest.TestCase):
-    def test_gpu_cpu_fallback_is_unavailable(self):
-        from backend.benchmark_diagnostics import normalize_probe
-        result = normalize_probe('gpu', {'state':'passed', 'actual_arch':'x64', 'message':'ok'}, 0.1)
-        self.assertEqual(result['state'], 'unavailable')
+    def test_gpu_probe_is_not_run(self):
+        from backend.benchmark_probe import probe
+        self.assertEqual(probe('gpu')['state'], 'unavailable')
 
     def test_report_persists_each_check_and_metadata_without_importing_taichi(self):
         from backend.benchmark_diagnostics import run_diagnostics
         with tempfile.TemporaryDirectory() as directory:
             with patch('backend.benchmark_diagnostics._run_probe', side_effect=lambda name, out, timeout: {'name':name,'state':'failed','message':'DLL load failed','elapsed_seconds':0.01}), patch('backend.benchmark_diagnostics.inspect_native_dependencies', return_value={'status':'unknown','missing':[]}):
                 result = run_diagnostics(Path(directory))
-            self.assertEqual([c['name'] for c in result['checks']], ['import','cpu','gpu'])
+            self.assertEqual([c['name'] for c in result['checks']], ['import','cpu'])
             self.assertGreater(result['hardware']['logical_cpu_count'], 0)
             self.assertTrue(result['python']['executable'])
             self.assertEqual(json.loads((Path(directory)/'diagnostics.json').read_text(encoding='utf-8'))['kind'], 'diagnostics')

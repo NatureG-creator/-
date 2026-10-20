@@ -16,6 +16,8 @@ class BackendUnavailable(RuntimeError):
     pass
 
 def initialize_backend(arch, threads=1):
+    if str(arch).lower() != "cpu":
+        raise BackendUnavailable("当前仅允许 Taichi CPU 架构")
     try:
         import taichi as ti
         from corrosion_model.taichi_accel_优化版 import init_taichi, taichi_last_error
@@ -78,7 +80,7 @@ def run_trial(spec: dict, mode: str, folder: Path) -> dict:
         raise ValueError('有初始快照时 stage_number 必须 >= 2')
     read_seconds = time.perf_counter() - read_started
     use_taichi = mode.startswith('taichi')
-    arch = 'gpu' if 'gpu' in mode else 'cpu'
+    arch = 'cpu'
     started = time.perf_counter()
     actual = initialize_backend(arch, threads) if use_taichi else 'cpu'
     initialization_seconds = time.perf_counter() - started

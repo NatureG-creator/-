@@ -1,12 +1,26 @@
-function summary = matlab_apdl_convert(input_file, output_dir, input_variable, dx_mm, dy_mm, x_start_mm, y_start_mm)
+function summary = matlab_apdl_convert(input_file, output_dir, input_variable, dx_mm, dy_mm, x_start_mm, y_start_mm, conversion_mode, cell_thickness_mm, coordinate_direction)
 %MATLAB_APDL_CONVERT Convert a 2-D surface matrix to APDL X/Y/Z vectors.
-% The matrix is preserved exactly. meshgrid plus MATLAB (:), matching the
+% surface_mm preserves the matrix. baseline_cells explicitly transposes and
+% converts layer counts to mm; front Z is negative, back Z is positive.
+% meshgrid plus MATLAB (:), matching the
 % existing matlab_apdl.m rule and the coordinate parser used by the website.
 if nargin < 3 || isempty(input_variable), input_variable = ''; end
 if nargin < 4 || isempty(dx_mm), dx_mm = 0.3; end
 if nargin < 5 || isempty(dy_mm), dy_mm = 0.3; end
 if nargin < 6 || isempty(x_start_mm), x_start_mm = 0; end
 if nargin < 7 || isempty(y_start_mm), y_start_mm = 0; end
+if nargin < 8 || isempty(conversion_mode), conversion_mode = 'surface_mm'; end
+if nargin < 9 || isempty(cell_thickness_mm), cell_thickness_mm = 0.025; end
+if nargin < 10 || isempty(coordinate_direction), coordinate_direction = 'front'; end
+if ~ismember(conversion_mode, {'surface_mm', 'baseline_cells'})
+    error('matlab_apdl_convert:Mode', '未知的矩阵转换模式。');
+end
+if ~ismember(coordinate_direction, {'front', 'back'})
+    error('matlab_apdl_convert:Direction', '坐标方向必须是 front 或 back。');
+end
+if strcmp(conversion_mode, 'baseline_cells') && (~isnumeric(cell_thickness_mm) || ~isscalar(cell_thickness_mm) || ~isfinite(cell_thickness_mm) || cell_thickness_mm <= 0)
+    error('matlab_apdl_convert:CellSize', 'Z 向元胞厚度必须是正的有限数值。');
+end
 input_file = char(input_file);
 output_dir = char(output_dir);
 if ~isfile(input_file), error('matlab_apdl_convert:InputMissing', '输入文件不存在：%s', input_file); end
@@ -37,10 +51,16 @@ elseif ismember(ext, {'.csv', '.txt', '.tsv'})
 else
     error('matlab_apdl_convert:Extension', '仅支持 MAT、CSV、TXT、TSV 二维矩阵。');
 end
-if ~isnumeric(grid_matrix) || ~ismatrix(grid_matrix) || min(size(grid_matrix)) < 2 || any(~isfinite(grid_matrix(:)))
+if ~isnumeric(grid_matrix) || ~isreal(grid_matrix) || ~ismatrix(grid_matrix) || min(size(grid_matrix)) < 2 || any(~isfinite(grid_matrix(:)))
     error('matlab_apdl_convert:Matrix', '输入必须是至少 2×2 的有限二维数值矩阵。');
 end
 grid_matrix = double(grid_matrix);
+input_shape = size(grid_matrix);
+input_range = [min(grid_matrix(:)), max(grid_matrix(:))];
+if strcmp(conversion_mode, 'baseline_cells')
+    grid_matrix = -grid_matrix.' .* cell_thickness_mm;
+    if strcmp(coordinate_direction, 'back'), grid_matrix = -grid_matrix; end
+end
 [ny, nx] = size(grid_matrix);
 [X, Y] = meshgrid(x_start_mm + (0:nx-1) * dx_mm, y_start_mm + (0:ny-1) * dy_mm);
 write_vector(fullfile(output_dir, 'DIANYUN_X.txt'), X(:));
@@ -48,6 +68,17 @@ write_vector(fullfile(output_dir, 'DIANYUN_Y.txt'), Y(:));
 write_vector(fullfile(output_dir, 'DIANYUN_Z.txt'), grid_matrix(:));
 summary = struct('shape', [ny, nx], 'point_count', numel(grid_matrix), 'variable', input_variable, ...
     'dx_mm', dx_mm, 'dy_mm', dy_mm, 'origin_x_mm', x_start_mm, 'origin_y_mm', y_start_mm);
+summary.conversion_mode = conversion_mode;
+summary.input_shape = input_shape;
+summary.input_range = input_range;
+summary.z_range_mm = [min(grid_matrix(:)), max(grid_matrix(:))];
+summary.max_relative_depth_mm = max(grid_matrix(:)) - min(grid_matrix(:));
+summary.coordinate_direction = coordinate_direction;
+if strcmp(conversion_mode, 'baseline_cells'), summary.cell_thickness_mm = cell_thickness_mm; end
+fid = fopen(fullfile(output_dir, 'conversion_summary.json'), 'w', 'n', 'UTF-8');
+if fid < 0, error('matlab_apdl_convert:Output', '无法写入转换报告。'); end
+cleanup = onCleanup(@() fclose(fid));
+fprintf(fid, '%s', jsonencode(summary));
 fprintf('MATLAB APDL 坐标已生成：%d × %d，%d 点。\n', ny, nx, numel(grid_matrix));
 end
 
