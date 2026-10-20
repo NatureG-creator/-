@@ -8,6 +8,7 @@ export function previewGeometry(result){
  // Older servers used stride sampling. Do not stretch a truncated grid to its full span.
  const x=p.x_mm||top[0].map((_,j)=>x0+j*Math.max(1,Math.ceil(s.nx/80))*o.dx_mm);
  const y=p.y_mm||top.map((_,i)=>y0+i*Math.max(1,Math.ceil(s.ny/80))*o.dy_mm);
+ const region=result.corrosion_region||null;
  const bounds=[[x0,x0+Number(s.length_mm)],[y0,y0+Number(s.width_mm)],[0,t]];
  const axis=o.tensile_direction==='Y'?1:0,transverse=1-axis,dof=axis?'UY':'UX',tdof=axis?'UX':'UY';
  const [first,last]=bounds[axis],clamped=o.boundary_mode==='clamped_grips';
@@ -26,7 +27,7 @@ export function previewGeometry(result){
    corners.push({name:'A',point:a,rule:`${tdof}=0，UZ=0`},{name:'B',point:b,rule:dz===0?'UZ=0':`${fmt(span)} × UZ − (${fmt(dz)}) × ${tdof}=0（耦合约束）`});
   }
  }
- return {o,top,bottom,x,y,t,bounds,axis,dof,tdof,fixed,loaded,clamped,corners,
+ return {o,top,bottom,x,y,t,bounds,axis,dof,tdof,fixed,loaded,clamped,corners,region,
   complete:x.at(-1)===bounds[0][1]&&y.at(-1)===bounds[1][1]};
 }
 
@@ -36,7 +37,7 @@ export function previewSummary(m){
  <p><strong>蓝色固定区</strong><br>${axis} ∈ [${range(m.fixed)}] mm<br>${m.dof}=0${m.clamped?`，${m.tdof}=0，UZ=0`:'；其余自由度由角点约束消除刚体运动。'}</p>
  <p><strong>橙色加载区</strong><br>${axis} ∈ [${range(m.loaded)}] mm<br>${m.dof}=+${fmt(m.o.target_displacement_mm)} mm${m.clamped?`，${m.tdof}=0，UZ=0`:'；横向收缩自由。'}</p>
  </div>${m.corners.length?`<p class="help-line">角点附加约束：${m.corners.map(c=>`${c.name} (${c.point.map(fmt).join(', ')}) mm：${esc(c.rule)}`).join('；')}。</p>`:''}
- <p class="help-line">约束区域覆盖另两个方向的试件节点；范围框表示坐标选择包络，实际选点遵循命令流与选择容差。${m.clamped?'零夹持长度表示端面。':'蓝色端面仅施加轴向约束，并非整面锁死。'}箭头表示正向<strong>位移控制</strong>，不是力值。</p>`;
+ ${m.region&&m.o.local_corrosion?`<p class="help-line"><strong>局部腐蚀区域：</strong>X ${range(m.region.x_range_mm)} mm；Y ${range(m.region.y_range_mm)} mm；${fmt(m.region.nx)} × ${fmt(m.region.ny)} 个原始表面采样点。图中红框为腐蚀区域边界，框外保持未腐蚀。</p>`:''}<p class="help-line">约束区域覆盖另两个方向的试件节点；范围框表示坐标选择包络，实际选点遵循命令流与选择容差。${m.clamped?'零夹持长度表示端面。':'蓝色端面仅施加轴向约束，并非整面锁死。'}箭头表示正向<strong>位移控制</strong>，不是力值。</p>`;
 }
 
 export function mountApdl3DPreview(container,result){
@@ -67,6 +68,7 @@ export function mountApdl3DPreview(container,result){
   function label(p,text,color='#334a40',dx=5,dy=-6){const q=project(p);ctx.fillStyle=color;ctx.font='13px "Microsoft YaHei",sans-serif';ctx.fillText(text,Math.max(4,Math.min(w-ctx.measureText(text).width-4,q[0]+dx)),Math.max(14,Math.min(h-6,q[1]+dy)));}
   function polygon(points,color,stroke){const ps=points.map(project);ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}}
   faces.map(f=>({...f,depth:f.points.reduce((v,p)=>v+project(p)[2],0)/4})).sort((a,b)=>a.depth-b.depth).forEach(f=>polygon(f.points,f.color));
+  if(m.region&&m.o.local_corrosion){const [[x0,x1],[y0,y1]]= [m.region.x_range_mm,m.region.y_range_mm],z=m.t;for(const [a,b] of [[[x0,y0,z],[x1,y0,z]],[[x1,y0,z],[x1,y1,z]],[[x1,y1,z],[x0,y1,z]],[[x0,y1,z],[x0,y0,z]]])line(a,b,'#b23a35',2);}
   for(const [range,color] of [[m.fixed,'#2468ad'],[m.loaded,'#bf602e']]){
    const box=(a)=>m.axis?[[m.bounds[0][0],a,0],[m.bounds[0][1],a,0],[m.bounds[0][1],a,m.t],[m.bounds[0][0],a,m.t]]:[[a,m.bounds[1][0],0],[a,m.bounds[1][1],0],[a,m.bounds[1][1],m.t],[a,m.bounds[1][0],m.t]];
    const a=box(range[0]),b=box(range[1]);polygon(a,color+'33',color);if(range[0]!==range[1]){polygon(b,color+'33',color);for(let i=0;i<4;i++)line(a[i],b[i],color,2);}

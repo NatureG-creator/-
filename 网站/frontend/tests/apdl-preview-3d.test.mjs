@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {previewGeometry,previewSummary} from '../apdl_preview_3d.mjs';
 
 function result(options={}){
- return {options:{thickness_mm:6,origin_x_mm:-10,origin_y_mm:25,dx_mm:10,dy_mm:20,tensile_direction:'X',boundary_mode:'poisson_free',target_displacement_mm:.2,...options},stats:{nx:3,ny:2,length_mm:20,width_mm:20},preview:{x_mm:[-10,0,10],y_mm:[25,45],top_depth:[[0,1,2],[1,2,3]],bottom_depth:[[.1,.2,.3],[.4,.5,.6]]}};
+ return {options:{thickness_mm:6,origin_x_mm:-10,origin_y_mm:25,dx_mm:10,dy_mm:20,tensile_direction:'X',boundary_mode:'poisson_free',target_displacement_mm:.2,...options},stats:{nx:3,ny:2,length_mm:20,width_mm:20},corrosion_region:{x_range_mm:[-5,5],y_range_mm:[25,45],nx:2,ny:2},preview:{x_mm:[-10,0,10],y_mm:[25,45],top_depth:[[0,1,2],[1,2,3]],bottom_depth:[[.1,.2,.3],[.4,.5,.6]]}};
 }
 
 test('physical origin, dimensions and non-flat corner coupling follow X boundary rules',()=>{
@@ -45,4 +45,10 @@ test('legacy stride coordinates retain physical spacing and flag missing far edg
  r.stats.nx=193;r.stats.ny=83;r.stats.length_mm=1920;r.stats.width_mm=1640;
  const m=previewGeometry(r);
  assert.deepEqual(m.x,[-10,20,50]);assert.deepEqual(m.y,[25,65]);assert.equal(m.complete,false);
+});
+test('local corrosion preview carries actual patch bounds and reports sampling size',()=>{
+ const m=previewGeometry(result({local_corrosion:true}));
+ assert.deepEqual(m.region.x_range_mm,[-5,5]);
+ assert.match(previewSummary(m),/局部腐蚀区域/);
+ assert.match(previewSummary(m),/2 × 2 个原始表面采样点/);
 });

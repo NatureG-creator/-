@@ -14,6 +14,30 @@ class ApdlApiTests(unittest.TestCase):
     setUp=fe_api.FiniteElementApiTests.setUp
     tearDown=fe_api.FiniteElementApiTests.tearDown
     request=fe_api.FiniteElementApiTests.request
+    def test_local_corrosion_precheck_reports_plate_and_patch_coordinates(self):
+        stream=io.BytesIO();np.savetxt(stream,np.array([[.1,.2],[.3,.4]]),delimiter=',');data=stream.getvalue()
+        upload=self.server.upload('local_patch.csv',io.BytesIO(data),len(data))
+        payload={'options':{'corrosion_mode':'single_top','local_corrosion':True,
+                            'length_mm':4,'width_mm':3,'layers':1},
+                 'top_source':{'upload_id':upload['id'],'mapping':{'layout':'yx','dx_mm':1,
+                    'dy_mm':1,'origin_x_mm':0,'origin_y_mm':0}}}
+        code,preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200,preview)
+        self.assertEqual((preview['stats']['nx'],preview['stats']['ny']),(5,4))
+        self.assertEqual(preview['corrosion_region']['x_range_mm'],[2,3])
+        self.assertEqual(preview['corrosion_region']['y_range_mm'],[1,2])
+        self.assertEqual(preview['preview']['top_depth'][1][2],.1)
+        self.assertEqual(preview['options']['patch_offset_x_mm'],2)
+        with patch.object(self.server,'launch'):
+            code,job=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,201,job)
+        run_job(job['id'],self.server.runtime)
+        summary=json.loads((self.server.runtime/'jobs'/job['id']/'outputs'/'summary.json').read_text(encoding='utf-8'))
+        self.assertEqual(summary['provenance']['corrosion_region'],preview['corrosion_region'])
+        with np.load(self.server.runtime/'jobs'/job['id']/'outputs'/'surface_inputs.npz') as surface:
+            self.assertEqual(surface['top_depth'].shape,(4,5))
+            self.assertEqual(float(surface['top_depth'].sum()),1.0)
+
     def test_common_xy_precheck_frozen_worker_and_report_agree(self):
         from backend.apdl_service import sha256
         import zipfile

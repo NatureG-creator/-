@@ -59,6 +59,16 @@ test('默认弹性平板可直接建模且不附带无关表面',()=>{
  assert.equal(p.options.grip_length_fixed_mm,0);assert.equal(p.options.grip_length_loaded_mm,0);
  assert.equal(p.run_mode,'build');assert.equal(p.top_source,undefined);assert.equal(p.bottom_source,undefined);
 });
+test('局部腐蚀配置提交完整板尺寸和可选的网格对齐偏移',()=>{
+ const draft=apdlDefaults();draft.options.corrosion_mode='single_top';draft.options.local_corrosion=true;
+ draft.options.length_mm=120;draft.options.width_mm=40;draft.options.patch_offset_x_mm='12';draft.options.patch_offset_y_mm='';
+ draft.top.origin='upload';draft.top.source_kind='measured';draft.top.upload_id='upload-test';draft.top.mapping.dx_mm='.5';draft.top.mapping.dy_mm='.5';
+ const payload=buildApdlPayload(draft);
+ assert.equal(payload.options.local_corrosion,true);assert.equal(payload.options.length_mm,120);
+ assert.equal(payload.options.patch_offset_x_mm,12);assert.equal(payload.options.patch_offset_y_mm,null);
+ draft.options.patch_offset_x_mm='NaN';assert.throws(()=>buildApdlPayload(draft),/有限数值/);
+ draft.options.corrosion_mode='flat';assert.equal(buildApdlPayload(draft).options.local_corrosion,false);
+});
 test('夹持长度旧配置缺失或为空时回退为0，负数和非有限值仍拒绝',()=>{
  const draft=apdlDefaults();
  draft.options.grip_length_fixed_mm=null;draft.options.grip_length_loaded_mm='';

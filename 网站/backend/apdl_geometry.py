@@ -30,6 +30,7 @@ DEFAULTS = {
     'grip_length_loaded_mm': 0.,
     'surface_grid_mode': 'strict',
     'mapping_dx_mm': None, 'mapping_dy_mm': None,
+    'local_corrosion': False, 'patch_offset_x_mm': None, 'patch_offset_y_mm': None,
 }
 MODES = {'flat', 'single_top', 'single_bottom', 'double_independent', 'double_symmetric'}
 MESH_TYPES = {'solid185_hex', 'solid187_tetra', 'solid285_tetra'}
@@ -62,9 +63,15 @@ def normalise_options(options: dict) -> dict:
         if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or int(value) != value or value < minimum or (maximum is not None and value > maximum):
             raise ValueError(f'{key} 必须是范围内的整数（最小 {minimum}）。')
         result[key] = int(value)
-    for key in ('large_deflection', 'export_full_field', 'allow_negative_slope'):
+    for key in ('large_deflection', 'export_full_field', 'allow_negative_slope', 'local_corrosion'):
         if not isinstance(result[key], bool):
             raise ValueError(f'{key} 必须是布尔值。')
+    for key in ('patch_offset_x_mm', 'patch_offset_y_mm'):
+        value = result[key]
+        if value is not None:
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value < 0:
+                raise ValueError(f'{key} 必须是有限且不小于 0 的数值或留空居中。')
+            result[key] = float(value)
     if not isinstance(result['corrosion_mode'], str) or result['corrosion_mode'] not in MODES:
         raise ValueError('corrosion_mode 无效。')
     if result['surface_grid_mode'] not in ('strict', 'common_xy'):
@@ -148,6 +155,8 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
                    options: dict) -> dict:
     o = normalise_options(options)
     mode = o['corrosion_mode']
+    if o['local_corrosion'] and mode == 'flat':
+        raise ValueError('局部腐蚀区域需要选择单面或双面腐蚀模式。')
     if mode == 'flat':
         nx, ny = o['nx'], o['ny']
         _counts(nx, ny, o['layers'], o['mesh_type'])
@@ -171,9 +180,57 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
             bottom = top.copy()
         if top.shape != bottom.shape:
             raise ValueError('正反面行列数不同，不允许静默重采样。')
-        ny, nx = top.shape
-        _counts(nx, ny, o['layers'], o['mesh_type'])
-        o.update(nx=nx, ny=ny, length_mm=(nx-1)*o['dx_mm'], width_mm=(ny-1)*o['dy_mm'])
+        if o['local_corrosion']:
+            patch_ny, patch_nx = top.shape
+            intervals_x = o['length_mm']/o['dx_mm']
+            intervals_y = o['width_mm']/o['dy_mm']
+            if not math.isfinite(intervals_x) or not math.isfinite(intervals_y):
+                raise ValueError('完整平板尺寸与采样间距的比例超出可计算范围。')
+            ix, iy = round(intervals_x), round(intervals_y)
+            if ix < 1 or iy < 1 or not math.isclose(intervals_x, ix, rel_tol=1e-10, abs_tol=1e-10) or not math.isclose(intervals_y, iy, rel_tol=1e-10, abs_tol=1e-10):
+                raise ValueError('完整平板长宽必须分别是 X/Y 网格间距的整数倍；当前结构化网格不支持非均匀边缘单元。')
+            nx, ny = ix+1, iy+1
+            _counts(nx, ny, o['layers'], o['mesh_type'])
+            source_width, source_height = (patch_nx-1)*o['dx_mm'], (patch_ny-1)*o['dy_mm']
+            if source_width > o['length_mm']+1e-10 or source_height > o['width_mm']+1e-10:
+                raise ValueError('腐蚀区域尺寸大于完整平板，无法放置。')
+            offsets = []
+            for axis, supplied, span, source_span, spacing in (
+                    ('X', o['patch_offset_x_mm'], o['length_mm'], source_width, o['dx_mm']),
+                    ('Y', o['patch_offset_y_mm'], o['width_mm'], source_height, o['dy_mm'])):
+                raw = (span-source_span)/2 if supplied is None else supplied
+                index = round(raw/spacing)
+                actual = index*spacing
+                if supplied is not None and not math.isclose(raw, actual, rel_tol=1e-10, abs_tol=1e-10):
+                    raise ValueError(f'腐蚀区域 {axis} 偏移必须落在完整平板网格线上（间距 {spacing:g} mm）。')
+                if index < 0 or index + (patch_nx-1 if axis == 'X' else patch_ny-1) > (ix if axis == 'X' else iy):
+                    raise ValueError(f'腐蚀区域超出完整平板 {axis} 范围。')
+                offsets.append((index, actual))
+            x_index, offset_x = offsets[0]
+            y_index, offset_y = offsets[1]
+            o.update(patch_offset_x_mm=offset_x, patch_offset_y_mm=offset_y)
+            embedded_top = np.zeros((ny, nx), dtype=np.float64)
+            embedded_bottom = np.zeros_like(embedded_top)
+            embedded_top[y_index:y_index+patch_ny, x_index:x_index+patch_nx] = top
+            embedded_bottom[y_index:y_index+patch_ny, x_index:x_index+patch_nx] = bottom
+            top, bottom = embedded_top, embedded_bottom
+            corrosion_region = {
+                'x_range_mm': [o['origin_x_mm']+offset_x, o['origin_x_mm']+offset_x+source_width],
+                'y_range_mm': [o['origin_y_mm']+offset_y, o['origin_y_mm']+offset_y+source_height],
+                'nx': patch_nx, 'ny': patch_ny, 'offset_x_mm': offset_x, 'offset_y_mm': offset_y,
+            }
+            o.update(nx=nx, ny=ny)
+        else:
+            ny, nx = top.shape
+            _counts(nx, ny, o['layers'], o['mesh_type'])
+            o.update(nx=nx, ny=ny, length_mm=(nx-1)*o['dx_mm'], width_mm=(ny-1)*o['dy_mm'])
+            corrosion_region = {
+                'x_range_mm': [o['origin_x_mm'], o['origin_x_mm']+o['length_mm']],
+                'y_range_mm': [o['origin_y_mm'], o['origin_y_mm']+o['width_mm']],
+                'nx': nx, 'ny': ny, 'offset_x_mm': 0., 'offset_y_mm': 0.,
+            }
+    if mode == 'flat':
+        corrosion_region = None
     _count_bound, element_count = _counts(nx, ny, o['layers'], o['mesh_type'])
     count = nx * ny * (o['layers'] + 1)
     tensile_direction = o['tensile_direction']
@@ -273,10 +330,12 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         warnings.append(f'最大单元边长比为 {max_aspect:.3g}，建议检查网格收敛与厚度层数。')
     if mode == 'double_symmetric':
         warnings.append('双面对称模式明确复用同一正面深度，反面不另作独立随机生成。')
+    if o['local_corrosion']:
+        warnings.append('局部腐蚀贴片边缘按原始深度直接接入未腐蚀区域；未添加过渡带，边缘可能形成几何台阶。')
     if abs(tetra_stats.get('surface_volume_change_fraction', 0)) > .01:
         warnings.append('三角形表面与双线性参考面的总体积差超过1%；请复核表面离散及网格收敛性。')
     if mode == 'flat' and (o['boundary_mode'] != 'poisson_free' or o['material_model'] != 'elastic' or o['large_deflection']):
         warnings.append('EA/L、EAδ/L仅是小变形弹性自由泊松伸缩参考，当前约束或材料设置可能不满足其假设。')
     return dict(options=o, top_depth=top.copy(), bottom_depth=bottom.copy(),
                 remaining=remaining, x=x, y=y, nodes=nodes, elements=elements,
-                stats=stats, warnings=warnings)
+                stats=stats, warnings=warnings, corrosion_region=corrosion_region)

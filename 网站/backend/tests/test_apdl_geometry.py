@@ -70,6 +70,50 @@ class APDLGeometryTests(unittest.TestCase):
         np.testing.assert_allclose(g['nodes'][:6, 3], .5)
         np.testing.assert_allclose(g['nodes'][-6:, 3], 5.2)
 
+    def test_local_corrosion_is_embedded_without_rescaling_on_full_plate(self):
+        depth = np.array([[.1, .2, .3], [.4, .5, .6]])
+        g = build_geometry(depth, None, {
+            'corrosion_mode': 'single_top', 'local_corrosion': True,
+            'length_mm': 8, 'width_mm': 4, 'dx_mm': 1, 'dy_mm': 1,
+            'layers': 2,
+        })
+        self.assertEqual((g['stats']['nx'], g['stats']['ny']), (9, 5))
+        self.assertEqual(g['stats']['length_mm'], 8)
+        self.assertEqual(g['stats']['width_mm'], 4)
+        self.assertEqual(g['corrosion_region']['x_range_mm'], [3, 5])
+        self.assertEqual(g['corrosion_region']['y_range_mm'], [2, 3])
+        np.testing.assert_array_equal(g['top_depth'][2:4, 3:6], depth)
+        self.assertEqual(np.count_nonzero(g['top_depth']), np.count_nonzero(depth))
+        self.assertEqual(float(g['top_depth'][:2].sum()+g['top_depth'][4:].sum()), 0)
+        self.assertEqual(float(g['top_depth'][:, :3].sum()+g['top_depth'][:, 6:].sum()), 0)
+        self.assertEqual(g['options']['patch_offset_x_mm'], 3)
+        self.assertEqual(g['options']['patch_offset_y_mm'], 2)
+
+    def test_local_corrosion_explicit_offset_and_invalid_placement(self):
+        depth = np.ones((2, 3))*.25
+        options = {'corrosion_mode': 'single_bottom', 'local_corrosion': True,
+                   'length_mm': 8, 'width_mm': 4, 'dx_mm': 1, 'dy_mm': 1,
+                   'patch_offset_x_mm': 5, 'patch_offset_y_mm': 3}
+        g = build_geometry(None, depth, options)
+        self.assertEqual(g['corrosion_region']['x_range_mm'], [5, 7])
+        self.assertEqual(g['corrosion_region']['y_range_mm'], [3, 4])
+        np.testing.assert_array_equal(g['bottom_depth'][3:5, 5:8], depth)
+        for override in ({'patch_offset_x_mm': 7}, {'patch_offset_x_mm': 5.5},
+                         {'length_mm': 8.2}, {'corrosion_mode': 'flat'}):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                build_geometry(None if override.get('corrosion_mode') != 'flat' else None,
+                    None if override.get('corrosion_mode') == 'flat' else depth,
+                    dict(options, **override))
+
+    def test_local_corrosion_switch_is_strict_and_default_path_stays_source_sized(self):
+        with self.assertRaisesRegex(ValueError, '布尔值'):
+            normalise_options({'local_corrosion': 1})
+        g = build_geometry(np.ones((2, 3))*.1, None, {
+            'corrosion_mode': 'single_top', 'dx_mm': 1, 'dy_mm': 1,
+        })
+        self.assertEqual((g['stats']['length_mm'], g['stats']['width_mm']), (2, 1))
+        self.assertIsNotNone(g['corrosion_region'])
+
     def test_connectivity_has_positive_orientation_and_exact_counts(self):
         g = build_geometry(np.array([[.1, .3, .2], [.4, .8, .5]]), None,
                            {'layers': 3, 'dx_mm': .5, 'dy_mm': 2})

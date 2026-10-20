@@ -361,6 +361,7 @@ def precheck_apdl(service,payload):
         preview[name]=array[np.ix_(rows,cols)].tolist()
     return dict(options=spec['options'],stats=geometry['stats'],warnings=warnings,diagnostics=diagnostics,
                 faces={key:face['metadata'] for key,face in spec['faces'].items()},preview=preview,
+                corrosion_region=geometry.get('corrosion_region'),
                 units='N-mm-MPa',run_mode=spec['run_mode'],registration_confirmed=spec['registration_confirmed'],
                 registration_signature=spec['registration_signature'],
                 surface_mapping=spec.get('surface_mapping'),
@@ -444,7 +445,8 @@ def run_apdl_job(spec,job_dir,progress=None):
         with stage('build','build_export_seconds','apdl_build'):
             provenance=dict(faces={key:face['metadata'] for key,face in spec['faces'].items()},runtime=runtime_provenance(),
                             preset_id=spec.get('preset_id'),preset=spec.get('preset_provenance'),
-                            surface_mapping=spec.get('surface_mapping'))
+                            surface_mapping=spec.get('surface_mapping'),
+                            corrosion_region=geometry.get('corrosion_region'))
             result.update(create_tension_bundle(geometry,output,provenance))
             result.update(build_state='built',timing=timing,stage_states=states)
         if spec['run_mode']=='solve':
