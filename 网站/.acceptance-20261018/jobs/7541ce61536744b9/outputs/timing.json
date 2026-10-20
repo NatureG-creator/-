@@ -1,0 +1,11 @@
+{
+  "reading_seconds": 0.09309380000013334,
+  "compute_seconds": 2.519972999998572,
+  "checkpoint_seconds": 0.0,
+  "export_seconds": 0.006979099998716265,
+  "plotting_seconds": 0.34013560000130383,
+  "postprocess_seconds": 0.0010168000007979572,
+  "peak_memory_bytes": 168382464,
+  "session_seconds": 3.0172393999982887,
+  "scope_note": "阶段计算/检查点时间含可恢复历史；session_seconds仅本次进程，读取包含已冻结输入读取。"
+}

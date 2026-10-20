@@ -1,0 +1,198 @@
+{
+  "modes": {
+    "ga": {
+      "metadata": {
+        "analysis_mode": "ga",
+        "mode_label": "GA 同口径验收",
+        "state_shape": [
+          35,
+          28,
+          12
+        ],
+        "physical_layers": 11,
+        "layer_rule": "旧交互脚本口径：末层作为附加层；请核对原模拟 grid_n",
+        "window_size": 15,
+        "gaussian_sigma": 2.0,
+        "expand_factor": 1,
+        "min_prominence": 0.05,
+        "min_distance": 15,
+        "neighborhood": 15,
+        "threshold": 0.3,
+        "sjb_divisor": 10.0,
+        "space_xy_um": 25.0,
+        "space_z_um": 25.0,
+        "log_bin_width": 0.1,
+        "boundary_fallback_count": 0,
+        "pit_depth_definition": "原算法：(峰值-全局最小基准面+1)*space_z_um；空边界回退1层；不删除边缘坑",
+        "source_sha256": "9f23a16eee07ac93ff02d1cf0325836b02f61b2d2f1ed64742988889caf00095",
+        "configuration_provenance": "当前配置复算；外部 NPZ 未冻结完整后处理配置，不能认定原优化过程完全重放",
+        "source_name": "acceptance.npz"
+      },
+      "formula": "H=depth_cells*space_z_um; L=ln(H/(1 um)); Y=L/C",
+      "normal_fit_formula": "f(L)=exp(-(L-mu_L)^2/(2*sigma_L^2))/(sigma_L*sqrt(2*pi)); mu_L=mean(L); sigma_L=std(L,ddof=1)",
+      "normalization": 1.04,
+      "space_z_um": 25.0,
+      "extracted_count": 1,
+      "valid_count": 1,
+      "invalid_count": 0,
+      "raw_depth_um": {
+        "count": 1,
+        "mean": 66.94414761678482,
+        "std": 0.0,
+        "min": 66.94414761678482,
+        "max": 66.94414761678482,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "log_depth": {
+        "count": 1,
+        "mean": 4.203858654078617,
+        "std": 0.0,
+        "min": 4.203858654078617,
+        "max": 4.203858654078617,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "normalized_log_depth": {
+        "count": 1,
+        "mean": 4.042171782767901,
+        "std": 0.0,
+        "min": 4.042171782767901,
+        "max": 4.042171782767901,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "note": "正的常数 C 仅缩放横坐标，不改变偏态或使非正态样本变为正态。",
+      "log_ratio": {
+        "count": 1,
+        "mean": 4.05844228770883,
+        "std": 0.0,
+        "min": 4.05844228770883,
+        "max": 4.05844228770883,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "objective_note": "原四目标不约束完整分布必须正态；径深比标准差未直接参与，坑深对数均值/标准差误差按0.6/0.4合并。",
+      "six_metrics": [
+        -15.204081632653061,
+        9.795918367346939,
+        4.05844228770883,
+        4.203858654078617,
+        null,
+        null
+      ],
+      "warnings": [
+        "当前配置复算；外部 NPZ 未冻结完整后处理配置，不能认定原优化过程完全重放",
+        "旧交互脚本口径：末层作为附加层；请核对原模拟 grid_n",
+        "原四目标不约束完整分布必须正态；径深比标准差未直接参与，坑深对数均值/标准差误差按0.6/0.4合并。",
+        "正态参考曲线不代表正态检验通过；原算法空边界回退样本数见报告。"
+      ],
+      "timing": {
+        "reading_seconds": 0.0125620999988314,
+        "compute_seconds": 0.016006899999410962,
+        "plot_seconds": 0.4954413999985263
+      }
+    },
+    "detail": {
+      "metadata": {
+        "analysis_mode": "detail",
+        "mode_label": "精细形貌分析",
+        "state_shape": [
+          35,
+          28,
+          12
+        ],
+        "physical_layers": 11,
+        "layer_rule": "旧交互脚本口径：末层作为附加层；请核对原模拟 grid_n",
+        "window_size": 7,
+        "gaussian_sigma": 2.0,
+        "expand_factor": 1,
+        "min_prominence": 0.001,
+        "min_distance": 15,
+        "neighborhood": 12,
+        "threshold": 0.3,
+        "sjb_divisor": 10.0,
+        "space_xy_um": 25.0,
+        "space_z_um": 25.0,
+        "log_bin_width": 0.1,
+        "boundary_fallback_count": 0,
+        "pit_depth_definition": "原算法：(峰值-全局最小基准面+1)*space_z_um；空边界回退1层；不删除边缘坑",
+        "source_sha256": "9f23a16eee07ac93ff02d1cf0325836b02f61b2d2f1ed64742988889caf00095",
+        "configuration_provenance": "当前配置复算；外部 NPZ 未冻结完整后处理配置，不能认定原优化过程完全重放",
+        "source_name": "acceptance.npz"
+      },
+      "formula": "H=depth_cells*space_z_um; L=ln(H/(1 um)); Y=L/C",
+      "normal_fit_formula": "f(L)=exp(-(L-mu_L)^2/(2*sigma_L^2))/(sigma_L*sqrt(2*pi)); mu_L=mean(L); sigma_L=std(L,ddof=1)",
+      "normalization": 1.04,
+      "space_z_um": 25.0,
+      "extracted_count": 1,
+      "valid_count": 1,
+      "invalid_count": 0,
+      "raw_depth_um": {
+        "count": 1,
+        "mean": 129.3465067289963,
+        "std": 0.0,
+        "min": 129.3465067289963,
+        "max": 129.3465067289963,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "log_depth": {
+        "count": 1,
+        "mean": 4.862494901920211,
+        "std": 0.0,
+        "min": 4.862494901920211,
+        "max": 4.862494901920211,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "normalized_log_depth": {
+        "count": 1,
+        "mean": 4.675475867230972,
+        "std": 0.0,
+        "min": 4.675475867230972,
+        "max": 4.675475867230972,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "note": "正的常数 C 仅缩放横坐标，不改变偏态或使非正态样本变为正态。",
+      "log_ratio": {
+        "count": 1,
+        "mean": 2.9615511089360806,
+        "std": 0.0,
+        "min": 2.9615511089360806,
+        "max": 2.9615511089360806,
+        "skewness": null,
+        "shapiro_p": null,
+        "normality_note": "常数样本，不拟合正态曲线、不做正态检验"
+      },
+      "objective_note": "原四目标不约束完整分布必须正态；径深比标准差未直接参与，坑深对数均值/标准差误差按0.6/0.4合并。",
+      "six_metrics": [
+        -15.204081632653061,
+        9.795918367346939,
+        2.9615511089360806,
+        4.862494901920211,
+        null,
+        null
+      ],
+      "warnings": [
+        "当前配置复算；外部 NPZ 未冻结完整后处理配置，不能认定原优化过程完全重放",
+        "旧交互脚本口径：末层作为附加层；请核对原模拟 grid_n",
+        "原四目标不约束完整分布必须正态；径深比标准差未直接参与，坑深对数均值/标准差误差按0.6/0.4合并。",
+        "正态参考曲线不代表正态检验通过；原算法空边界回退样本数见报告。"
+      ],
+      "timing": {
+        "reading_seconds": 0.01256219999777386,
+        "compute_seconds": 0.008391600000322796,
+        "plot_seconds": 0.4612973000002967
+      }
+    }
+  }
+}

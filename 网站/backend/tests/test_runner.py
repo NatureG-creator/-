@@ -19,6 +19,32 @@ class RunnerTests(unittest.TestCase):
         return {"kind": "simulation", "run_mode": "single", "config": config,
                 "targets": [[10, 2, 1, 3, .2, .3]]}
 
+    def test_ga_text_progress_reports_compute_phase_and_individual_counts(self):
+        # Stop after notifications: this tests the website callback, not GA numerics.
+        def notify_only(*args, **kwargs):
+            kwargs["verbose"]("[阶段1] 开始寻优")
+            kwargs["verbose"]("[阶段1] Gen1 已完成 1 / 2 个体")
+            raise InterruptedError("progress checked")
+
+        for mode in ("pycharm", "fast"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                spec = self.tiny_spec()
+                spec["config"]["mode"] = mode
+                spec["config"]["TAICHI_CONFIG"]["use_taichi"] = False
+                events = []
+                with patch("backend.runner.run_ga", side_effect=notify_only):
+                    with self.assertRaisesRegex(InterruptedError, "progress checked"):
+                        run_simulation(spec, Path(folder), progress=events.append)
+                messages = [event for event in events if event.get("label")]
+                self.assertEqual(len(messages), 2)
+                self.assertTrue(all(event["phase"] == "compute" for event in messages))
+                final = messages[-1]
+                self.assertEqual(final["stage"], 1)
+                self.assertEqual(final["generation"], 1)
+                self.assertEqual(final["maxgen"], 2)
+                self.assertEqual(final["completed_individuals"], 1)
+                self.assertEqual(final["total_individuals"], 2)
+
     def test_numerical_outputs_survive_plot_failure_and_show_actual_metrics(self):
         spec = self.tiny_spec()
         with tempfile.TemporaryDirectory() as folder:

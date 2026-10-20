@@ -2,7 +2,7 @@ function [target_path,result]=export_original_ca_target(raw_filled,smooth_filled
     pit_depth_mm,sjb,diameter_mm,max_locs,cfg,sources,output_base)
 % 导出原程序已经算出的数据；不重新识别坑、不改图形、不修饰负值。
 if nargin<10
-	output_base='E:/CODEX文件/python腐蚀代码/腐蚀代码7_高速版_MATLAB实测接口/实测目标';
+	output_base='D:/research/files/腐蚀代码7_高速版_MATLAB实测接口/01_MATLAB实测目标接口/实测目标';
 end
 task_output = getenv('CORROSION_OUTPUT_BASE');
 if ~isempty(task_output), output_base = task_output; end

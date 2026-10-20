@@ -1,0 +1,15 @@
+{
+  "id": "7d5f43564ecb4f48",
+  "kind": "morphology_export",
+  "state": "completed",
+  "created_at": 1792234800,
+  "updated_at": 1792300810.1144266,
+  "pid": null,
+  "phase": "queued",
+  "case_name": "形貌分析高清导出",
+  "display_name": "形貌分析高清导出",
+  "task_io": {
+    "name": "",
+    "export_directory": ""
+  }
+}

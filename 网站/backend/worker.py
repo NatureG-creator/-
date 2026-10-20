@@ -21,10 +21,8 @@ def run_job(job_id: str, runtime: Path) -> None:
     status_path = job_dir / "status.json"
 
     def update(changes: dict):
-        state = json.loads(status_path.read_text(encoding="utf-8"))
-        state.update(changes)
-        state["updated_at"] = time.time()
-        _atomic_json(status_path, state)
+        from .job_status import update_job_status
+        update_job_status(status_path,dict(changes,updated_at=time.time()))
 
     lock_path = job_dir / "worker.lock"
     if lock_path.exists():
@@ -41,8 +39,36 @@ def run_job(job_id: str, runtime: Path) -> None:
             "started_at": time.time(), "error": None})
     started = time.perf_counter()
     try:
+        import psutil
+        update({"process_created_at": psutil.Process().create_time()})
+    except (ImportError, OSError):
+        pass
+    try:
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
+        elif spec["kind"] == "morphology_export":
+            from .morphology_service import run_export
+            result = run_export(spec, job_dir, progress=update)
+        elif spec["kind"] == "morphology_analysis":
+            from .morphology_service import run_morphology
+            result = run_morphology(spec, job_dir, progress=update)
+        elif spec["kind"] == "origin_plot":
+            from .origin_plotting import run_origin
+            result = run_origin(job_dir, spec, update)
+        elif spec["kind"] == "fitting":
+            from .fitting_service import run_fitting
+            result = run_fitting(spec, job_dir, progress=update)
+        elif spec["kind"] == "apdl_tension":
+            from .apdl_service import run_apdl_job
+            result=run_apdl_job(spec,job_dir,progress=update)
+        elif spec["kind"] == "benchmark":
+            from .benchmark_service import run_benchmark
+            result = run_benchmark(spec, job_dir, progress=update)
+        elif spec["kind"] == "diagnostics":
+            from .benchmark_diagnostics import run_diagnostics
+            update({"phase": "diagnostics"})
+            result = run_diagnostics(job_dir / "outputs", spec.get("timeout_seconds", 30))
+            _atomic_json(job_dir / "outputs" / "summary.json", result)
         elif spec["kind"] == "pointcloud":
             reference = job_dir / "inputs" / ("reference" + spec["reference_extension"])
             detail = job_dir / "inputs" / ("detail" + spec["detail_extension"])
@@ -52,13 +78,43 @@ def run_job(job_id: str, runtime: Path) -> None:
                 detail = (runtime / "uploads" / spec["detail_id"] / "input").with_suffix(spec["detail_extension"])
             update({"phase": "matlab"})
             result = run_pointcloud(job_dir, reference, detail, spec["pointcloud_config"])
+            # The task-local outputs remain authoritative; the archive is a
+            # separate, categorized copy for downstream research use.
+            from .pointcloud_archive import archive_pointcloud_job
+            archive = archive_pointcloud_job(job_dir, job_id=job_id)
+            result["archive"] = archive
+            summary_path = job_dir / "outputs" / "summary.json"
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                summary["archive"] = archive
+                _atomic_json(summary_path, summary)
+            except (OSError, ValueError, TypeError):
+                # The task result still carries the archive status; a malformed
+                # summary must not hide an otherwise completed MATLAB run.
+                pass
+            update({"phase": "archive", "archive": archive})
         else:
             update({"phase": "finite_element_export"})
             source = job_dir / spec["frozen_source_path"]
+            options = dict(spec['options'])
+            if spec.get('input_variable'):
+                options['input_variable'] = spec['input_variable']
             result = create_surface_bundle(spec["source_kind"], source,
-                                           job_dir / "outputs", spec["options"])
+                                           job_dir / "outputs", options)
+        from .task_io import job_io
+        export_pending = bool(job_io(job_dir, spec).get('export_directory'))
         update({"state": "completed", "phase": "completed", "result": result,
+                "export_pending": export_pending,
                 "elapsed_seconds": round(time.perf_counter() - started, 3)})
+        try:
+            from .task_io import export_outputs
+            export_outputs(job_dir, runtime)
+        except Exception:
+            # Export is a separate copy operation; keep the scientific result usable.
+            traceback.print_exc()
+        finally:
+            if export_pending:
+                update({'export_pending': False})
     except Exception as exc:
         traceback.print_exc()
         update({"state": "failed", "error": str(exc),

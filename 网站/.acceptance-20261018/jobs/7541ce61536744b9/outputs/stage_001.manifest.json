@@ -1,0 +1,70 @@
+{
+  "fingerprint": "e84f2e7e6fc5aac124ad0c94e2ee141c97e5be5700e65a7285f040465b095d24",
+  "engine_fingerprint": "c64cbdc78bf3811b0ae9f88b07a6143e771cae3b0f21415685a9930e7815216d",
+  "sha256": "5a152bd298db905daa1470a455cb4a30c4cdd195c923d9af89ce70e809dd961a",
+  "summary": {
+    "stage": 1,
+    "target": [
+      10,
+      2,
+      1,
+      3,
+      0.2,
+      0.3
+    ],
+    "target_metrics": {
+      "mean_depth_um": 10,
+      "nonuniform_depth_um": 2,
+      "mu_log_ratio": 1,
+      "mu_log_depth": 3,
+      "sigma_log_ratio": 0.2,
+      "sigma_log_depth": 0.3
+    },
+    "actual_metrics": {
+      "mean_depth_um": 31.66666666666667,
+      "nonuniform_depth_um": 6.666666666666667,
+      "mu_log_ratio": null,
+      "mu_log_depth": null,
+      "sigma_log_ratio": null,
+      "sigma_log_depth": null
+    },
+    "actual_six_metrics": [
+      31.66666666666667,
+      6.666666666666667,
+      null,
+      null,
+      null,
+      null
+    ],
+    "metric_notes": {
+      "mu_log_ratio": "未提取到有效腐蚀坑，分布参数无法定义；原GA空样本回退仍仅用于原目标计算。",
+      "mu_log_depth": "未提取到有效腐蚀坑，分布参数无法定义；原GA空样本回退仍仅用于原目标计算。",
+      "sigma_log_ratio": "未提取到有效腐蚀坑，分布参数无法定义；原GA空样本回退仍仅用于原目标计算。",
+      "sigma_log_depth": "未提取到有效腐蚀坑，分布参数无法定义；原GA空样本回退仍仅用于原目标计算。"
+    },
+    "four_errors": [
+      0.33,
+      2.33,
+      1.0,
+      1.0
+    ],
+    "parameters": {
+      "p_uniform_base": 0.08734733756717146,
+      "p_passive_base": 0.24084025403028822,
+      "p_break": 0.0025427454811919885,
+      "cl_threshold": 33.153395212506105,
+      "alpha_corrosion": 3.5911089399120666,
+      "sensitive_point": 0.011235955056179775,
+      "alpha_p_break": 14.470444553004397,
+      "p_h": 0.16902784562774792,
+      "p_v": 0.02076209086468002,
+      "p_o": 10.096238397655105
+    },
+    "generations": 2,
+    "convergence": [],
+    "state_file": "stage_001.npz",
+    "plot_file": "stage_001.png",
+    "plot_available": false
+  },
+  "timing": {}
+}

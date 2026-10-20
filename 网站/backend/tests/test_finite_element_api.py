@@ -61,7 +61,7 @@ class FiniteElementApiTests(unittest.TestCase):
         self.assertEqual(code, 201)
         self.assertEqual(value["kind"], "finite_element")
         launch.assert_called_once()
-        spec = json.loads((self.server.runtime / "jobs" / value["id"] / "spec.json").read_text())
+        spec = json.loads((self.server.runtime / "jobs" / value["id"] / "spec.json").read_text(encoding="utf-8"))
         self.assertEqual(spec["source_job_id"], "a" * 16)
         self.assertEqual(spec["options"]["output_variable"], "Z_filled")
         self.assertTrue(Path(spec["source_path"]).is_file())

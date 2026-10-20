@@ -27,13 +27,17 @@ def _apply_scientific_settings(config: dict) -> None:
         current = getattr(source_config, name)
         current.clear()
         current.update(config[name])
+    # PATH_CONFIG 在引擎脚本中参与 Path 拼接，恢复为 Path 对象以保持原调用方式。
+    current_paths = getattr(source_config, "PATH_CONFIG")
+    current_paths.clear()
+    current_paths.update({key: Path(value) for key, value in config["PATH_CONFIG"].items()})
 
 
 @contextmanager
 def scientific_settings(config: dict):
     """Imported engine dictionaries are task-scoped and restored on every exit."""
     names = ("GEOMETRY_CONFIG", "GA_CONFIG", "CA_CONFIG", "POSTPROCESS_CONFIG",
-             "MATLAB_CA_COMPARISON_CONFIG")
+             "MATLAB_CA_COMPARISON_CONFIG", "PATH_CONFIG")
     saved = {name: copy.deepcopy(getattr(source_config, name)) for name in names}
     _apply_scientific_settings(config)
     try:
@@ -106,6 +110,7 @@ def _run_strict_stage(target, config, stage_number, folder, fingerprint, *,
             timing.update({f"stage_{stage_number}_{key}": value for key, value in stage_timing.items()})
         if progress is not None:
             progress({"stage": stage_number, "generation": generation,
+                      "maxgen": ga_config.maxgen,
                       "completed_individuals": completed, "total_individuals": ga_config.nind,
                       "phase": phase, "timing": dict(stage_timing),
                       "checkpoint_count": checkpoint_count, "checkpoint_bytes": checkpoint_bytes,

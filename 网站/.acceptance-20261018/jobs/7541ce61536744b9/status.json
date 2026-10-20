@@ -1,0 +1,67 @@
+{
+  "id": "7541ce61536744b9",
+  "kind": "simulation",
+  "state": "completed",
+  "created_at": 1792303604.925812,
+  "updated_at": 1792303799.1088588,
+  "pid": 3464,
+  "phase": "completed",
+  "case_name": "阶段内恢复 · 独立验收",
+  "display_name": "阶段内恢复 · 独立验收",
+  "task_io": {
+    "name": "阶段内恢复 · 独立验收",
+    "export_directory": ""
+  },
+  "error": null,
+  "started_at": 1792303795.9721677,
+  "process_created_at": 1792303794.9872706,
+  "total_stages": 1,
+  "timing": {
+    "reading_seconds": 0.09309380000013334,
+    "compute_seconds": 2.519972999998572,
+    "checkpoint_seconds": 0.0,
+    "export_seconds": 0.006979099998716265,
+    "plotting_seconds": 0.34013560000130383,
+    "postprocess_seconds": 0.0010168000007979572,
+    "peak_memory_bytes": 168382464,
+    "session_seconds": 3.021250299998428,
+    "scope_note": "阶段计算/检查点时间含可恢复历史；session_seconds仅本次进程，读取包含已冻结输入读取。"
+  },
+  "stage": 1,
+  "generation": 2,
+  "maxgen": 3,
+  "completed_individuals": 4,
+  "total_individuals": 4,
+  "label": "[GA] 寻优完成，共迭代 2 代",
+  "stages_completed": 1,
+  "result": {
+    "stages_completed": 1,
+    "outputs": [
+      "effective_config.json",
+      "simulation.npz",
+      "stage_001.manifest.json",
+      "stage_001.npz",
+      "stage_001.png",
+      "stage_metrics.csv",
+      "summary.json",
+      "timing.json"
+    ],
+    "warnings": [
+      "PyCharm模式使用 NumPy ProcessPool，多进程数=2；每代及已完成个体评价保存检查点，未保存个体按原种子重算。"
+    ],
+    "timing": {
+      "reading_seconds": 0.09309380000013334,
+      "compute_seconds": 2.519972999998572,
+      "checkpoint_seconds": 0.0,
+      "export_seconds": 0.006979099998716265,
+      "plotting_seconds": 0.34013560000130383,
+      "postprocess_seconds": 0.0010168000007979572,
+      "peak_memory_bytes": 168382464,
+      "session_seconds": 3.031790600000022,
+      "scope_note": "阶段计算/检查点时间含可恢复历史；session_seconds仅本次进程，读取包含已冻结输入读取。"
+    },
+    "actual_backend": "NumPy ProcessPool"
+  },
+  "export_pending": false,
+  "elapsed_seconds": 3.134
+}

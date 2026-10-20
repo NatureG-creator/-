@@ -24,6 +24,7 @@ LABELS = {
     "space_xy_um": "面内元胞尺寸 / μm", "space_z_um": "厚度方向元胞尺寸 / μm",
     "plate_thickness_um": "原始钢板厚度 / μm", "nind": "种群数量", "F": "CA 步数",
     "selected_count": "每代保留个体数", "maxgen": "最大代数", "parallel_workers": "内部并行进程数",
+    "reuse_process_pool": "跨 GA 代复用进程池",
     "seed": "随机种子", "bits_per_param": "每个参数的二进制位数", "base_px": "初始交叉概率",
     "base_pm": "初始变异概率", "decay_rate": "概率衰减率", "sigma_share": "适应度共享尺度",
     "use_taichi": "启用 Taichi", "arch": "Taichi 架构", "allow_taichi_parallel": "允许 Taichi 与并行共用",
@@ -66,6 +67,8 @@ HELP = {
     "GA_PARAMETER_UPPER_BOUNDS": "10个GA参数的上界，与下界按同一顺序一一对应；扩大区间会改变搜索空间，需要重新验证拟合结果。",
     "TARGET_SOURCE": "matlab表示从上传MAT中选定六指标变量，manual表示手工输入六指标。网站任务以实际上传选择或手工表格冻结目标，不读取引擎中的本地源路径。",
     "GA_CONFIG.seed": "随机种子控制初始种群、交叉、变异与个体随机种子。严格模式在同一引擎和环境下支持随机数状态恢复；更改种子会创建不同寻优轨迹。",
+    "STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
+    "SINGLE_STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
 }
 
 
@@ -137,13 +140,15 @@ def simulation_catalog() -> list[dict]:
             help_text = HELP.get(path, comments.get(path, f"{GROUP_LABELS.get(group, group)}参数 {key}；值沿用统一配置。"))
             if "本任务未使用" in scope:
                 help_text += " 可编辑保存供独立分析复用；当前网站CA/GA任务不读取该字段。"
-            if group in managed:
-                help_text += " 由上传、工况和独立任务目录管理；修改由对应任务操作完成。"
+            if group == "ROOT":
+                help_text += " 这是网站源码根目录，由服务启动位置管理，不建议修改。"
+            elif group == "PATH_CONFIG":
+                help_text += " 可在网页中直接编辑；建议使用“数据工作区”快捷区统一生成并应用编号路径。"
             if group in deferred:
                 help_text += " 当前 CA/GA 运行链路不消费此字段。"
             entries.append({"path": path, "group": group, "key": key, "label": label,
                             "help": help_text, "type": value_type(value), "value": value,
-                            "scope": scope, "editable": group not in managed})
+                            "scope": scope, "editable": group != "ROOT"})
     return entries
 
 
@@ -187,6 +192,8 @@ def estimate_resources(config: dict, stages: int = 1, run_mode: str = "staged") 
         recommendations.append("估算内存超过4 GiB；建议降低并行数或网格层数。")
     if config["mode"] == "strict":
         recommendations.append("严格模式采用固定种子和单进程 NumPy。")
+    elif config["mode"] == "pycharm":
+        recommendations.append(f"PyCharm模式使用 NumPy ProcessPool，当前配置为 {configured_workers} 个进程；内存不足时优先降低 parallel_workers。")
     return {"estimated": True, "guaranteed_upper_bound": False,
             "run_mode": run_mode, "cells": cells, "workers": workers,
             "configured_workers": configured_workers, "stages": stages,

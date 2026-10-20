@@ -1,0 +1,4 @@
+# Optional local Windows Origin plotting integration. Install alongside requirements.txt.
+originpro==1.1.15; sys_platform == "win32"
+OriginExt==1.2.6; sys_platform == "win32"
+Pillow; sys_platform == "win32"

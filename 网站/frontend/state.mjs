@@ -26,9 +26,10 @@ export function catalogFromConfig(config) {
   visit(config);return normaliseCatalog(result);
 }
 export function applyMode(config, mode) {
-  if (!['strict','fast'].includes(mode)) throw new Error('请选择严格或高速模式');
+  if (!['strict','pycharm','fast'].includes(mode)) throw new Error('请选择严格、PyCharm 或 Taichi 高速模式');
   config.mode=mode; config.TAICHI_CONFIG ||= {};config.TAICHI_CONFIG.use_taichi=mode==='fast';
   if(mode==='strict') for(const group of ['STAGE_GA_CONFIG','SINGLE_STAGE_GA_CONFIG']) { config[group] ||= {};config[group].parallel_workers=1; }
+  if(mode==='pycharm') for(const group of ['STAGE_GA_CONFIG','SINGLE_STAGE_GA_CONFIG']) { config[group] ||= {}; if(!Number.isInteger(config[group].parallel_workers)||config[group].parallel_workers<=1) config[group].parallel_workers=10; }
   return config;
 }
 export function createWorkspace(defaults) {
@@ -121,13 +122,14 @@ export function finiteElementDefaults() {
 
 export function finiteElementPayload(draft) {
   const value={...finiteElementDefaults(),...(draft||{})};
-  if(!/^[0-9a-f]{16}$/.test(String(value.sourceJobId))) throw new Error('请选择已完成的源任务');
+  if(value.uploadId){if(!/^[0-9a-f]{32}$/.test(value.uploadId))throw new Error('请重新上传有效的源文件');}
+  else if(!/^[0-9a-f]{16}$/.test(String(value.sourceJobId))) throw new Error('请选择已完成的源任务');
   if(!['simulation','measured'].includes(value.sourceKind)) throw new Error('源数据类型无效');
   for(const [key,label] of [['spaceZUm','Z向元胞尺寸'],['gridSpacingMm','XY网格间距']]) { const number=Number(value[key]); if(!Number.isFinite(number)||number<=0) throw new Error(`${label}必须是正数`); value[key]=number; }
   for(const [key,label] of [['originXmm','X坐标原点'],['originYmm','Y坐标原点']]) { const number=Number(value[key]); if(!Number.isFinite(number)) throw new Error(`${label}必须是有限数值`); value[key]=number; }
   if(!['Z_filled','F_filled'].includes(value.outputVariable)) throw new Error('输出变量只能是 Z_filled 或 F_filled');
   if(!/^%\.\d{1,2}[feg]$/.test(value.precision)) throw new Error('输出精度应为 %.6f 这类格式');
-  return {source_job_id:value.sourceJobId,source_kind:value.sourceKind,source_file:value.sourceFile||undefined,input_variable:value.inputVariable||undefined,options:{output_variable:value.outputVariable,space_z_um:value.spaceZUm,grid_spacing_mm:value.gridSpacingMm,origin_x_mm:value.originXmm,origin_y_mm:value.originYmm,precision:value.precision}};
+  return {source_job_id:value.uploadId?undefined:value.sourceJobId,upload_id:value.uploadId||undefined,source_kind:value.sourceKind,source_file:value.sourceFile||undefined,input_variable:value.inputVariable||undefined,options:{output_variable:value.outputVariable,space_z_um:value.spaceZUm,grid_spacing_mm:value.gridSpacingMm,origin_x_mm:value.originXmm,origin_y_mm:value.originYmm,precision:value.precision}};
 }
 
 

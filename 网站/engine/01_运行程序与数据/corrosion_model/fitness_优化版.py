@@ -141,6 +141,8 @@ def evaluate_population(
     verbose: ProgressTarget = False,
     progress_label: str = "Fitness",
     retain_states: bool = True,
+    saved_scores: dict | None = None,
+    on_individual=None,
 ) -> FitnessResult:
     """Python version of `fitness.m`.
 
@@ -159,19 +161,29 @@ def evaluate_population(
     child_seeds = [int(master.integers(0, np.iinfo(np.uint32).max)) for _ in range(nind)]
     # 原 Taichi 内核包含浮点原子更新；重放并非严格确定，保留其全状态。
     retain_states = bool(retain_states or use_taichi)
+    saved_scores = {} if saved_scores is None else saved_scores
+    if saved_scores and retain_states:
+        raise ValueError("个体续算仅支持 NumPy 不保留全种群状态的模式")
+    for key, row in saved_scores.items():
+        index = int(key)
+        values = np.asarray(row, dtype=np.float64)
+        if not 0 <= index < nind or values.shape != (data.size,):
+            raise ValueError("个体检查点编号或评价维数不匹配")
+        objv[index] = values
+    pending = [i for i in range(nind) if str(i) not in saved_scores]
     worker_count = int(parallel_workers)
     use_parallel = worker_count > 1 and (allow_taichi_parallel or not use_taichi) and nind > 1
     a_states: list[np.ndarray] = [np.empty(0)] * nind
     d_states: list[np.ndarray] = [np.empty(0)] * nind
     cl_states: list[np.ndarray] = [np.empty(0)] * nind
     emit_progress(verbose, f"[{progress_label}] 开始评估种群：个体数={nind}, Taichi={use_taichi}")
-    if use_parallel:
+    if use_parallel and pending:
         emit_progress(
             verbose,
             f"[{progress_label}] 启用并行评估：workers={worker_count}, Taichi={use_taichi}",
         )
-        tasks = [(i, xy[i, :].copy(), child_seeds[i], use_taichi) for i in range(nind)]
-        completed = 0
+        tasks = [(i, xy[i, :].copy(), child_seeds[i], use_taichi) for i in pending]
+        completed = len(saved_scores)
         with ProcessPoolExecutor(
             max_workers=worker_count,
             initializer=_fitness_worker_init,
@@ -200,13 +212,15 @@ def evaluate_population(
                 if retain_states:
                     a_states[idx], d_states[idx], cl_states[idx] = returned[2:]
                 completed += 1
+                if on_individual is not None:
+                    on_individual(idx, obj_row)
                 if should_report(completed, nind):
                     emit_progress(
                         verbose,
                         f"[{progress_label}] 已完成 {completed}/{nind} 个体，当前首个目标值={obj_row[0]:.4f}",
                     )
     else:
-        for i in range(nind):
+        for i in pending:
             # MATLAB `parfor i=1:NIND` has independent workers; Python uses a
             # reproducible per-individual sub-seed to avoid hidden global state.
             child_seed = child_seeds[i]
@@ -229,6 +243,8 @@ def evaluate_population(
                 progress_label=f"{progress_label} 个体 {i + 1}/{nind}",
             )
             objv[i, :] = np.round(np.abs(result.cs), 2)
+            if on_individual is not None:
+                on_individual(i, objv[i, :])
             if retain_states:
                 a_states[i] = result.a
                 d_states[i] = result.d

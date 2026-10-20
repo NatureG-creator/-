@@ -150,7 +150,14 @@ if ~isempty(override_file)
             key = fields{k};
             assert(isfield(cfg.(group), key), ...
                 'site:UnknownParameter', '未知参数：%s.%s', group, key);
-            cfg.(group).(key) = overrides.(group).(key);
+            value = overrides.(group).(key);
+            template = cfg.(group).(key);
+            % JSON一维数组解码为列向量；保持原配置的向量方向和值。
+            if isnumeric(template) && isvector(template) && ~isscalar(template) && ...
+                    isnumeric(value) && isvector(value) && numel(value)==numel(template)
+                value = reshape(value,size(template));
+            end
+            cfg.(group).(key) = value;
         end
     end
 end

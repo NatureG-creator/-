@@ -5,14 +5,56 @@ from __future__ import annotations
 import subprocess
 import threading
 import shutil
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 _LOCK = threading.Lock()
+_REPO_ENV_NAMES = ("CORROSION_GIT_ROOT", "GIT_REPO_ROOT")
+_SIBLING_REPO_NAMES = ("corrosion-sync", "corrosion-workbench")
 
 
-def _git(*arguments: str, timeout: int = 30):
-    import os
+def _repository_context() -> tuple[Path, str]:
+    """Return the Git root and the website path inside it.
+
+    The packaged website can run outside a checkout. In that case prefer an
+    explicit repository path, then the nearby sync checkouts used by the local
+    launcher. The returned relative path is always POSIX-style for Git pathspecs.
+    """
+    candidates: list[Path] = []
+    for name in _REPO_ENV_NAMES:
+        value = os.environ.get(name, "").strip().strip('"')
+        if value:
+            candidates.append(Path(value))
+    for parent in (ROOT, *ROOT.parents):
+        if (parent / ".git").exists():
+            candidates.append(parent)
+        for name in _SIBLING_REPO_NAMES:
+            candidates.append(parent / name)
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            repo = candidate.resolve()
+        except OSError:
+            continue
+        if repo in seen or not (repo / ".git").exists():
+            continue
+        seen.add(repo)
+        try:
+            relative = ROOT.resolve().relative_to(repo).as_posix()
+        except ValueError:
+            mapped = repo / ROOT.name
+            if not mapped.is_dir():
+                continue
+            relative = ROOT.name
+        return repo, relative
+    raise ValueError(
+        "当前网站目录未关联Git仓库；请设置 CORROSION_GIT_ROOT 为包含 .git 的仓库目录"
+    )
+
+
+def _git(*arguments: str, timeout: int = 30, cwd: Path | None = None):
     executable = shutil.which("git")
     if not executable and os.name == "nt":
         candidates = [
@@ -22,7 +64,7 @@ def _git(*arguments: str, timeout: int = 30):
     if not executable:
         raise ValueError("未找到Git，请安装Git并登录GitHub后再同步")
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    result = subprocess.run([executable, "-C", str(ROOT), *arguments],
+    result = subprocess.run([executable, "-C", str(cwd or ROOT), *arguments],
                             capture_output=True, text=True, encoding="utf-8", errors="replace",
                             timeout=timeout, creationflags=flags)
     if result.returncode:
@@ -32,18 +74,20 @@ def _git(*arguments: str, timeout: int = 30):
 
 def sync_status() -> dict:
     try:
-        repo = Path(_git("rev-parse", "--show-toplevel"))
-        relative = ROOT.relative_to(repo).as_posix()
-        changes = _git("status", "--short", "--", ":(top)" + relative)
+        repo, relative = _repository_context()
+        def git(*arguments: str, timeout: int = 30):
+            return _git(*arguments, timeout=timeout, cwd=repo)
+        repo = Path(git("rev-parse", "--show-toplevel"))
+        changes = git("status", "--short", "--", ":(top)" + relative)
         try:
-            ahead = int(_git("rev-list", "--count", "@{upstream}..HEAD"))
+            ahead = int(git("rev-list", "--count", "@{upstream}..HEAD"))
         except (ValueError, OSError, subprocess.TimeoutExpired):
             ahead = None
-        return {"available": True, "branch": _git("branch", "--show-current"),
-                "remote": _git("remote", "get-url", "origin"),
+        return {"available": True, "branch": git("branch", "--show-current"),
+                "remote": git("remote", "get-url", "origin"),
                 "changes": changes, "changed_files": [line[3:] for line in changes.splitlines()],
                 "changed_count": len(changes.splitlines()),
-                "commit": _git("rev-parse", "--short", "HEAD"), "ahead_count": ahead,
+                "commit": git("rev-parse", "--short", "HEAD"), "ahead_count": ahead,
                 "directory": relative, "busy": _LOCK.locked()}
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         return {"available": False, "error": str(exc)}
@@ -57,28 +101,34 @@ def sync_website() -> dict:
         if not status.get("available"):
             raise ValueError(status.get("error", "未找到Git仓库"))
         branch, relative = status["branch"], status["directory"]
+        try:
+            repo, _ = _repository_context()
+        except ValueError:
+            repo = ROOT
+        def git(*arguments: str, timeout: int = 30):
+            return _git(*arguments, timeout=timeout, cwd=repo)
         if not branch:
             raise ValueError("当前处于分离HEAD，先在Git中切换到分支")
-        staged = _git("diff", "--cached", "--name-only", "-z").split("\0")
+        staged = git("diff", "--cached", "--name-only", "-z").split("\0")
         if any(name and not (name == relative or name.startswith(relative + "/")) for name in staged):
             raise ValueError("存在网站之外已暂存的文件；请先单独处理，防止一并上传")
-        unstaged = _git("diff", "--name-only", "-z").split("\0")
+        unstaged = git("diff", "--name-only", "-z").split("\0")
         if set(name for name in staged if name) & set(name for name in unstaged if name):
             raise ValueError("网站存在部分暂存的文件；请先完成该文件的暂存或提交，避免覆盖已选择的改动")
-        _git("add", "--", ":(top)" + relative)
-        names = [name for name in _git("diff", "--cached", "--name-only", "-z").split("\0") if name]
+        git("add", "--", ":(top)" + relative)
+        names = [name for name in git("diff", "--cached", "--name-only", "-z").split("\0") if name]
         prohibited = ("/.runtime/", "/__pycache__/", "/.venv/", "/node_modules/")
         if any(any(part in "/" + name for part in prohibited) or
                Path(name).name in {".env", "auth.json", "credentials.json"} for name in names):
             raise ValueError("暂存区包含运行数据或凭据，请从暂存区移除后重试")
         committed = False
         if names:
-            _git("commit", "-m", "feat: sync corrosion research workbench", timeout=60)
+            git("commit", "-m", "feat: sync corrosion research workbench", timeout=60)
             committed = True
         # 即使没有新改动，也推送上次未上传的提交。
-        output = _git("push", "-u", "origin", branch, timeout=120)
+        output = git("push", "-u", "origin", branch, timeout=120)
         return {"success": True, "committed": committed, "branch": branch,
-                "remote": status["remote"], "commit": _git("rev-parse", "HEAD"),
+                "remote": status["remote"], "commit": git("rev-parse", "HEAD"),
                 "message": "网站源码已同步到GitHub", "output": output}
     finally:
         _LOCK.release()
