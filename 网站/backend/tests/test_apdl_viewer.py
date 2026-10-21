@@ -55,10 +55,11 @@ class ViewerTests(unittest.TestCase):
                 result = apdl_viewer.open_viewer(service, '0123456789abcdef', {'view': 'stress'})
             command = launch.call_args.args[0]
             self.assertIn('-g', command)
-            self.assertIn('-i', command)
-            self.assertEqual(command[command.index('-i') + 1], 'viewer.inp')
+            self.assertIn('-s', command)
+            self.assertEqual(command[command.index('-s') + 1], 'read')
             self.assertNotIn('-b', command)
             session = Path(result['session_directory'])
+            self.assertEqual((session/'start.ans').read_text(encoding=apdl_viewer._apdl_text_encoding()), '/INPUT,viewer,inp\n')
             startup = (session/'viewer.inp').read_text()
             macro = startup+'\n'+'\n'.join(p.read_text() for p in session.glob('*.mac'))
             self.assertIn('PLNSOL,S,EQV', macro)

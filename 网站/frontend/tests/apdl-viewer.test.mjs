@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {viewerOptions} from '../apdl_viewer.mjs';
+import {viewerImageUrl,viewerOptions} from '../apdl_viewer.mjs';
 
 test('viewer selects current result and escapes task names',()=>{
  const jobs=[{id:'a',name:'<script>&"'},{id:'b',name:'构件B'}];
@@ -13,4 +13,7 @@ test('viewer selects current result and escapes task names',()=>{
 test('empty and missing preferred tasks have sensible defaults',()=>{
  assert.equal(viewerOptions([],'b').selected,undefined);
  assert.equal(viewerOptions([{id:'a',name:'A'}],'b').selected.id,'a');
+});
+test('viewer image URL matches the session-based image endpoint',()=>{
+ assert.equal(viewerImageUrl('D:\\research\\apdl_viewers\\abc123'),'/api/apdl/viewers/abc123');
 });

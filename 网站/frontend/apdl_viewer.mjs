@@ -5,6 +5,11 @@ export function viewerOptions(jobs,preferredId){
  return {html:jobs.map(job=>`<option value="${esc(job.id)}"${job.id===preferredId?' selected':''}>${esc(job.name)} · ${esc(job.id)}</option>`).join(''),selected:jobs.find(job=>job.id===preferredId)||jobs[0]};
 }
 
+export function viewerImageUrl(sessionDirectory){
+ const sessionId=String(sessionDirectory).split(/[\\/]/).pop();
+ return `/api/apdl/viewers/${encodeURIComponent(sessionId)}`;
+}
+
 export async function mountApdlViewer(root,{get,post,preferredId}){
  if(!root||root.querySelector('[data-apdl-viewer]'))return;
  const box=document.createElement('section');box.className='card wide';box.dataset.apdlViewer='';
@@ -18,6 +23,6 @@ export async function mountApdlViewer(root,{get,post,preferredId}){
  async function load(){refresh.disabled=true;open.disabled=true;note.textContent='正在检查本机可查看任务…';try{const report=await get('/api/apdl/viewer/jobs');if(!box.isConnected)return;jobs=report.jobs||[];available=report.available;task.innerHTML=viewerOptions(jobs,task.value||preferredId).html;select();note.textContent=!available?'未发现本机 MAPDL，请先安装或配置 MAPDL_BIN。':jobs.length?'已列出保留数据库的任务。':'暂无保留 corrosion.db 的已结束任务；先生成并运行有限元模型。';}catch(error){note.textContent=error.message;}finally{refresh.disabled=false;}}
  task.addEventListener('change',select);view.addEventListener('change',explain);refresh.addEventListener('click',load);
  open.addEventListener('click',async()=>{if(busy||open.disabled)return;busy=true;open.disabled=true;refresh.disabled=true;task.disabled=true;view.disabled=true;note.textContent='正在启动本机 APDL 图形会话…';try{const result=await post(`/api/apdl/jobs/${encodeURIComponent(task.value)}/viewer`,{view:view.value});note.textContent=`已请求启动 APDL（进程 ${result.pid}）。请查看系统中的 APDL 窗口；载入完成后显示所选图像。查看目录：${result.session_directory}`;}catch(error){note.textContent=error.message;}finally{busy=false;refresh.disabled=false;task.disabled=false;view.disabled=false;select();}});
- render.addEventListener('click',async()=>{if(busy||render.disabled)return;busy=true;render.disabled=true;open.disabled=true;refresh.disabled=true;task.disabled=true;view.disabled=true;note.textContent='正在用 MAPDL 批处理生成所选云图…';try{const result=await post(`/api/apdl/jobs/${encodeURIComponent(task.value)}/viewer/render`,{view:view.value});q('[data-viewer-preview]').innerHTML=`<p><strong>${esc(viewCommands[result.view])}</strong> · ${esc(result.apdl_command)}</p><img src="/api/apdl/viewers/${encodeURIComponent(result.session_directory.split(/[\\/]/).pop())}/${encodeURIComponent(result.view)}.png" alt="${esc(result.view)} 云图预览" style="max-width:100%;border:1px solid #ccd5cc">`;note.textContent=`云图已生成。会话目录：${result.session_directory}`;}catch(error){note.textContent=error.message;}finally{busy=false;refresh.disabled=false;task.disabled=false;view.disabled=false;select();}});
+ render.addEventListener('click',async()=>{if(busy||render.disabled)return;busy=true;render.disabled=true;open.disabled=true;refresh.disabled=true;task.disabled=true;view.disabled=true;note.textContent='正在用 MAPDL 批处理生成所选云图…';try{const result=await post(`/api/apdl/jobs/${encodeURIComponent(task.value)}/viewer/render`,{view:view.value});q('[data-viewer-preview]').innerHTML=`<p><strong>${esc(viewCommands[result.view])}</strong> · ${esc(result.apdl_command)}</p><img src="${viewerImageUrl(result.session_directory)}" alt="${esc(result.view)} 云图预览" style="max-width:100%;border:1px solid #ccd5cc">`;note.textContent=`云图已生成。会话目录：${result.session_directory}`;}catch(error){note.textContent=error.message;}finally{busy=false;refresh.disabled=false;task.disabled=false;view.disabled=false;select();}});
  await load();
 }

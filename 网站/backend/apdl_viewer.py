@@ -99,11 +99,10 @@ def open_viewer(service, job_id, payload):
         lines.append(f"*ABBR,{buttons[key]},'/INPUT,{macro_name},mac'")
     lines.append('/INPUT,v_'+view+',mac')
     (session/'viewer.inp').write_text('\n'.join(lines)+'\n', encoding=_apdl_text_encoding())
+    (session/'start.ans').write_text('/INPUT,viewer,inp\n', encoding=_apdl_text_encoding())
     executable = Path(capability['executable'])
-    # Load the viewer input explicitly.  GUI startup-file probing varies by
-    # MAPDL version and may leave the window open without executing the macro.
     command = [str(executable), '-g', '-d', 'win32', '-dir', str(session),
-               '-np', '1', '-j', job_name, '-i', 'viewer.inp']
+               '-np', '1', '-j', job_name, '-s', 'read']
     record = dict(state='launch_requested', source_job_id=job_id, view=view,
                   started_at=datetime.now(timezone.utc).isoformat(), command=command,
                   session_directory=str(session), note=source['note'])
