@@ -16,14 +16,14 @@ GitHub保存源码；计算服务运行在使用者自己的电脑上。直接�
    python -m pip install -r requirements.txt
    ```
 
-2. 双击 **`打开网站.cmd`**。脚本寻找Python、检查依赖、后台启动并打开浏览器；已启动时复用服务，端口占用时选择附近空闲端口。
+2. 双击 **`打开网站.cmd`**。脚本寻找Python、检查依赖、后台启动并打开浏览器；默认固定使用 **8560**，同一源码版本已启动时复用服务，端口被其他服务占用时提示检查。
 3. 手动启动可运行：
 
    ```powershell
-   python start_server.py --port 8523
+   python start_server.py --port 8560
    ```
 
-   打开 `http://127.0.0.1:8523/`。只允许本机访问。运行记录和日志存入`.runtime/`，不要删除需要恢复的任务目录。
+   打开 `http://127.0.0.1:8560/`。只允许本机访问。默认运行记录和日志存入 `D:\research\CorrosionWebsiteData`，可用 `--runtime` 指定目录；不要删除需要恢复的任务目录。
 
 ## 第一部分：实测点云六指标
 
@@ -75,7 +75,7 @@ Taichi安装方式沿用 `requirements-fast.txt`。点击“本机环境诊断�
 
 ```powershell
 $env:CORROSION_NATIVE_DLL_DIR = 'C:\可信的64位运行库目录'
-python start_server.py --port 8523
+python start_server.py --port 8560
 ```
 
 目录必须已存在且包含 `MSVCP140.dll`。只在当前Python进程及其子进程添加DLL目录和加载该文件，不修改系统PATH、注册表或安装运行库；诊断记录实际路径与SHA-256。显卡驱动及内核是否可用仍以实测为准。验收范围见 `docs/2026-10-15-性能对比第二轮验收记录.md`。

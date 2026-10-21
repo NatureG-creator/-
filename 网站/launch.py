@@ -1,4 +1,4 @@
-"""双击启动：复用本网站服务，端口被其他程序占用时选择空闲端口。"""
+"""双击启动：默认固定使用 8560，复用同一源码版本的网站服务。"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def service_at(port: int) -> bool:
         return False
 
 
-def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=False):
+def launch(*, open_browser=True, preferred_port=8560, runtime=None, fixed_port=True):
     runtime = Path(runtime) if runtime is not None else DEFAULT_RUNTIME
     runtime.mkdir(parents=True, exist_ok=True)
     marker = runtime / "service.json"
@@ -91,7 +91,7 @@ def launch(*, open_browser=True, preferred_port=8537, runtime=None, fixed_port=F
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-browser", action="store_true")
-    parser.add_argument("--port", type=int, default=8537)
+    parser.add_argument("--port", type=int, default=8560)
     parser.add_argument("--runtime", type=Path, default=None)
     options = parser.parse_args()
     try:

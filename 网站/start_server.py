@@ -7,7 +7,7 @@ if __name__ == "__main__":
     from pathlib import Path
     from backend.runner import _atomic_json
     parser = argparse.ArgumentParser(description="启动腐蚀研究工作台本机服务")
-    parser.add_argument("--port", type=int, default=8523)
+    parser.add_argument("--port", type=int, default=8560)
     parser.add_argument("--runtime", type=Path)
     args = parser.parse_args()
     server = make_server(port=args.port, runtime=args.runtime)
