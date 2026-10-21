@@ -3,7 +3,7 @@ import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} f
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
 import {renderTaskFiles} from './task_files.mjs';
 import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261021-baseline-mat';
-import {mountBaseline,renderBaselineResult,baselineApdlDraft} from './baseline.mjs';
+import {mountBaseline,renderBaselineResult,baselineApdlDraft} from './baseline.mjs?v=20261021-external-npz';
 import {mountApdlViewer} from './apdl_viewer.mjs?v=20261018-apdl-viewer-results';
 import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261021-postsolve-curves';
 import {mountFitting,renderFittingResult} from './fitting.mjs';
@@ -119,7 +119,8 @@ $('#include-hidden-jobs').addEventListener('change',refreshHistory);
 function readBatchControls(){workspace.batchMode=$('#batch-mode').value;workspace.parallelCaseWorkers=parseTyped($('#parallel-case-workers').value,'integer');workspace.sequentialEnabled=$('#sequential-enabled').checked;workspace.parallelEnabled=$('#parallel-enabled').checked;updateBatchAvailability();}
 async function boot(){try{defaults=await request('/api/defaults');workspace=createWorkspace(defaults);simulationCatalog=normaliseCatalog(defaults.simulation_catalog||catalogFromConfig(defaults.simulation));$('#health-text').textContent='本地服务已连接';$('#health-dot').parentElement.classList.add('ok');$('#capability').textContent=defaults.capabilities?.taichi?'NumPy / Taichi 依赖可用':'NumPy · Taichi 依赖不可用';$('#matlab-capability').textContent=defaults.capabilities?.matlab?'MATLAB 可用':'MATLAB 依赖需检查';$('#footer-version').textContent=`${defaults.version||'本地任务服务'} · 独立任务目录`;renderSimulation();renderCatalog('pointcloud');renderCases();bind();updateButtons();await refreshHistory();await refreshSyncStatus();}catch(error){$('#health-text').textContent='本地服务未连接';message('#global-message',`初始化失败：${error.message}。请启动本地服务后刷新页面。`,true);}}
 mountBenchmark({getPayload:()=>{if(!workspace)throw new Error('本地服务尚未初始化，请稍后重试');return collectSimulation(false);},post,openJob,get:request});
-mountBaseline($('#baseline-root'),{get:request,post,openJob});
+const baselineWorkspace=mountBaseline($('#baseline-root'),{get:request,post,openJob});
+$('#import-external-npz').addEventListener('click',()=>{activate('finite-element-panel');baselineWorkspace.showExternalUpload();});
 Promise.resolve(mountApdl({get:request,post,openJob})).then(controller=>{apdlWorkspace=controller;mountMaterialTools({get:request,post});return mountApdlViewer($('#apdl-root'),{get:request,post});}).catch(error=>message('#job-message',error.message,true));
 mountFitting({get:request,post,openJob});
 mountMultivariate({get:request,post,openJob});

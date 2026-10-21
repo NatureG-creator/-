@@ -26,7 +26,7 @@
   <div class="sidebar-bottom"><span class="sidebar-label">本机环境</span><div class="health"><span id="health-dot" aria-hidden="true"></span><span id="health-text">连接本地服务…</span></div><p id="capability">正在读取后端能力</p><small id="footer-version">本地计算 · 独立任务目录</small></div>
 </aside>
 <div class="main-shell">
-<header class="topbar"><div><span class="eyebrow">RESEARCH / WORKBENCH</span><p id="page-label">实测点云与形貌指标</p></div><div class="top-actions"><span class="local-badge"><i></i>本地工作区</span><button id="sync-button" class="button secondary">↑ 同步网站源码</button></div></header>
+<header class="topbar"><div><span class="eyebrow">RESEARCH / WORKBENCH</span><p id="page-label">实测点云与形貌指标</p></div><div class="top-actions"><button id="import-external-npz" class="button secondary">外部 NPZ → MAT</button><span class="local-badge"><i></i>本地工作区</span><button id="sync-button" class="button secondary">↑ 同步网站源码</button></div></header>
 <main id="workspace" data-layout="product-performs">
   <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
   <section class="hero-band"><div><div class="kicker">数据有来源，计算可追溯</div><h1>让每一次腐蚀计算<br class="hero-break">都有清晰的来路。</h1><p>从扫描表面提取形貌指标，再用实测目标约束腐蚀演化。</p></div><div class="workflow" aria-label="研究工作流程"><div><span>01</span><strong>实测点云</strong><small>任意扫描尺寸</small></div><b aria-hidden="true">→</b><div><span>02</span><strong>六项指标</strong><small>参考面与单位校核</small></div><b aria-hidden="true">→</b><div><span>03</span><strong>CA–GA 演化</strong><small>目标 · 参数 · 误差</small></div></div></section>
@@ -84,5 +84,5 @@
     <details class="card"><summary>腐蚀模拟中断后，怎样继续？</summary><p>在下方找到原任务，点击“恢复”，或“查看”后使用恢复按钮。后端会核对配置、输入和检查点；续算时不能修改参数或随机种子。</p><ul><li><strong>严格复现模式：</strong>从完整检查点恢复阶段、代/个体和随机状态，未保存的工作重新计算。</li><li><strong>PyCharm NumPy 模式：</strong>新任务保存每代状态及当前代已完成个体评价。点击“恢复（阶段内）”，未保存个体按原种子重算。旧任务仅能复用已完成阶段；没有检查点的历史任务无法补回进度。</li><li><strong>Taichi 模式：</strong>目前不支持续算。没有恢复按钮时，可能尚无完整检查点或运行模式不支持；“载入本次配置”后运行是新任务。</li></ul><p>隐藏的任务可勾选“包含已隐藏记录”找回；永久删除会同时清除续算所需的检查点。</p></details>
     <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-</main></div><script type="module" src="/app.js?v=20261021-baseline-mat"></script>
+</main></div><script type="module" src="/app.js?v=20261021-external-npz"></script>
 </body></html>
