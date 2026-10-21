@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import unittest
 from pathlib import Path
 import numpy as np
@@ -14,6 +15,83 @@ class ApdlApiTests(unittest.TestCase):
     setUp=fe_api.FiniteElementApiTests.setUp
     tearDown=fe_api.FiniteElementApiTests.tearDown
     request=fe_api.FiniteElementApiTests.request
+
+    def _saved_solved_apdl_job(self, job_id='c'*16, state='completed'):
+        folder=self.server.runtime/'jobs'/job_id
+        output=folder/'outputs';output.mkdir(parents=True)
+        rows=np.array([[0.,0.,10.,-10.,0.,1.], [1.,.1,20.,-20.,.001,2.]])
+        np.savetxt(output/'force_displacement.csv',rows,delimiter=',')
+        _atomic_json(folder/'status.json',{'id':job_id,'kind':'apdl_tension','state':state,
+            'created_at':1,'updated_at':1,'pid':None})
+        _atomic_json(folder/'spec.json',{'kind':'apdl_tension','options':{}})
+        _atomic_json(output/'summary.json',{'kind':'apdl_tension','solve_state':'solved',
+            'results':{'curve':rows.tolist(),'curve_plot':{'state':'disabled'},
+                       'files':['force_displacement.csv']}})
+        return rows
+
+    def test_completed_apdl_result_can_generate_plot_after_solving(self):
+        rows=self._saved_solved_apdl_job()
+        with patch('backend.apdl_curve_plot._write_curve_plot',side_effect=lambda path,curve:path.write_bytes(b'PNG')):
+            code,job=self.request(f'/api/apdl/jobs/{"c"*16}/force-displacement-plot',{})
+        self.assertEqual(code,200,job)
+        output=self.server.runtime/'jobs'/('c'*16)/'outputs'
+        self.assertTrue((output/'load_displacement.png').is_file())
+        self.assertEqual(job['summary']['results']['curve_plot']['state'],'completed')
+        self.assertIn('load_displacement.png',[item['name'] for item in job['files']])
+        np.testing.assert_array_equal(np.asarray(job['summary']['results']['curve']),rows)
+
+    def test_completed_apdl_result_can_generate_stress_strain_plot_after_solving(self):
+        rows=self._saved_solved_apdl_job('f'*16)
+        seen=[]
+        def write_plot(path,curve):
+            seen.append(curve.copy())
+            path.write_bytes(b'PNG')
+        with patch('backend.apdl_curve_plot._write_stress_strain_plot',side_effect=write_plot):
+            code,job=self.request(f'/api/apdl/jobs/{"f"*16}/stress-strain-plot',{})
+        self.assertEqual(code,200,job)
+        output=self.server.runtime/'jobs'/('f'*16)/'outputs'
+        self.assertTrue((output/'engineering_stress_strain.png').is_file())
+        self.assertEqual(job['summary']['results']['stress_strain_plot']['state'],'completed')
+        self.assertIn('engineering_stress_strain.png',[item['name'] for item in job['files']])
+        np.testing.assert_array_equal(seen[0][:,4],rows[:,4])
+        np.testing.assert_array_equal(seen[0][:,5],rows[:,5])
+
+    def test_failed_apdl_result_can_generate_diagnostic_stress_strain_plot_from_saved_curve(self):
+        rows=self._saved_solved_apdl_job('a'*16,state='failed')
+        output=self.server.runtime/'jobs'/('a'*16)/'outputs'
+        summary=json.loads((output/'summary.json').read_text(encoding='utf-8'))
+        summary['solve_state']='failed'
+        _atomic_json(output/'summary.json',summary)
+        seen=[]
+        def write_plot(path,curve):
+            seen.append(curve.copy())
+            path.write_bytes(b'PNG')
+        with patch('backend.apdl_curve_plot._write_stress_strain_plot',side_effect=write_plot):
+            code,job=self.request(f'/api/apdl/jobs/{"a"*16}/stress-strain-plot',{})
+        self.assertEqual(code,200,job)
+        self.assertEqual(job['state'],'failed')
+        report=job['summary']['results']['stress_strain_plot']
+        self.assertEqual(report['data_quality'],'partial')
+        self.assertIn('不能作为完整有效求解结果',report['note'])
+        self.assertTrue((output/'engineering_stress_strain.png').is_file())
+        np.testing.assert_array_equal(seen[0][:,4:],rows[:,4:])
+
+    def test_postsolve_plot_rejects_running_jobs_and_unverified_csv(self):
+        self._saved_solved_apdl_job('d'*16,state='running')
+        folder=self.server.runtime/'jobs'/('d'*16)
+        status=json.loads((folder/'status.json').read_text(encoding='utf-8'))
+        status['pid']=os.getpid()
+        _atomic_json(folder/'status.json',status)
+        code,error=self.request(f'/api/apdl/jobs/{"d"*16}/force-displacement-plot',{})
+        self.assertEqual(code,400)
+        self.assertIn('已结束',error['error'])
+        self._saved_solved_apdl_job('e'*16)
+        csv=self.server.runtime/'jobs'/('e'*16)/'outputs'/'force_displacement.csv'
+        csv.write_text('0,0,10,-10,0,1\n1,.1,20,-20,.002,2\n',encoding='ascii')
+        code,error=self.request(f'/api/apdl/jobs/{"e"*16}/force-displacement-plot',{})
+        self.assertEqual(code,400)
+        self.assertIn('不一致',error['error'])
+
     def test_local_corrosion_precheck_reports_plate_and_patch_coordinates(self):
         stream=io.BytesIO();np.savetxt(stream,np.array([[.1,.2],[.3,.4]]),delimiter=',');data=stream.getvalue()
         upload=self.server.upload('local_patch.csv',io.BytesIO(data),len(data))

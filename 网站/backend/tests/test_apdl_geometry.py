@@ -55,6 +55,14 @@ class APDLGeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalise_options({'result_save_mode': 'selected', 'field_output_times': [.8, .2, 1]})
 
+    def test_force_displacement_plot_defaults_on_and_accepts_only_boolean(self):
+        self.assertTrue(normalise_options({})['export_force_displacement_plot'])
+        self.assertFalse(normalise_options({'export_force_displacement_plot': False})[
+            'export_force_displacement_plot'])
+        for value in (0, 1, 'false', None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, '布尔值'):
+                normalise_options({'export_force_displacement_plot': value})
+
     def test_double_face_remaining_and_non_square_axes(self):
         g = build_geometry(np.full((2, 3), .8), np.full((2, 3), .5), {
             'corrosion_mode': 'double_independent', 'dx_mm': 2, 'dy_mm': 3,

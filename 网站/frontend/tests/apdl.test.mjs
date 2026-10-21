@@ -39,6 +39,50 @@ test('原生云图说明显示单位、真实变形和节点平均含义，出�
  assert.doesNotMatch(failed,/MAPDL 求解失败/);
 });
 
+test('APDL任务有加载曲线文件时显示反力-位移预览和下载入口',()=>{
+ const html=renderApdlResult({solve_state:'solved'}, {id:'job-123',files:[{name:'load_displacement.png'}]});
+ assert.match(html,/加载端反力—施加位移曲线/);
+ assert.match(html,/\/api\/jobs\/job-123\/view\/load_displacement\.png/);
+ assert.match(html,/\/api\/jobs\/job-123\/download\/load_displacement\.png/);
+ assert.match(html,/施加位移（mm）/);
+ assert.doesNotMatch(renderApdlResult({solve_state:'solved'}, {id:'job-123',files:[]}),/加载端反力—施加位移曲线/);
+});
+test('求解完成后即使关闭初始PNG也提供按需生成曲线入口',()=>{
+ const html=renderApdlResult({solve_state:'solved',results:{curve_plot:{state:'disabled'}}},
+  {id:'job-123',state:'completed',files:[{name:'force_displacement.csv'}]});
+ assert.match(html,/apdl-generate-force-displacement/);
+ assert.match(html,/无需重新求解/);
+ const pending=renderApdlResult({solve_state:'solved'}, {id:'job-123',state:'running',files:[]});
+ assert.doesNotMatch(pending,/apdl-generate-force-displacement/);
+});
+test('求解完成结果显示工程应变—名义应力图的按需生成和预览入口',()=>{
+ const html=renderApdlResult({solve_state:'solved'},
+  {id:'job-123',state:'completed',files:[{name:'force_displacement.csv'}]});
+ assert.match(html,/apdl-generate-stress-strain/);
+ assert.match(html,/工程应变—名义应力图/);
+ assert.match(html,/工程应变（%）/);
+ const plotted=renderApdlResult({solve_state:'solved'},
+  {id:'job-123',state:'completed',files:[{name:'engineering_stress_strain.png'}]});
+ assert.match(plotted,/工程应变—名义应力曲线/);
+ assert.match(plotted,/\/api\/jobs\/job-123\/download\/engineering_stress_strain\.png/);
+});
+test('失败任务有已保存加载曲线时提供诊断图入口并标明非完整结果',()=>{
+ const html=renderApdlResult({solve_state:'failed',error:'MAPDL exited with code 1'},
+  {id:'job-failed',state:'failed',files:[{name:'force_displacement.csv'}]});
+ assert.match(html,/apdl-generate-stress-strain/);
+ assert.match(html,/失败任务也可生成，但仅供诊断参考/);
+ assert.match(html,/不能替代有效求解结果/);
+});
+test('反力—位移图默认生成，可关闭PNG但不删除数值曲线',()=>{
+ const draft=apdlDefaults();
+ assert.equal(buildApdlPayload(draft,'solve').options.export_force_displacement_plot,true);
+ draft.options.export_force_displacement_plot=false;
+ assert.equal(buildApdlPayload(draft,'solve').options.export_force_displacement_plot,false);
+ const html=renderApdlResult({solve_state:'solved',results:{curve_plot:{state:'disabled'}}});
+ assert.match(html,/关闭了曲线 PNG 出图/);
+ assert.match(html,/force_displacement\.csv/);
+});
+
 test('结果卡区分求解后处理和未核验RST，不把未核验显示成不适用',()=>{
  const pending=renderApdlResult({run_mode:'build',build_state:'pending',stage_states:{geometry:'running'}});
  assert.match(pending,/正在生成几何与网格/);assert.doesNotMatch(pending,/APDL 输入包已生成/);

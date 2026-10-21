@@ -132,6 +132,34 @@ class APDLSolverTests(unittest.TestCase):
             self.assertAlmostEqual(result['analytic_reference']['stiffness_relative_error'], 0)
             self.assertAlmostEqual(result['final_load_n'], rows[-1, 2])
             self.assertTrue((out/'load_displacement.png').is_file())
+            self.assertEqual(result['curve_plot']['state'], 'completed')
+
+    def test_disabling_curve_png_preserves_numeric_curve_results(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g, _ = self.fixture(out, export_force_displacement_plot=False)
+            with patch('backend.apdl_solver._write_curve_plot') as plot:
+                result = read_tension_results(out, g['stats'], g['options'])
+            plot.assert_not_called()
+            self.assertTrue((out/'force_displacement.csv').is_file())
+            self.assertNotIn('load_displacement.png', result['files'])
+            self.assertEqual(result['curve_plot']['state'], 'disabled')
+            self.assertEqual(result['point_count'], 2)
+
+    def test_curve_plot_keeps_post_peak_reaction_softening_branch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out = Path(temp)
+            g, rows = self.fixture(out)
+            rows[0, 2] = rows[0, 2] * 2
+            rows[0, 3] = -rows[0, 2]
+            rows[0, 5] = rows[0, 2] / g['stats']['nominal_area_mm2']
+            rows[1, 2] = rows[1, 2] * .5
+            rows[1, 3] = -rows[1, 2]
+            rows[1, 5] = rows[1, 2] / g['stats']['nominal_area_mm2']
+            np.savetxt(out/'force_displacement.csv', rows, delimiter=',')
+            result = read_tension_results(out, g['stats'], g['options'])
+            self.assertGreater(result['curve'][0][2], result['curve'][1][2])
+            self.assertTrue((out/'load_displacement.png').is_file())
 
     def test_y_tension_result_uses_y_length_and_validates_uy_on_y_grips(self):
         with tempfile.TemporaryDirectory() as temp:

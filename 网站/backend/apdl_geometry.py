@@ -21,7 +21,8 @@ DEFAULTS = {
     'tangent_MPa': 1000., 'target_displacement_mm': .1, 'substeps': 10,
     'large_deflection': False, 'boundary_mode': 'poisson_free',
     'tensile_direction': 'X',
-    'export_full_field': True, 'cores': 2, 'timeout_seconds': 3600,
+    'export_full_field': True, 'export_force_displacement_plot': True,
+    'cores': 2, 'timeout_seconds': 3600,
     'restart_frequency': 1,
     'plastic_curve': None, 'allow_negative_slope': False,
     'max_substeps': 450, 'min_substeps': 1,
@@ -64,7 +65,8 @@ def normalise_options(options: dict) -> dict:
         if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or int(value) != value or value < minimum or (maximum is not None and value > maximum):
             raise ValueError(f'{key} 必须是范围内的整数（最小 {minimum}）。')
         result[key] = int(value)
-    for key in ('large_deflection', 'export_full_field', 'allow_negative_slope', 'local_corrosion'):
+    for key in ('large_deflection', 'export_full_field', 'export_force_displacement_plot',
+                'allow_negative_slope', 'local_corrosion'):
         if not isinstance(result[key], bool):
             raise ValueError(f'{key} 必须是布尔值。')
     for key in ('patch_offset_x_mm', 'patch_offset_y_mm'):

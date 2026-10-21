@@ -58,6 +58,9 @@ def normalise_output_options(options: dict) -> dict:
             or any(not 0 < value <= 1 for value in cleaned)
             or any(b <= a for a, b in zip(cleaned, cleaned[1:]))):
         raise ValueError('selected 模式要求 1 至 20 个严格递增、不重复的加载比例，0<t<=1 且包含 1。')
+    curve_plot = options.get('export_force_displacement_plot', True)
+    if not isinstance(curve_plot, bool):
+        raise ValueError('export_force_displacement_plot 必须为布尔值。')
     return {'result_save_mode': mode, 'field_output_times': cleaned}
 
 

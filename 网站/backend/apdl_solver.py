@@ -391,11 +391,15 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
                     'scope': '小变形弹性、无腐蚀、自由泊松伸缩的EA/L与EAδ/L参考。'}
         if analytic['stiffness_relative_error'] > .05:
             warnings.append('平板结果相对EA/L误差超过5%，应检查材料、约束及网格后再用于研究。')
-    try:
-        _write_curve_plot(output/'load_displacement.png', curve)
-        files.append('load_displacement.png')
-    except Exception as exc:
-        warnings.append(f'曲线预览失败但数值结果已保留：{type(exc).__name__}: {exc}')
+    curve_plot = {'state': 'disabled'}
+    if o['export_force_displacement_plot']:
+        try:
+            _write_curve_plot(output/'load_displacement.png', curve)
+            files.append('load_displacement.png')
+            curve_plot = {'state': 'completed', 'file': 'load_displacement.png'}
+        except Exception as exc:
+            curve_plot = {'state': 'failed', 'error': f'{type(exc).__name__}: {exc}'}
+            warnings.append(f'曲线预览失败但数值结果已保留：{type(exc).__name__}: {exc}')
     return {**({'diagnostics': reports['diagnostics']} if reports is not None else {}),
             'solve_state': 'solved', 'point_count': len(curve), 'curve': curve.tolist(),
             'tensile_direction': o['tensile_direction'], 'axial_length_mm': length,
@@ -414,4 +418,5 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
                        'max_reaction_residual_n': float(residual.max()),
                        'reaction_relative_tolerance': .01, 'reaction_absolute_tolerance_n': 1e-4},
             'nodal_summary': nodal_summary, 'analytic_reference': analytic, 'rst_validation': rst_validation,
+            'curve_plot': curve_plot,
             'warnings': warnings, 'files': files}
