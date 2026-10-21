@@ -1,7 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as apdl from '../apdl.mjs';
-import {apdlDefaults,buildApdlPayload,availableSurfaceFiles,renderApdlResult,createFaceUploadManager,applyApdlPreset} from '../apdl.mjs';
+import {apdlDefaults,buildApdlPayload,availableSurfaceFiles,renderApdlResult,createFaceUploadManager,applyApdlPreset,applyMappingProfile,mappingProfileLabel} from '../apdl.mjs';
+
+test('规则预设只组合网站参数并记录预设名称',()=>{
+ const draft=apdlDefaults();
+ applyMappingProfile(draft,'double_patch');
+ assert.equal(draft.options.mapping_profile,'double_patch');
+ assert.equal(draft.options.corrosion_mode,'double_independent');
+ assert.equal(draft.options.local_corrosion,true);
+ assert.equal(draft.options.surface_grid_mode,'strict');
+ assert.equal(mappingProfileLabel('double_patch'),'兼容双面加夹持区（局部放置）');
+ assert.throws(()=>applyMappingProfile(draft,'old_script'),/规则预设无效/);
+});
+
+test('规则预设下拉说明不把旧 MATLAB 文件当作执行入口',()=>{
+ const html=apdl.renderMatlabConversionControls({},'top-');
+ assert.ok(html.includes('只影响下方 MATLAB 转换按钮'));
+});
 
 test('MATLAB转换明确区分毫米矩阵与元胞层数，间距独立于Z厚度',()=>{
  const source={origin:'upload',upload_id:'raw',mapping:{dx_mm:'.25',dy_mm:'.3'},mat_info:{variable:'baseline'}};

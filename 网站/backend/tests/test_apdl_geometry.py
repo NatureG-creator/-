@@ -55,6 +55,13 @@ class APDLGeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalise_options({'result_save_mode': 'selected', 'field_output_times': [.8, .2, 1]})
 
+    def test_mapping_profiles_are_recorded_and_validated(self):
+        for profile in ('manual', 'single_top', 'double_strict', 'double_common_xy', 'double_patch'):
+            with self.subTest(profile=profile):
+                self.assertEqual(normalise_options({'mapping_profile': profile})['mapping_profile'], profile)
+        with self.assertRaisesRegex(ValueError, 'mapping_profile'):
+            normalise_options({'mapping_profile': 'legacy_script_file'})
+
     def test_force_displacement_plot_defaults_on_and_accepts_only_boolean(self):
         self.assertTrue(normalise_options({})['export_force_displacement_plot'])
         self.assertFalse(normalise_options({'export_force_displacement_plot': False})[

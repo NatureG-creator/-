@@ -29,7 +29,7 @@ DEFAULTS = {
     'mesh_type': 'solid185_hex',
     'grip_length_fixed_mm': 0.,
     'grip_length_loaded_mm': 0.,
-    'surface_grid_mode': 'strict',
+    'mapping_profile': 'manual', 'surface_grid_mode': 'strict',
     'mapping_dx_mm': None, 'mapping_dy_mm': None,
     'local_corrosion': False, 'patch_offset_x_mm': None, 'patch_offset_y_mm': None,
     'patch_rotation_deg': 0, 'patch_flip_x': False, 'patch_flip_y': False,
@@ -86,6 +86,8 @@ def normalise_options(options: dict) -> dict:
         raise ValueError('corrosion_mode 无效。')
     if result['surface_grid_mode'] not in ('strict', 'common_xy'):
         raise ValueError('双面网格模式必须为 strict 或 common_xy。')
+    if result['mapping_profile'] not in {'manual', 'single_top', 'double_strict', 'double_common_xy', 'double_patch'}:
+        raise ValueError('mapping_profile 无效。')
     for key in ('mapping_dx_mm', 'mapping_dy_mm'):
         value = result[key]
         if value is not None:
