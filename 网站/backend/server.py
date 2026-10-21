@@ -165,6 +165,16 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/api/apdl/capabilities":
             from .apdl_solver import mapdl_capabilities
             return self._json(200,mapdl_capabilities())
+        if method == 'GET' and path == '/api/apdl/stress-strain/sources':
+            from .apdl_stress_strain import list_stress_strain_sources
+            return self._json(200, list_stress_strain_sources(self.server))
+        if method == 'POST' and path == '/api/apdl/stress-strain/comparisons':
+            from .apdl_stress_strain import create_stress_strain_comparison
+            return self._json(201, create_stress_strain_comparison(self.server, self._body()))
+        if method == 'GET' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'stress-strain-comparisons']:
+            from .apdl_stress_strain import comparison_file
+            return self._file(comparison_file(self.server, parts[3], parts[4]),
+                              download=query.get('download') == ['1'])
         if method == 'GET' and path == '/api/apdl/viewer/jobs':
             from .apdl_viewer import viewer_jobs
             return self._json(200, viewer_jobs(self.server))

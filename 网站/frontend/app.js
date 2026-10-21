@@ -4,7 +4,7 @@ import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResu
 import {renderTaskFiles} from './task_files.mjs';
 import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261018-apdl-direction';
 import {mountApdlViewer} from './apdl_viewer.mjs?v=20261018-apdl-viewer-results';
-import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261017-apdl-viewer';
+import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261021-stress-strain';
 import {mountFitting,renderFittingResult} from './fitting.mjs';
 import {mountOrigin,renderOriginResult} from './origin.mjs';
 import {mountMultivariate,renderMultivariateResult} from './fitting_multivariate.mjs';
