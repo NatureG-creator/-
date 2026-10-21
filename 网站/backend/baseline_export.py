@@ -22,7 +22,7 @@ def inspect_baseline(service, payload):
         record, path = service.get_upload(payload['upload_id'])
         expected, name = record['sha256'], record['name']
         config = config.get('config', config)
-        provenance = '配套导入的原模拟配置' if config else '外部 NPZ；请明确填写原尺寸及平滑参数'
+        provenance = '配套导入的原模拟配置' if config else '外部 NPZ'
     else:
         job_id = service.validate_id(payload['source_job_id'])
         job = service.get_job(job_id)
@@ -76,6 +76,17 @@ def inspect_baseline(service, payload):
 def prepare_baseline(service, payload):
     info = inspect_baseline(service, payload)
     supplied = dict(payload.get('options') or {})
+    stage = payload.get('npz_stage', info['stage_count'])
+    if isinstance(stage, bool) or not isinstance(stage, int) or not 1 <= stage <= info['stage_count']:
+        raise ValueError('阶段超出所选 NPZ 状态的范围')
+    if supplied.get('matrix_only') is True:
+        return dict(kind='finite_element', source_kind='simulation', source_path=info['source_path'],
+                    source_hash=info['source_hash'], source_file=info['name'],
+                    source_job_id=payload.get('source_job_id'),
+                    case_name=payload.get('case_name') or info['name'] + ' · baseline 矩阵转换',
+                    options=dict(output_variable='baseline', matrix_only=True,
+                                 physical_layers=info['physical_layers'], layer_provenance=info['layer_provenance'],
+                                 npz_variable=info['npz_variable'], npz_stage=stage))
     geometry = resolve_geometry({'geometry': {k: v for k, v in info['geometry'].items() if v is not None}},
                                 {k: supplied[k] for k in ('space_xy_um', 'space_z_um') if k in supplied})
     window = supplied.get('window_size', info['window_size'])
@@ -84,9 +95,6 @@ def prepare_baseline(service, payload):
         raise ValueError('平滑窗口必须为 1～101 的奇数，请按原后处理参数填写')
     if isinstance(sigma, bool) or not isinstance(sigma, (int, float)) or not math.isfinite(sigma) or not 0 <= sigma <= 100:
         raise ValueError('高斯 sigma 必须为 0～100 的有限数值，请按原参数填写')
-    stage = payload.get('npz_stage', info['stage_count'])
-    if isinstance(stage, bool) or not isinstance(stage, int) or not 1 <= stage <= info['stage_count']:
-        raise ValueError('阶段超出所选 NPZ 状态的范围')
     options = dict(output_variable='baseline', **geometry, grid_spacing_mm=geometry['space_xy_um'] / 1000,
                    origin_x_mm=0, origin_y_mm=0, precision='%.9f', window_size=window,
                    gaussian_sigma=float(sigma), physical_layers=info['physical_layers'],
@@ -111,6 +119,17 @@ def create_baseline_bundle(source, output, options):
     from corrosion_model.analysis import moving_avg_3d
     from .finite_element_export import _write_coordinates, _write_surface_csv, _write_preview
     state, selection = read_npz_state(source, options['npz_variable'], options['npz_stage'])
+    if options.get('matrix_only'):
+        from corrosion_model.ca import first_metal_depth
+        baseline = first_metal_depth(state, *state.shape[:2], options['physical_layers'])
+        output = Path(output)
+        output.mkdir(parents=True, exist_ok=True)
+        savemat(output / 'baseline.mat', {'baseline': baseline}, do_compression=True)
+        return dict(output_variable='baseline', matrix_only=True, shape=list(baseline.shape),
+                    value_range_cells=[float(baseline.min()), float(baseline.max())],
+                    source=dict(kind='simulation', sha256=sha256(source)), options=options,
+                    rules='MATLAB 1-based first metal layer at each XY; no smoothing, scaling or transpose.',
+                    files=['baseline.mat'])
     baseline, _, _, _ = moving_avg_3d(state, options['window_size'], *state.shape[:2],
                                     options['physical_layers'], gaussian_sigma=options['gaussian_sigma'])
     metadata = dict(schema_version=1, layout='xy', value_unit='cell_layer_index',

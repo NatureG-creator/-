@@ -3,7 +3,7 @@ import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} f
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
 import {renderTaskFiles} from './task_files.mjs';
 import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261021-baseline-mat';
-import {mountBaseline,renderBaselineResult,baselineApdlDraft} from './baseline.mjs?v=20261021-external-npz';
+import {mountBaseline,renderBaselineResult,baselineApdlDraft} from './baseline.mjs?v=20261021-baseline-matrix';
 import {mountApdlViewer} from './apdl_viewer.mjs?v=20261018-apdl-viewer-results';
 import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261021-postsolve-curves';
 import {mountFitting,renderFittingResult} from './fitting.mjs';

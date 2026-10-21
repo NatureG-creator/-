@@ -79,6 +79,24 @@ class BaselineExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '阶段'):
             prepare_baseline(self.service, dict(payload, npz_stage=3))
 
+    def test_plain_matrix_needs_no_geometry_and_preserves_each_value(self):
+        payload = dict(upload_id=self.upload['id'], options={'output_variable':'baseline', 'matrix_only':True})
+        spec = prepare_baseline(self.service, payload)
+        self.assertNotIn('space_xy_um', spec['options'])
+        self.assertNotIn('space_z_um', spec['options'])
+        self.assertNotIn('window_size', spec['options'])
+        output = self.root/'plain'
+        result = create_baseline_bundle(spec['source_path'], output, spec['options'])
+        saved = loadmat(output/'baseline.mat')
+        self.assertEqual([key for key in saved if not key.startswith('__')], ['baseline'])
+        np.testing.assert_array_equal(saved['baseline'], self.layers)
+        self.assertEqual(saved['baseline'].dtype, np.dtype('float64'))
+        self.assertEqual(result['files'], ['baseline.mat'])
+        self.assertEqual([p.name for p in output.iterdir()], ['baseline.mat'])
+        spec = prepare_baseline(self.service, dict(payload, npz_variable='a_sd', npz_stage=1))
+        create_baseline_bundle(spec['source_path'], self.root/'plain-stage1', spec['options'])
+        np.testing.assert_array_equal(loadmat(self.root/'plain-stage1/baseline.mat')['baseline'], np.ones((4,3)))
+
     def test_legacy_baseline_needs_explicit_conversion_metadata(self):
         path = self.root/'100d.mat'
         savemat(path, {'baseline': self.layers})
@@ -128,6 +146,25 @@ class BaselineApiTests(unittest.TestCase):
         from urllib.request import urlopen
         with urlopen(self.base+'/api/jobs/'+job_id+'/download/baseline.mat') as response:
             self.assertIn('baseline', loadmat(io.BytesIO(response.read())))
+
+    def test_plain_matrix_api_without_configuration(self):
+        payload = self.payload()
+        payload.pop('source_config')
+        payload['options']['matrix_only'] = True
+        with patch.object(self.server, 'launch'):
+            code, job = self.request('/api/finite-element/exports', payload)
+        self.assertEqual(code, 201, job)
+        run_job(job['id'], self.server.runtime)
+        _, completed = self.request('/api/jobs/'+job['id'])
+        self.assertEqual(completed['state'], 'completed', completed.get('error'))
+        self.assertNotIn('space_z_um', completed['spec']['options'])
+        from urllib.request import urlopen
+        with urlopen(self.base+'/api/jobs/'+job['id']+'/download/baseline.mat') as response:
+            saved = loadmat(io.BytesIO(response.read()))
+        self.assertEqual([key for key in saved if not key.startswith('__')], ['baseline'])
+        expected = np.ones((4,3))
+        expected[0,0] = 4
+        np.testing.assert_array_equal(saved['baseline'], expected)
 
     def test_task_source_uses_its_frozen_configuration(self):
         source = self.fake_simulation()

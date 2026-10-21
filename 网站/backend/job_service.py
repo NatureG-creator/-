@@ -213,15 +213,16 @@ class JobService:
                 from .baseline_export import prepare_baseline
                 baseline_spec = prepare_baseline(self, payload)
                 options = baseline_spec['options']
-            try:
-                options["space_z_um"] = float(options.get("space_z_um", 25.0))
-                options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
-                options["origin_x_mm"] = float(options.get("origin_x_mm", 0.0))
-                options["origin_y_mm"] = float(options.get("origin_y_mm", 0.0))
-            except (TypeError, ValueError) as exc:
-                raise ValueError("有限元导出尺寸参数必须是数值") from exc
-            if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
-                raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
+            if not (options.get('output_variable') == 'baseline' and options.get('matrix_only')):
+                try:
+                    options["space_z_um"] = float(options.get("space_z_um", 25.0))
+                    options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
+                    options["origin_x_mm"] = float(options.get("origin_x_mm", 0.0))
+                    options["origin_y_mm"] = float(options.get("origin_y_mm", 0.0))
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("有限元导出尺寸参数必须是数值") from exc
+                if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
+                    raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
             if options.get("output_variable") not in {None, "", "Z_filled", "F_filled", "baseline"}:
                 raise ValueError("output_variable 只能是 Z_filled 或 F_filled")
         job_id = uuid.uuid4().hex[:16]
