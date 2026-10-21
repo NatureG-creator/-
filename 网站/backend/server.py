@@ -301,6 +301,10 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'POST' and path == '/api/local-directory':
             from .task_io import choose_directory
             return self._json(200, choose_directory())
+        if method == 'POST' and path == '/api/baseline/inspect':
+            from .baseline_export import inspect_baseline
+            info = inspect_baseline(self.server, self._body())
+            return self._json(200, {k: v for k, v in info.items() if k != 'source_path'})
         if method == "POST" and path == "/api/finite-element/exports":
             body = self._body()
             body["kind"] = "finite_element"

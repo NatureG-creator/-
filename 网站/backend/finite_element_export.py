@@ -143,6 +143,11 @@ def create_surface_bundle(source_kind: str, source_file: str | Path,
     output = Path(output_dir).expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     options = dict(options or {})
+    if options.get('output_variable') == 'baseline':
+        if source_kind != 'simulation':
+            raise ValueError('baseline 转换仅支持 CA–GA 模拟状态')
+        from .baseline_export import create_baseline_bundle
+        return create_baseline_bundle(source, output, options)
     output_variable = str(options.get("output_variable") or ("F_filled" if source_kind == "simulation" else "Z_filled"))
     if output_variable not in ALLOWED_VARIABLES:
         raise ValueError("output_variable 只能是 Z_filled 或 F_filled。")

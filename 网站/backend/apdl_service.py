@@ -45,6 +45,7 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
     inherited=dict(inherited_geometry or {})
     variable=mapping.get('variable') or None
     state_metadata={}
+    baseline_info=None
     if source_kind=='simulation':
         if 'space_z_um' not in inherited or 'space_xy_um' not in inherited:
             raise ValueError('模拟来源缺少真实元胞尺寸，不能猜测物理间距')
@@ -62,14 +63,26 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
             raise ValueError('实测表面仅支持MAT/CSV/TXT/TSV二维矩阵；XYZ点云请先在第一模块处理')
         if path.suffix.lower()=='.mat':
             values=loadmat(path)
-            choices=[key for key in ('Z_filled','F_filled') if key in values]
+            choices=[key for key in ('Z_filled','F_filled','baseline') if key in values]
             if variable is None:
                 if len(choices)!=1:
-                    raise ValueError('MAT需要明确选择唯一表面变量Z_filled或F_filled')
+                    raise ValueError('MAT需要明确选择唯一表面变量Z_filled、F_filled或baseline')
                 variable=choices[0]
-            if variable not in ('Z_filled','F_filled') or variable not in values:
+            if variable not in ('Z_filled','F_filled','baseline') or variable not in values:
                 raise ValueError('MAT中没有指定的Z_filled/F_filled变量')
             raw=np.asarray(values[variable])
+            if variable=='baseline':
+                baseline_info=loadmat(path,variable_names=['surface_metadata'],simplify_cells=True).get('surface_metadata')
+                if not isinstance(baseline_info,dict) or baseline_info.get('schema_version')!=1:
+                    raise ValueError('此 baseline MAT 缺少尺寸及参考面信息；请使用新表面转换入口，或明确设置旧 MATLAB baseline 转换参数')
+                from .config import _jsonable
+                baseline_info=_jsonable(baseline_info)
+                cell_xy=_number(baseline_info.get('space_xy_um'),'baseline XY元胞尺寸',positive=True)
+                _number(baseline_info.get('space_z_um'),'baseline Z元胞尺寸',positive=True)
+                _number(baseline_info.get('reference_baseline_cells'),'baseline参考层号')
+                if mapping.get('unit','mm')!='mm' or mapping.get('value_mode','depth')!='depth':
+                    raise ValueError('新 baseline MAT 自动转换为正腐蚀深度 mm，请选择 mm / 正深度')
+                inherited.update(layout='xy',dx_mm=cell_xy/1000,dy_mm=cell_xy/1000)
         else:
             delimiter={'.csv':',','.tsv':'\t'}.get(path.suffix.lower())
             try:
@@ -89,6 +102,10 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
     original_shape=list(raw.shape)
     if not np.isfinite(raw).all():
         raise ValueError('表面包含非有限数值NaN/Inf')
+    if baseline_info is not None:
+        from .baseline_export import baseline_depth
+        raw=baseline_depth(raw,baseline_info)
+        state_metadata['baseline_processing']=baseline_info
     crop=mapping.get('center_crop_columns')
     crop_bounds=None
     if crop is not None:
@@ -122,7 +139,7 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
         if value is None:
             raise ValueError('上传/未知来源矩阵必须明确给出X/Y物理间距')
         number=_number(value,axis+'间距',positive=True)
-        if source_kind=='simulation' and not math.isclose(number,defaults[axis],rel_tol=0,abs_tol=1e-12):
+        if (source_kind=='simulation' or baseline_info is not None) and not math.isclose(number,defaults[axis],rel_tol=0,abs_tol=1e-12):
             raise ValueError('模拟来源必须继承真实XY间距，不能重新解释元胞尺寸')
         spacing.append(number)
     dx,dy=spacing
@@ -146,7 +163,7 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
                   min_depth_mm=float(depth.min()),max_depth_mm=float(depth.max()),
                   coordinate_note='局部表面坐标；双面独立数据仍需确认同一XY位置配准。')
     metadata.update(state_metadata)
-    if state_metadata:
+    if 'npz_variable' in state_metadata:
         metadata.update(space_xy_um=inherited['space_xy_um'],space_z_um=inherited['space_z_um'])
     return depth,metadata
 

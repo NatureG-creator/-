@@ -90,6 +90,9 @@ python start_server.py --port 8560
 
 ## 第三部分：APDL单轴拉伸与表面输入包
 
+- “有限元耦合”顶部新增“模拟结果 → MATLAB 表面”：选择已完成模拟，或上传 NPZ 及配套的 `effective_config.json` / `spec.json`，读取原 XY/Z 元胞尺寸、`grid_n`、`auto_plot_window_size` 和 `gaussian_sigma`。外部文件缺少的参数必须明确填写；原文件或冻结配置已知的元胞尺寸不能覆盖。
+- 转换可选 `perfect_a` 或数值 `a_sd` 的指定阶段，沿用 MATLAB 从 1 开始的第一层金属规则、高斯平滑及对称扩展的移动平均，保持原二维尺寸、不做网格放大。导出 `baseline.mat` 中的 `baseline[X,Y]` 为层号，与旧 `100d.mat` 的主变量结构兼容；同时保存 `surface_metadata`、预览、数值 CSV、坐标、参数及来源哈希。
+- 新 MAT 可下载，完成后点击“转入有限元正面”直接预检。基于旧 MATLAB 的 `height=-baseline.T*Z向元胞厚度`，有限元正深度为 `(baseline-baseline.min())*space_z_um/1000`（mm），参考面为当前表面最高点；CSV、预览和有限元读取采用同一规则。该参考面不保留绝对平均减薄，不应当作质量损失结果；夹持区的额外厚度或高度需在后续建模中明确设置。旧 MAT 只有 `baseline` 而没有元数据时，仍需在原矩阵上传区明确选择 MATLAB baseline 转换及物理间距。
 - 在“有限元耦合”运行区选择已完成的 CA–GA 模拟任务或实测表面 MAT 任务。
 - simulation 来源读取最终 `perfect_a`（或兼容的 `a_sd` 最后一阶段），沿 Z 方向寻找第一层未腐蚀金属并转换为正腐蚀深度；measured 来源保留 `Z_filled/F_filled` 的二维尺寸和数值，不默认重采样。
 - 有外部 CA 状态时，可在每个正/反面来源选择“上传外部 NPZ”。文件必须包含数值实数 `perfect_a[X,Y,Z]`，或数值 `a_sd[X,Y,Z]` / `a_sd[stage,X,Y,Z]`；网页会列出变量、原始形状、可选阶段和读取耗时。四维阶段按文件存储顺序从 1 编号，默认最后阶段，序号不等于腐蚀天数。

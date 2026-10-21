@@ -209,6 +209,10 @@ class JobService:
         io_settings = validate_task_io(payload, self.runtime)
         if kind == "finite_element":
             options = dict(payload.get("options") or {})
+            if options.get('output_variable') == 'baseline':
+                from .baseline_export import prepare_baseline
+                baseline_spec = prepare_baseline(self, payload)
+                options = baseline_spec['options']
             try:
                 options["space_z_um"] = float(options.get("space_z_um", 25.0))
                 options["grid_spacing_mm"] = float(options.get("grid_spacing_mm", 0.05))
@@ -218,7 +222,7 @@ class JobService:
                 raise ValueError("有限元导出尺寸参数必须是数值") from exc
             if options["space_z_um"] <= 0 or options["grid_spacing_mm"] <= 0:
                 raise ValueError("space_z_um 和 grid_spacing_mm 必须大于0")
-            if options.get("output_variable") not in {None, "", "Z_filled", "F_filled"}:
+            if options.get("output_variable") not in {None, "", "Z_filled", "F_filled", "baseline"}:
                 raise ValueError("output_variable 只能是 Z_filled 或 F_filled")
         job_id = uuid.uuid4().hex[:16]
         job_dir = self.runtime / "jobs" / job_id
@@ -299,6 +303,8 @@ class JobService:
                     "pointcloud_config": validate_pointcloud_config(payload.get("pointcloud_config", {})),
                     "reference_preview": inspect_xyz(ref_path), "detail_preview": inspect_xyz(detail_path),
                     "input_hashes": {"reference": sha256(ref_path), "detail": sha256(detail_path)}}
+        elif kind == 'finite_element' and options.get('output_variable') == 'baseline':
+            spec = baseline_spec
         elif kind == "finite_element" and payload.get("upload_id"):
             source_info, source_path = self.get_upload(payload["upload_id"])
             source_kind = payload.get("source_kind")
