@@ -80,12 +80,27 @@ def prepare_baseline(service, payload):
     if isinstance(stage, bool) or not isinstance(stage, int) or not 1 <= stage <= info['stage_count']:
         raise ValueError('阶段超出所选 NPZ 状态的范围')
     if supplied.get('matrix_only') is True:
+        window = supplied.get('window_size', 5)
+        sigma = supplied.get('gaussian_sigma', 1)
+        factor = supplied.get('expand_factor', 1)
+        layers = supplied.get('physical_layers', info['physical_layers'])
+        if isinstance(window, bool) or not isinstance(window, int) or not 1 <= window <= 101 or window % 2 != 1:
+            raise ValueError('平滑窗口必须为 1～101 的奇数')
+        if isinstance(sigma, bool) or not isinstance(sigma, (int, float)) or not math.isfinite(sigma) or not 0 <= sigma <= 100:
+            raise ValueError('高斯 sigma 必须为 0～100 的有限数值')
+        if isinstance(factor, bool) or not isinstance(factor, int) or not 1 <= factor <= 10:
+            raise ValueError('放大倍数 N 必须为 1～10 的整数')
+        if isinstance(layers, bool) or not isinstance(layers, int) or layers not in (info['state_shape'][2]-1, info['state_shape'][2]):
+            raise ValueError('物理 Z 层数 n 必须为状态 Z 层数或 Z 层数减 1')
+        if math.prod(info['state_shape'][:2]) * factor**2 > 4_000_000:
+            raise ValueError('放大后超过 400 万矩阵元素，请减小放大倍数 N')
         return dict(kind='finite_element', source_kind='simulation', source_path=info['source_path'],
                     source_hash=info['source_hash'], source_file=info['name'],
                     source_job_id=payload.get('source_job_id'),
                     case_name=payload.get('case_name') or info['name'] + ' · baseline 矩阵转换',
                     options=dict(output_variable='baseline', matrix_only=True,
-                                 physical_layers=info['physical_layers'], layer_provenance=info['layer_provenance'],
+                                 physical_layers=layers, layer_provenance='生成页面确认的物理 Z 层数',
+                                 window_size=window, gaussian_sigma=float(sigma), expand_factor=factor,
                                  npz_variable=info['npz_variable'], npz_stage=stage))
     geometry = resolve_geometry({'geometry': {k: v for k, v in info['geometry'].items() if v is not None}},
                                 {k: supplied[k] for k in ('space_xy_um', 'space_z_um') if k in supplied})
@@ -120,15 +135,25 @@ def create_baseline_bundle(source, output, options):
     from .finite_element_export import _write_coordinates, _write_surface_csv, _write_preview
     state, selection = read_npz_state(source, options['npz_variable'], options['npz_stage'])
     if options.get('matrix_only'):
-        from corrosion_model.ca import first_metal_depth
-        baseline = first_metal_depth(state, *state.shape[:2], options['physical_layers'])
+        from scipy.ndimage import gaussian_filter, uniform_filter
+        # MATLAB scans all stored layers; n only controls the no-metal fallback.
+        mask = state == 1
+        baseline = np.where(mask.any(axis=2), mask.argmax(axis=2)+1, options['physical_layers']+1).astype(float)
+        sigma = options.get('gaussian_sigma', 0)
+        if sigma > 0:
+            # imgaussfilt defaults: filter size 2*ceil(2*sigma)+1, replicate padding.
+            baseline = gaussian_filter(baseline, sigma=sigma, radius=math.ceil(2*sigma), mode='nearest')
+        baseline = uniform_filter(baseline, size=options.get('window_size', 1), mode='reflect')
+        factor = options.get('expand_factor', 1)
+        if factor > 1:
+            baseline = np.repeat(np.repeat(baseline, factor, axis=0), factor, axis=1)
         output = Path(output)
         output.mkdir(parents=True, exist_ok=True)
         savemat(output / 'baseline.mat', {'baseline': baseline}, do_compression=True)
         return dict(output_variable='baseline', matrix_only=True, shape=list(baseline.shape),
                     value_range_cells=[float(baseline.min()), float(baseline.max())],
                     source=dict(kind='simulation', sha256=sha256(source)), options=options,
-                    rules='MATLAB 1-based first metal layer at each XY; no smoothing, scaling or transpose.',
+                    rules='MATLAB 1-based first metal; imgaussfilt with replicate padding; symmetric moving average; nearest expansion; no physical unit scaling.',
                     files=['baseline.mat'])
     baseline, _, _, _ = moving_avg_3d(state, options['window_size'], *state.shape[:2],
                                     options['physical_layers'], gaussian_sigma=options['gaussian_sigma'])

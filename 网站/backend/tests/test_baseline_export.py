@@ -80,11 +80,12 @@ class BaselineExportTests(unittest.TestCase):
             prepare_baseline(self.service, dict(payload, npz_stage=3))
 
     def test_plain_matrix_needs_no_geometry_and_preserves_each_value(self):
-        payload = dict(upload_id=self.upload['id'], options={'output_variable':'baseline', 'matrix_only':True})
+        payload = dict(upload_id=self.upload['id'], options={'output_variable':'baseline', 'matrix_only':True,
+                       'window_size':1, 'gaussian_sigma':0})
         spec = prepare_baseline(self.service, payload)
         self.assertNotIn('space_xy_um', spec['options'])
         self.assertNotIn('space_z_um', spec['options'])
-        self.assertNotIn('window_size', spec['options'])
+        self.assertEqual(spec['options']['window_size'], 1)
         output = self.root/'plain'
         result = create_baseline_bundle(spec['source_path'], output, spec['options'])
         saved = loadmat(output/'baseline.mat')
@@ -96,6 +97,38 @@ class BaselineExportTests(unittest.TestCase):
         spec = prepare_baseline(self.service, dict(payload, npz_variable='a_sd', npz_stage=1))
         create_baseline_bundle(spec['source_path'], self.root/'plain-stage1', spec['options'])
         np.testing.assert_array_equal(loadmat(self.root/'plain-stage1/baseline.mat')['baseline'], np.ones((4,3)))
+
+    def test_matlab_gaussian_window_and_nearest_expansion(self):
+        payload = dict(upload_id=self.upload['id'], options={'output_variable':'baseline', 'matrix_only':True,
+                       'window_size':3, 'gaussian_sigma':1.3, 'expand_factor':2, 'physical_layers':5})
+        spec = prepare_baseline(self.service, payload)
+        output = self.root/'smoothed'
+        result = create_baseline_bundle(spec['source_path'], output, spec['options'])
+        # Independent finite Gaussian kernel, replicated edges, then symmetric window sums.
+        from scipy.signal import convolve2d
+        radius = 3
+        axis = np.arange(-radius, radius+1)
+        kernel = np.exp(-(axis[:,None]**2 + axis[None,:]**2)/(2*1.3**2))
+        kernel /= kernel.sum()
+        gaussian = convolve2d(np.pad(self.layers, radius, mode='edge'), kernel, mode='valid')
+        padded = np.pad(gaussian, 1, mode='symmetric')
+        expected = np.array([[padded[i:i+3,j:j+3].mean() for j in range(3)] for i in range(4)])
+        expected = np.repeat(np.repeat(expected, 2, axis=0), 2, axis=1)
+        saved = loadmat(output/'baseline.mat')
+        np.testing.assert_allclose(saved['baseline'], expected, rtol=0, atol=1e-12)
+        self.assertEqual(result['shape'], [8,6])
+        self.assertEqual([k for k in saved if not k.startswith('__')], ['baseline'])
+        self.assertEqual(result['files'], ['baseline.mat'])
+
+    def test_matrix_parameters_are_validated_and_defaults_are_script_examples(self):
+        payload = dict(upload_id=self.upload['id'], options={'output_variable':'baseline', 'matrix_only':True})
+        options = prepare_baseline(self.service, payload)['options']
+        self.assertEqual((options['window_size'],options['gaussian_sigma'],options['expand_factor']), (5,1,1))
+        for update in ({'window_size':2}, {'window_size':False}, {'gaussian_sigma':float('nan')},
+                       {'gaussian_sigma':-1}, {'expand_factor':1.5}, {'expand_factor':0},
+                       {'expand_factor':11}, {'physical_layers':3}, {'physical_layers':True}):
+            with self.subTest(update=update), self.assertRaises(ValueError):
+                prepare_baseline(self.service, dict(payload,options={**payload['options'],**update}))
 
     def test_legacy_baseline_needs_explicit_conversion_metadata(self):
         path = self.root/'100d.mat'
@@ -150,7 +183,7 @@ class BaselineApiTests(unittest.TestCase):
     def test_plain_matrix_api_without_configuration(self):
         payload = self.payload()
         payload.pop('source_config')
-        payload['options']['matrix_only'] = True
+        payload['options'].update(matrix_only=True, window_size=1, gaussian_sigma=0)
         with patch.object(self.server, 'launch'):
             code, job = self.request('/api/finite-element/exports', payload)
         self.assertEqual(code, 201, job)
