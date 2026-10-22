@@ -6,7 +6,8 @@ import zipfile
 from pathlib import Path
 
 import numpy as np
-from scipy.io import savemat
+from scipy.io import savemat, whosmat
+from scipy.io.matlab import MatReadError
 from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import griddata
 
@@ -16,6 +17,15 @@ from .system_info import sha256
 from .apdl_npz import inspect_npz, read_npz_state, resolve_geometry
 from .finite_element_export import surface_from_ca_state
 from .pointcloud_runner import inspect_xyz, POINT_EXTENSIONS
+
+
+def inspect_surface_mat(path):
+    try:
+        variables = whosmat(path)
+    except (NotImplementedError, ValueError, OSError, MatReadError) as exc:
+        raise ValueError('无法读取MAT：文件损坏或版本不支持。本入口仅支持传统MAT（至v7.2）；v7.3/HDF5请在MATLAB中用 save(..., "-v7") 另存后上传') from exc
+    return dict(variables=[dict(name=name, shape=list(shape)) for name, shape, kind in variables
+        if len(shape) == 2 and kind in {'double', 'single', 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64'}])
 
 
 def number(options, key, default=None, *, positive=False):
@@ -129,7 +139,7 @@ def load_xyz(path, options):
             raise ValueError(f'XYZ有{missing_count}个未覆盖网格点；裁剪来源或明确启用最近邻填补后重试')
         matrix[missing] = griddata(unique, values, (gx[missing], gy[missing]), method='nearest')
     return matrix, x, y, dict(input_point_count=len(points), duplicate_xy_count=len(points)-len(unique),
-        missing_filled_count=missing_count, interpolation='linear', missing_fill='nearest' if missing_count else 'none',
+        source_resampled=True, missing_filled_count=missing_count, interpolation='linear', missing_fill='nearest' if missing_count else 'none',
         point_cloud_note='由散乱XYZ线性网格化；最近邻填补数量单列报告，非原始散乱点序列。')
 
 
@@ -137,11 +147,16 @@ def process_face(path, face):
     o = face['options']
     extra = {}
     if path.suffix.lower() == '.mat':
+        inspect_surface_mat(path)
         variable, raw = _read_surface_matrix(path, face.get('variable'))
         dx, dy = number(o, 'dx_mm', .3, positive=True), number(o, 'dy_mm', .3, positive=True)
+        ox, oy = number(o, 'origin_x_mm', 0), number(o, 'origin_y_mm', 0)
         matrix = orient_matrix(raw, o)
-        x = number(o, 'origin_x_mm', 0) + np.arange(matrix.shape[1])*dx
-        y = number(o, 'origin_y_mm', 0) + np.arange(matrix.shape[0])*dy
+        if o.get('transpose', False):
+            dx, dy = dy, dx
+            ox, oy = oy, ox
+        x = ox + np.arange(matrix.shape[1])*dx
+        y = oy + np.arange(matrix.shape[0])*dy
     elif path.suffix.lower() == '.npz':
         info = inspect_npz(path)
         supplied = face.get('source_geometry') or {}
@@ -157,6 +172,7 @@ def process_face(path, face):
         dx = dy = geometry['space_xy_um']/1000
         x, y = np.arange(matrix.shape[1])*dx, np.arange(matrix.shape[0])*dy
         extra.update(cell_geometry=geometry, value_mode='depth', input_unit='mm',
+            npz_selection='最终阶段快照（perfect_a内部仅1帧）' if variable == 'perfect_a' else f'历史数组第{extra["npz_stage"]}阶段',
             npz_rule=info['rule'], point_cloud_note='由CA状态提取的模拟表面，不是实测扫描。')
     else:
         variable = 'XYZ'
@@ -168,10 +184,12 @@ def process_face(path, face):
     source_size = [float(x[-1]-x[0]), float(y[-1]-y[0])]
     matrix, x, y, crop = crop_surface(matrix, x, y, o)
     metadata = dict(crop, source_variable=variable, value_mode=o.get('value_mode', 'height'),
-        input_unit=o.get('unit', 'mm'), input_shape=list(raw.shape), input_dx_mm=dx, input_dy_mm=dy,
+        input_unit=o.get('unit', 'mm'), input_shape=list(raw.shape),
+        input_dx_mm=dy if o.get('transpose', False) else dx, input_dy_mm=dx if o.get('transpose', False) else dy,
         source_size_xy_mm=source_size,
         orientation={key: o.get(key, default) for key, default in [('transpose', False), ('flip_x', False), ('flip_y', False), ('height_sign', 1)]})
     metadata.update(extra)
+    metadata['resampled'] = crop['resampled'] or extra.get('source_resampled', False)
     return matrix, x, y, metadata
 
 
@@ -189,6 +207,7 @@ def prepare_generation(service, payload):
         if bool(face.get('upload_id')) == bool(face.get('source_job_id')):
             raise ValueError('每面请选择一个上传文件或一个已完成模拟')
         source_geometry = {}
+        variable = face.get('variable')
         if face.get('upload_id'):
             record, path = service.get_upload(face['upload_id'])
         else:
@@ -201,6 +220,10 @@ def prepare_generation(service, payload):
             source_spec = json.loads((folder / 'spec.json').read_text(encoding='utf-8'))
             source_geometry = {key: source_spec['config']['GEOMETRY_CONFIG'][key] for key in ('space_xy_um', 'space_z_um')}
             path = folder / 'outputs/simulation.npz'
+            # perfect_a is final-only; chronological selections must use a_sd.
+            variable = 'a_sd' if face.get('stage') is not None else 'perfect_a'
+            if variable == 'a_sd' and not any(v['name'] == 'a_sd' and v['supported'] for v in inspect_npz(path)['variables']):
+                raise ValueError('该模拟只有最终快照，没有可读取的阶段历史；请将阶段留空')
             record = dict(name=f'{job_id}/simulation.npz', sha256=sha256(path))
         if path.suffix.lower() not in {'.mat', '.npz'} | POINT_EXTENSIONS:
             raise ValueError('仅接受 MAT、NPZ、TXT/CSV/TSV/XYZ 表面来源')
@@ -209,7 +232,7 @@ def prepare_generation(service, payload):
         options = dict(face.get('options') or {})
         frozen = f'inputs/{side}{path.suffix.lower()}'
         item = dict(side=side, source_name=record['name'], source_sha256=record['sha256'],
-            variable=face.get('variable'), stage=face.get('stage'), source_geometry=source_geometry,
+            variable=variable, stage=face.get('stage'), source_geometry=source_geometry,
             source_job_id=face.get('source_job_id'), options=options, frozen_path=frozen)
         matrix, x, y, metadata = process_face(path, item)
         item['preview'] = dict(metadata, side=side, source_name=record['name'], matrix_shape=list(matrix.shape), point_count=int(matrix.size),

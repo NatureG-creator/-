@@ -1,0 +1,43 @@
+{
+  "review_independence": "same-family",
+  "acceptance_status": "provisional",
+  "reviewer": "/root/surface_assumptions",
+  "base_commit": "b214d9e753cb55dce0f21e83c89cbc5995c6cbb1",
+  "rounds": [
+    {
+      "undeclared": [
+        {"site":"网站/frontend/surface_generation.mjs:28,49,57；网站/backend/surface_generation.py:153；网站/backend/apdl_npz.py:12,110-125","decision":"已完成模拟隐藏变量选择并默认读取 perfect_a，但仍允许输入阶段编号；perfect_a 是最终阶段快照。","why_it_matters":"存在实际输出含义错误：三阶段模拟输入阶段1会导出最终阶段，元数据仍写 npz_stage=1；输入阶段2则拒绝。已通过内存数值探针复现，且 scientific_outputs.py:125-129 确认 perfect_a 来自最后阶段。","class":"semantic"},
+        {"site":"网站/backend/surface_generation.py:92,123,163-169；网站/frontend/surface_generation.mjs:22","decision":"resampled 仅表示最终裁剪采用 exact 模式，忽略 XYZ 已发生的线性网格化。","why_it_matters":"存在实际结果说明错误：原始3×3、间距1 mm的XYZ，默认生成7×7、跨度1.8 mm的插值网格，仍记录 resampled=false，并显示“保留原始网格”。A-006声明插值，却未声明该标记采用不同含义。","class":"semantic"},
+        {"site":"网站/frontend/surface_generation.mjs:29；网站/backend/surface_generation.py:35,115,141","decision":"外部MAT/XYZ默认使用mm和0.3 mm间距，直接生成不要求用户明确填写或确认。","why_it_matters":"这些默认值决定高度尺度、MAT物理尺寸及XYZ采样密度；请求未指定默认值，清单也未记录该选择。","class":"semantic"},
+        {"site":"网站/backend/surface_generation.py:141-144,165-167；网站/frontend/surface_generation.mjs:31","decision":"MAT转置后继续把dx/dy作为输出方向间距；XYZ转置则交换坐标轴及其间距。","why_it_matters":"非等距MAT转置会重新解释物理几何。例如2×3矩阵、dx=1、dy=2，转置前跨度2×2 mm，转置后成为1×4 mm。界面帮助说明了选择，但假设清单未声明此格式间差异。","class":"semantic"},
+        {"site":"网站/frontend/surface_generation.mjs:16,32,47","decision":"双面必须共用长度、宽度、方向、裁剪偏移和目标间距；公共设置覆盖各面设置。","why_it_matters":"SPEC要求每面有裁剪设置，A-004写各面独立裁剪。当前UI无法在同一任务中为两个来源指定不同裁剪位置；该界面约束未列入假设清单。","class":"interface"}
+      ],
+      "stale_rows": [
+        {"row":"A-007","mismatch":"清单写外部文件要求确认单位与间距；代码允许直接使用预填默认值生成。"},
+        {"row":"A-004","mismatch":"独立裁剪仅在后端数据结构中成立，实际UI绑定双面裁剪设置；清单应明确这一限制或恢复逐面设置。"}
+      ],
+      "semantic_undeclared": 4,
+      "verdict": "gaps"
+    },
+    {
+      "undeclared": [
+        {"site":"网站/backend/surface_generation.py:141-146,174","decision":"MAT转置交换间距，但保留原X/Y原点；input_dx_mm/input_dy_mm记录转置后的间距，而input_shape仍记录转置前形状。","why_it_matters":"已用内存探针复现：原点(10,20)、2×3矩阵、间距(1,2)转置后，实际坐标为X=[10,12]、Y=[20,22]；按交换XY应为X=[20,22]、Y=[10,12]。导出点云的位置与A-015不符，manifest中的输入形状和输入间距也属于不同坐标方向。","class":"semantic"},
+        {"site":"网站/frontend/surface_generation.mjs:73-74；网站/backend/apdl_matlab.py:64-72；网站/backend/morphology_service.py:23-29","decision":"上传多变量MAT时，UI按文件变量顺序自动选中第一个二维数值变量；这会覆盖后端优先选择唯一Z_filled/F_filled的规则。","why_it_matters":"文件中辅助二维数组排在Z_filled前面时，可以直接把辅助数组导出为表面；同一文件经UI和省略variable的API请求会选择不同来源。清单未声明默认变量选择规则。","class":"semantic"},
+        {"site":"网站/backend/surface_generation.py:140；网站/backend/morphology_service.py:15-18；网站/backend/apdl_matlab.py:43-63","decision":"生成阶段仅支持scipy.io.loadmat可读的MAT格式，未支持MATLAB v7.3；上传检查却可通过MATLAB回退列出v7.3变量。","why_it_matters":"界面可能成功识别并提供变量选择，随后预检在loadmat处失败。SPEC和清单只写MAT，未声明版本限制或检查与生成之间的支持差异。","class":"interface"}
+      ],
+      "stale_rows": [{"row":"A-015","mismatch":"清单声明MAT、XYZ转置均交换XY；MAT实际只交换间距，不交换非零原点，而XYZ交换完整坐标轴。"}],
+      "semantic_undeclared": 2,
+      "verdict": "provisional_gaps"
+    }
+  ],
+  "executor_resolutions": [
+    "A-013: completed simulations select a_sd for explicit chronological stage; missing history is rejected. Three-stage regression checks each depth.",
+    "A-014: XYZ records source_resampled and total resampled; UI distinguishes initial gridding and later cropping.",
+    "A-007: defaults mm/0.3 mm are explicit editable defaults, with precheck geometry.",
+    "A-015: transpose exchanges MAT origin and spacing; manifest input spacing matches original input_shape. Nonzero origin anisotropic regression passes.",
+    "A-004: per-face crop length, width, axis and offsets override shared defaults; shared mode and target spacing are declared.",
+    "A-016: UI prefers unique Z_filled/F_filled; ambiguous variables remain unselected and backend rejects missing selection.",
+    "A-017: dedicated upload inspector and generator both use SciPy MAT support and explain v7.3 conversion; no MATLAB fallback mismatch."
+  ],
+  "final_review_limit": "Two-round budget reached; round-2 fixes verified deterministically, not re-reviewed. No independent scientific-method correctness claim."
+}

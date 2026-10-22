@@ -1,12 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {generationPayload,renderGenerationSummary,generationPage} from '../surface_generation.mjs';
+import {generationPayload,renderGenerationSummary,generationPage,defaultSurfaceVariable} from '../surface_generation.mjs';
 
 test('single face needs only its own source and preserves explicit crop options',()=>{
  const payload=generationPayload([{side:'back',enabled:true,uploadId:'xyz',origin:'upload',options:{dx_mm:.3}},{side:'front',enabled:false}],{length_mm:50,grid_mode:'preserve'});
  assert.equal(payload.kind,'surface_generation');
  assert.deepEqual(payload.faces,[{side:'back',upload_id:'xyz',options:{dx_mm:.3,length_mm:50,grid_mode:'preserve'}}]);
  assert.equal('reference_id' in payload,false);
+});
+test('MAT variable defaults prefer the unique surface and leave ambiguous data unselected',()=>{
+ assert.equal(defaultSurfaceVariable([{name:'auxiliary'},{name:'Z_filled'}]),'Z_filled');
+ assert.equal(defaultSurfaceVariable([{name:'auxiliary'},{name:'other'}]),'');
+ assert.equal(defaultSurfaceVariable([{name:'Z_filled'},{name:'F_filled'}]),'');
+ assert.equal(defaultSurfaceVariable([{name:'surface'}]),'surface');
 });
 test('completed simulation and selected NPZ stage remain explicit',()=>{
  const result=generationPayload([{side:'front',enabled:true,origin:'task',jobId:'sim',variable:'a_sd',stage:'2',options:{}}],{});
@@ -17,6 +23,13 @@ test('completed simulation and selected NPZ stage remain explicit',()=>{
 test('no face and missing sources cannot submit',()=>{
  assert.throws(()=>generationPayload([],{}),/至少/);
  assert.throws(()=>generationPayload([{side:'front',enabled:true}],{}),/来源/);
+});
+test('per-face crop overrides shared defaults without leaking override keys',()=>{
+ const result=generationPayload([{side:'front',enabled:true,uploadId:'a',options:{override_length_mm:50,override_offset_x_mm:0,override_length_axis:'Y',override_width_mm:null}},{side:'back',enabled:true,uploadId:'b',options:{override_length_mm:null}}],{length_mm:60,width_mm:10,offset_x_mm:3,length_axis:'X'});
+ assert.deepEqual(result.faces[0].options,{length_mm:50,width_mm:10,offset_x_mm:0,length_axis:'Y'});
+ assert.equal(result.faces[1].options.length_mm,60);
+ const html=renderGenerationSummary({faces:[{side:'front',grid_mode:'preserve',source_resampled:true,resampled:true}]});
+ assert.match(html,/XYZ线性网格化/);assert.doesNotMatch(html,/保留原始网格/);assert.doesNotMatch(html,/精确尺寸/);
 });
 test('result reports actual dimensions and interpolation instead of nominal size only',()=>{
  const html=renderGenerationSummary({faces:[{side:'front',source_name:'<source>',source_variable:'F_filled',value_mode:'height',matrix_shape:[60,167],size_x_mm:49.8,size_y_mm:17.7,requested_length_mm:50,actual_length_mm:49.8,actual_width_mm:17.7,grid_mode:'preserve',resampled:false,dx_mm:.3,dy_mm:.3,point_count:10020,missing_filled_count:12}]});

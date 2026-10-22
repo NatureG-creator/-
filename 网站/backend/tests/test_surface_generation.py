@@ -9,10 +9,32 @@ from scipy.io import savemat, loadmat
 
 from backend.server import make_server
 from backend.worker import run_job
-from backend.surface_generation import crop_surface, orient_matrix, process_face, prepare_generation, load_xyz
+from backend.surface_generation import crop_surface, orient_matrix, process_face, prepare_generation, load_xyz, inspect_surface_mat
 
 
 class SurfaceGenerationTests(unittest.TestCase):
+    def test_mat_inspection_and_generation_choose_unique_surface(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'face.mat'
+            savemat(path, dict(auxiliary=np.ones((3, 4)), Z_filled=np.full((3, 4), 7.)))
+            self.assertEqual([v['name'] for v in inspect_surface_mat(path)['variables']], ['auxiliary', 'Z_filled'])
+            out, _, _, meta = process_face(path, dict(options={}))
+            np.testing.assert_array_equal(out, 7)
+            self.assertEqual(meta['source_variable'], 'Z_filled')
+            path.write_bytes(b'unsupported MAT')
+            with self.assertRaisesRegex(ValueError, '另存'):
+                process_face(path, dict(options={}))
+
+    def test_transpose_preserves_anisotropic_mat_geometry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'face.mat'
+            raw = np.arange(6.).reshape(2, 3)
+            savemat(path, dict(Z_filled=raw))
+            out, x, y, meta = process_face(path, dict(options=dict(dx_mm=1, dy_mm=2, origin_x_mm=10, origin_y_mm=20, transpose=True)))
+            np.testing.assert_array_equal(out, raw.T)
+            self.assertEqual([x[0], y[0], x[-1], y[-1]], [20, 10, 22, 12])
+            self.assertEqual([meta['input_dx_mm'], meta['input_dy_mm']], [1, 2])
+
     def test_npz_axes_geometry_and_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'sim.npz'
@@ -36,6 +58,9 @@ class SurfaceGenerationTests(unittest.TestCase):
             np.testing.assert_allclose(out, yy[:, None]*2+xx[None, :])
             self.assertEqual(meta['duplicate_xy_count'], 1)
             self.assertEqual(meta['missing_filled_count'], 0)
+            self.assertTrue(meta['source_resampled'])
+            self.assertTrue(meta['resampled'])
+            self.assertEqual(meta['grid_mode'], 'preserve')
 
     def test_xyz_missing_grid_requires_explicit_fill(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -85,6 +110,20 @@ class SurfaceGenerationTests(unittest.TestCase):
                 preview = spec['faces'][0]['preview']
                 self.assertEqual(preview['matrix_shape'], [6, 3])
                 self.assertAlmostEqual(preview['dx_mm'], .1)
+                face = dict(side='front', source_job_id='a'*16, options={}, stage=1)
+                with self.assertRaisesRegex(ValueError, '最终快照'):
+                    prepare_generation(server, dict(faces=[face]))
+                stages = np.ones((3, 3, 6, 4))
+                for i in range(3):
+                    stages[i, :, :, :i] = 0
+                np.savez(folder/'outputs/simulation.npz', perfect_a=stages[-1], a_sd=stages)
+                for i in range(3):
+                    face['stage'] = i+1
+                    spec, _ = prepare_generation(server, dict(faces=[face]))
+                    preview = spec['faces'][0]['preview']
+                    self.assertEqual(preview['source_variable'], 'a_sd')
+                    self.assertEqual(preview['npz_stage'], i+1)
+                    np.testing.assert_allclose(preview['z_range_mm'], [i*.02, i*.02])
             finally:
                 server.server_close()
 
