@@ -305,6 +305,10 @@ class Handler(BaseHTTPRequestHandler):
             from .baseline_export import inspect_baseline
             info = inspect_baseline(self.server, self._body())
             return self._json(200, {k: v for k, v in info.items() if k != 'source_path'})
+        if method == 'POST' and path == '/api/surface-generation/inspect':
+            from .surface_generation import prepare_generation
+            spec, _ = prepare_generation(self.server, self._body())
+            return self._json(200, {'faces': [face['preview'] for face in spec['faces']]})
         if method == "POST" and path == "/api/finite-element/exports":
             body = self._body()
             body["kind"] = "finite_element"

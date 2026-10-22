@@ -8,10 +8,14 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import griddata
 
 from .morphology_service import _read_surface_matrix
 from .runner import _atomic_json
 from .system_info import sha256
+from .apdl_npz import inspect_npz, read_npz_state, resolve_geometry
+from .finite_element_export import surface_from_ca_state
+from .pointcloud_runner import inspect_xyz, POINT_EXTENSIONS
 
 
 def number(options, key, default=None, *, positive=False):
@@ -91,17 +95,84 @@ def crop_surface(matrix, x, y, options):
         actual_width_mm=float((yy if axis == 'X' else xx)[-1]-(yy if axis == 'X' else xx)[0]))
 
 
+def load_xyz(path, options):
+    inspect_xyz(path)
+    points = []
+    with path.open(encoding='utf-8-sig') as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            cells = next(csv.reader([line])) if ',' in line else line.split()
+            try:
+                points.append([float(v) for v in cells[:3]])
+            except ValueError:
+                continue  # inspect_xyz already permits only one textual header.
+    points = np.asarray(points)
+    factor = .001 if options.get('unit') == 'um' else 1
+    xy = points[:, :2]*factor
+    unique, inverse, counts = np.unique(xy, axis=0, return_inverse=True, return_counts=True)
+    values = np.bincount(inverse, weights=points[:, 2])/counts
+    dx, dy = number(options, 'dx_mm', .3, positive=True), number(options, 'dy_mm', .3, positive=True)
+    lo, hi = unique.min(axis=0), unique.max(axis=0)
+    dims = np.floor((hi-lo)/[dx, dy]+1e-9).astype(int)+1
+    if min(dims) < 2 or math.prod(dims) > 2_000_000:
+        raise ValueError('XYZ网格每轴至少2点、总数不超过200万，请检查尺寸与间距')
+    x, y = lo[0]+np.arange(dims[0])*dx, lo[1]+np.arange(dims[1])*dy
+    gx, gy = np.meshgrid(x, y)
+    try:
+        matrix = griddata(unique, values, (gx, gy), method='linear')
+    except Exception as exc:
+        raise ValueError('XYZ无法形成二维表面，请检查XY是否共线、方向或重复采样') from exc
+    missing = ~np.isfinite(matrix); missing_count = int(missing.sum())
+    if missing_count:
+        if not options.get('fill_missing', False):
+            raise ValueError(f'XYZ有{missing_count}个未覆盖网格点；裁剪来源或明确启用最近邻填补后重试')
+        matrix[missing] = griddata(unique, values, (gx[missing], gy[missing]), method='nearest')
+    return matrix, x, y, dict(input_point_count=len(points), duplicate_xy_count=len(points)-len(unique),
+        missing_filled_count=missing_count, interpolation='linear', missing_fill='nearest' if missing_count else 'none',
+        point_cloud_note='由散乱XYZ线性网格化；最近邻填补数量单列报告，非原始散乱点序列。')
+
+
 def process_face(path, face):
-    variable, raw = _read_surface_matrix(path, face.get('variable'))
     o = face['options']
-    matrix = orient_matrix(raw, o)
-    dx, dy = number(o, 'dx_mm', .3, positive=True), number(o, 'dy_mm', .3, positive=True)
-    x = number(o, 'origin_x_mm', 0) + np.arange(matrix.shape[1])*dx
-    y = number(o, 'origin_y_mm', 0) + np.arange(matrix.shape[0])*dy
+    extra = {}
+    if path.suffix.lower() == '.mat':
+        variable, raw = _read_surface_matrix(path, face.get('variable'))
+        dx, dy = number(o, 'dx_mm', .3, positive=True), number(o, 'dy_mm', .3, positive=True)
+        matrix = orient_matrix(raw, o)
+        x = number(o, 'origin_x_mm', 0) + np.arange(matrix.shape[1])*dx
+        y = number(o, 'origin_y_mm', 0) + np.arange(matrix.shape[0])*dy
+    elif path.suffix.lower() == '.npz':
+        info = inspect_npz(path)
+        supplied = face.get('source_geometry') or {}
+        if not supplied:
+            for key, option in [('space_xy_um', 'cell_xy_um'), ('space_z_um', 'cell_z_um')]:
+                if o.get(option) not in (None, ''):
+                    supplied[key] = number(o, option, positive=True)
+        geometry = resolve_geometry(info, supplied)
+        state, extra = read_npz_state(path, face.get('variable'), face.get('stage'))
+        raw = surface_from_ca_state(state, geometry['space_z_um']).T
+        variable = extra['npz_variable']
+        matrix = orient_matrix(raw, dict(o, unit='mm', value_mode='depth'))
+        dx = dy = geometry['space_xy_um']/1000
+        x, y = np.arange(matrix.shape[1])*dx, np.arange(matrix.shape[0])*dy
+        extra.update(cell_geometry=geometry, value_mode='depth', input_unit='mm',
+            npz_rule=info['rule'], point_cloud_note='由CA状态提取的模拟表面，不是实测扫描。')
+    else:
+        variable = 'XYZ'
+        raw, x, y, extra = load_xyz(path, o)
+        matrix = orient_matrix(raw, o)
+        if o.get('transpose', False):
+            x, y = y, x
+        dx, dy = float(x[1]-x[0]), float(y[1]-y[0])
+    source_size = [float(x[-1]-x[0]), float(y[-1]-y[0])]
     matrix, x, y, crop = crop_surface(matrix, x, y, o)
-    return matrix, x, y, dict(crop, source_variable=variable, value_mode=o.get('value_mode', 'height'),
+    metadata = dict(crop, source_variable=variable, value_mode=o.get('value_mode', 'height'),
         input_unit=o.get('unit', 'mm'), input_shape=list(raw.shape), input_dx_mm=dx, input_dy_mm=dy,
+        source_size_xy_mm=source_size,
         orientation={key: o.get(key, default) for key, default in [('transpose', False), ('flip_x', False), ('flip_y', False), ('height_sign', 1)]})
+    metadata.update(extra)
+    return matrix, x, y, metadata
 
 
 def prepare_generation(service, payload):
@@ -110,16 +181,38 @@ def prepare_generation(service, payload):
         raise ValueError('请选择一个或两个独立表面')
     sources, selected = [], []
     for face in faces:
+        if not isinstance(face, dict):
+            raise ValueError('每面设置必须为对象')
         side = face.get('side')
         if side not in {'front', 'back'} or side in [s['side'] for s in selected]:
             raise ValueError('正面/反面不能重复')
-        record, path = service.get_upload(face.get('upload_id'))
+        if bool(face.get('upload_id')) == bool(face.get('source_job_id')):
+            raise ValueError('每面请选择一个上传文件或一个已完成模拟')
+        source_geometry = {}
+        if face.get('upload_id'):
+            record, path = service.get_upload(face['upload_id'])
+        else:
+            job_id = service.validate_id(face['source_job_id'])
+            source_job = service.get_job(job_id)
+            if source_job['kind'] != 'simulation' or source_job['state'] != 'completed':
+                raise ValueError('任务来源必须为已完成模拟')
+            import json
+            folder = service.runtime / 'jobs' / job_id
+            source_spec = json.loads((folder / 'spec.json').read_text(encoding='utf-8'))
+            source_geometry = {key: source_spec['config']['GEOMETRY_CONFIG'][key] for key in ('space_xy_um', 'space_z_um')}
+            path = folder / 'outputs/simulation.npz'
+            record = dict(name=f'{job_id}/simulation.npz', sha256=sha256(path))
+        if path.suffix.lower() not in {'.mat', '.npz'} | POINT_EXTENSIONS:
+            raise ValueError('仅接受 MAT、NPZ、TXT/CSV/TSV/XYZ 表面来源')
+        if sha256(path) != record['sha256']:
+            raise ValueError('来源文件已改变，请重新选择')
         options = dict(face.get('options') or {})
         frozen = f'inputs/{side}{path.suffix.lower()}'
         item = dict(side=side, source_name=record['name'], source_sha256=record['sha256'],
-            variable=face.get('variable'), options=options, frozen_path=frozen)
+            variable=face.get('variable'), stage=face.get('stage'), source_geometry=source_geometry,
+            source_job_id=face.get('source_job_id'), options=options, frozen_path=frozen)
         matrix, x, y, metadata = process_face(path, item)
-        item['preview'] = dict(metadata, matrix_shape=list(matrix.shape), point_count=int(matrix.size),
+        item['preview'] = dict(metadata, side=side, source_name=record['name'], matrix_shape=list(matrix.shape), point_count=int(matrix.size),
             size_x_mm=float(x[-1]-x[0]), size_y_mm=float(y[-1]-y[0]),
             dx_mm=float(x[1]-x[0]), dy_mm=float(y[1]-y[0]), z_range_mm=[float(matrix.min()), float(matrix.max())])
         selected.append(item)

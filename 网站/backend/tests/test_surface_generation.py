@@ -9,10 +9,85 @@ from scipy.io import savemat, loadmat
 
 from backend.server import make_server
 from backend.worker import run_job
-from backend.surface_generation import crop_surface, orient_matrix
+from backend.surface_generation import crop_surface, orient_matrix, process_face, prepare_generation, load_xyz
 
 
 class SurfaceGenerationTests(unittest.TestCase):
+    def test_npz_axes_geometry_and_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'sim.npz'
+            state = np.ones((2, 4, 7, 5)); state[1, 1:3, 2:4, :2] = 0
+            np.savez(path, a_sd=state, space_xy_um=300., space_z_um=50.)
+            out, x, y, meta = process_face(path, dict(variable='a_sd', stage=2, options={}))
+            self.assertEqual(out.shape, (7, 4))
+            self.assertAlmostEqual(out[2, 1], .1)
+            self.assertAlmostEqual(x[-1], .9)
+            self.assertEqual(meta['value_mode'], 'depth')
+            with self.assertRaises(ValueError):
+                process_face(path, dict(options=dict(cell_xy_um=999)))
+
+    def test_xyz_plane_units_and_duplicate_average(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'plane.xyz'
+            x, y = np.meshgrid(np.arange(5)*300, np.arange(4)*300)
+            points = np.column_stack((x.ravel(), y.ravel(), (x+2*y).ravel()))
+            np.savetxt(path, np.vstack((points, points[0])))
+            out, xx, yy, meta = process_face(path, dict(options=dict(unit='um', dx_mm=.3, dy_mm=.3)))
+            np.testing.assert_allclose(out, yy[:, None]*2+xx[None, :])
+            self.assertEqual(meta['duplicate_xy_count'], 1)
+            self.assertEqual(meta['missing_filled_count'], 0)
+
+    def test_xyz_missing_grid_requires_explicit_fill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'tri.xyz'
+            np.savetxt(path, [[0, 0, 0], [3, 0, 1], [0, 3, 2]])
+            with self.assertRaisesRegex(ValueError, '未覆盖'):
+                load_xyz(path, dict(dx_mm=1, dy_mm=1))
+            matrix, x, y, meta = load_xyz(path, dict(dx_mm=1, dy_mm=1, fill_missing=True))
+            self.assertTrue(np.isfinite(matrix).all())
+            self.assertGreater(meta['missing_filled_count'], 0)
+
+    def test_dual_faces_freeze_and_export_independently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = make_server(port=0, runtime=Path(tmp))
+            try:
+                faces = []
+                for side, value in [('front', 2.), ('back', 7.)]:
+                    stream = io.BytesIO(); savemat(stream, {'surface': np.full((4, 8), value)}); stream.seek(0)
+                    upload = server.upload(side+'.mat', stream, len(stream.getbuffer()))
+                    faces.append(dict(side=side, upload_id=upload['id'], options={}))
+                spec, _ = prepare_generation(server, dict(faces=faces))
+                self.assertEqual(len(spec['faces']), 2)
+                with self.assertRaises(ValueError):
+                    prepare_generation(server, dict(faces=[faces[0], faces[0]]))
+                job = server.create_job(dict(kind='surface_generation', faces=faces), launch=False)
+                run_job(job['id'], Path(tmp))
+                output = Path(tmp)/'jobs'/job['id']/'outputs'
+                self.assertEqual(server.get_job(job['id'])['state'], 'completed')
+                np.testing.assert_array_equal(loadmat(output/'front/Z_filled.mat')['Z_filled'], 2)
+                np.testing.assert_array_equal(loadmat(output/'back/F_filled.mat')['F_filled'], 7)
+                self.assertTrue((output/'front/surface_preview.png').is_file())
+                import zipfile
+                with zipfile.ZipFile(output/'surface_bundle.zip') as archive:
+                    self.assertIn('back/manifest.json', archive.namelist())
+            finally:
+                server.server_close()
+
+    def test_completed_simulation_uses_frozen_geometry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = make_server(port=0, runtime=Path(tmp))
+            try:
+                folder = Path(tmp)/'jobs'/('a'*16); (folder/'outputs').mkdir(parents=True)
+                (folder/'status.json').write_text(json.dumps(dict(id='a'*16, kind='simulation', state='completed')))
+                (folder/'spec.json').write_text(json.dumps(dict(kind='simulation', config=dict(GEOMETRY_CONFIG=dict(space_xy_um=100., space_z_um=20.)))))
+                np.savez(folder/'outputs/simulation.npz', perfect_a=np.ones((3, 6, 4)))
+                spec, _ = prepare_generation(server, dict(faces=[dict(side='front', source_job_id='a'*16, options={})]))
+                preview = spec['faces'][0]['preview']
+                self.assertEqual(preview['matrix_shape'], [6, 3])
+                self.assertAlmostEqual(preview['dx_mm'], .1)
+            finally:
+                server.server_close()
+
     def test_preserve_50mm_is_an_exact_subset(self):
         matrix = np.arange(5*641, dtype=float).reshape(5, 641)
         x, y = np.arange(641)*.3, np.arange(5)*.3

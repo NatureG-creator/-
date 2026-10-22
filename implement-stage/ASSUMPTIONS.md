@@ -13,3 +13,5 @@
 | A-008 | 输出契约 | front/Z_filled、back/F_filled；每MAT只含二维double变量，元数据放旁文件；矩阵行Y列X | interface | user |
 | A-009 | 裁剪定位 | 默认居中；可输入距来源最小X/Y的偏移；保留网格时向区域内取整 | semantic | default |
 | A-010 | 初始尺寸 | 默认完整来源；预设190/60/50必须由用户选择，宽度留空沿用完整宽度 | interface | default |
+| A-011 | NPZ轴和网格 | NPZ的[X,Y,Z]状态先提取深度再转为行Y列X；不得用尺寸字段拉伸模拟，来源几何优先 | semantic | default |
+| A-012 | 原始XYZ定义域 | XYZ坐标按输入单位统一mm，网格从最小XY向内生成，跨度不足一个间隔拒绝；非矩形扫描默认拒绝缺失格，显式最近邻填充可补边缘 | semantic | default |
