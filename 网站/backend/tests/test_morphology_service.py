@@ -24,11 +24,12 @@ class MorphologyServiceTests(unittest.TestCase):
                     'source_kind': 'mat_surface', 'surface_variable': 'Z_filled',
                     'surface_options': {'unit': 'mm', 'value_mode': 'height', 'dx_mm': .3,
                         'dy_mm': .3, 'reference_mode': 'maximum', 'height_sign': 1,
-                        'layout': 'yx'}, 'analysis_mode': 'ga'}, launch=False)
+                    'layout': 'yx'}, 'analysis_mode': 'surface'}, launch=False)
                 folder = Path(tmp) / 'jobs' / job['id']
                 spec = json.loads((folder / 'spec.json').read_text(encoding='utf-8'))
                 report = run_morphology(spec, folder)
                 self.assertEqual(report['metadata']['source_type'], 'mat_surface')
+                self.assertEqual(report['extraction'].startswith('仅将'), True)
                 self.assertEqual(report['metadata']['matrix_shape'], [12, 16])
                 self.assertTrue((folder / 'outputs' / 'surface_points.csv').is_file())
                 self.assertTrue((folder / 'outputs' / 'surface_points.xyz').is_file())
@@ -198,7 +199,7 @@ class MorphologyServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             server=make_server(port=0,runtime=Path(tmp))
             try:
-                with self.assertRaisesRegex(ValueError,'ga、detail 或 both'):
+                with self.assertRaisesRegex(ValueError,'analysis_mode'):
                     server.create_job({'kind':'morphology_analysis','analysis_mode':'fake'},launch=False)
                 self.assertEqual(list((Path(tmp)/'jobs').iterdir()),[])
             finally:server.server_close()

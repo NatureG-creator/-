@@ -39,8 +39,9 @@ def _read_surface_matrix(path, variable):
 def prepare_morphology(service, payload):
     started=time.perf_counter()
     mode=payload.get('analysis_mode','ga')
-    if mode not in {'ga','detail','both'}: raise ValueError('analysis_mode 只能为 ga、detail 或 both')
-    mode_label={'ga':'GA同口径验收','detail':'精细形貌分析','both':'双模式对照'}[mode]
+    allowed_modes = {'ga', 'detail', 'both'} | ({'surface'} if payload.get('source_kind') == 'mat_surface' else set())
+    if mode not in allowed_modes: raise ValueError('analysis_mode 只能为 ga、detail、both；二维 MAT 使用 surface')
+    mode_label={'ga':'GA同口径验收','detail':'精细形貌分析','both':'双模式对照','surface':'实测表面形貌'}[mode]
     if bool(payload.get('upload_id'))==bool(payload.get('source_job_id')):
         raise ValueError('请选择一个上传 NPZ 或一个已完成模拟任务')
     config=default_simulation_config()
@@ -128,17 +129,18 @@ def _write_surface_point_cloud(result, output, source_name):
     values = np.asarray(result['oriented_values_um'], dtype=float) / 1000.0
     rows, cols = values.shape
     dx, dy = result['metadata']['dx_mm'], result['metadata']['dy_mm']
+    x0, y0 = result['metadata']['origin_x_mm'], result['metadata']['origin_y_mm']
     csv_path, xyz_path = output / 'surface_points.csv', output / 'surface_points.xyz'
     with csv_path.open('w', encoding='utf-8-sig', newline='') as handle:
         import csv
         writer = csv.writer(handle); writer.writerow(['x_mm', 'y_mm', 'z_mm'])
         for row in range(rows):
             for col in range(cols):
-                writer.writerow([f'{col*dx:.9g}', f'{row*dy:.9g}', f'{values[row,col]:.9g}'])
+                writer.writerow([f'{x0+col*dx:.9g}', f'{y0+row*dy:.9g}', f'{values[row,col]:.9g}'])
     with xyz_path.open('w', encoding='utf-8') as handle:
         for row in range(rows):
             for col in range(cols):
-                handle.write(f'{col*dx:.9g} {row*dy:.9g} {values[row,col]:.9g}\n')
+                handle.write(f'{x0+col*dx:.9g} {y0+row*dy:.9g} {values[row,col]:.9g}\n')
     result['metadata']['point_cloud_files'] = ['surface_points.csv', 'surface_points.xyz']
     result['metadata']['point_cloud_note'] = '由规则矩阵行列和 X/Y 间距展开；不是原始散乱扫描点云。'
 
@@ -147,7 +149,7 @@ def _run_surface_morphology(spec, job_dir, progress=None, *, output=None):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    from morphology_analysis import analyze_surface_matrix, export_analysis
+    from morphology_analysis import analyze_surface_matrix
     from .runner import _atomic_json
     path = next((job_dir / 'inputs').glob('source.mat'), None)
     if path is None or sha256(path) != spec['source_sha256']:
@@ -155,24 +157,29 @@ def _run_surface_morphology(spec, job_dir, progress=None, *, output=None):
     variable, matrix = _read_surface_matrix(path, spec['source_variable'])
     options = dict(spec.get('surface_options') or {})
     if progress: progress({'phase': 'reading'})
-    result = analyze_surface_matrix(matrix, mode=spec['analysis_mode'] if spec['analysis_mode'] != 'both' else 'ga',
-        dx_mm=options.get('dx_mm'), dy_mm=options.get('dy_mm'), unit=options.get('unit', 'mm'),
+    result = analyze_surface_matrix(matrix, dx_mm=options.get('dx_mm'), dy_mm=options.get('dy_mm'), unit=options.get('unit', 'mm'),
         value_mode=options.get('value_mode', 'height'), reference_mode=options.get('reference_mode', 'maximum'),
         reference_value=options.get('reference_value'), height_sign=int(options.get('height_sign', 1)),
         layout=options.get('layout', 'yx'), transpose=bool(options.get('transpose', False)),
-        flip_x=bool(options.get('flip_x', False)), flip_y=bool(options.get('flip_y', False)))
+        flip_x=bool(options.get('flip_x', False)), flip_y=bool(options.get('flip_y', False)),
+        origin_x_mm=options.get('origin_x_mm', 0.0), origin_y_mm=options.get('origin_y_mm', 0.0))
     result['metadata'].update(source_name=spec['source_name'], source_variable=variable,
                               source_sha256=spec['source_sha256'], configuration_provenance=spec['configuration_provenance'])
     output = output or job_dir / 'outputs'; output.mkdir(parents=True, exist_ok=True)
     _write_surface_point_cloud(result, output, spec['source_name'])
-    figures = export_analysis(result, output, source_name=spec['source_name'], formats=('png',))
-    for fig in figures: plt.close(fig)
     report = result['report']
-    report['six_metrics'] = [report['raw_depth_um']['mean'],
-                             float(np.mean(result['depth_map'])), report['log_ratio']['mean'],
-                             report['log_depth']['mean'], report['log_ratio']['std'], report['log_depth']['std']]
     report['warnings'] = [spec['configuration_provenance'], result['metadata']['layer_rule'],
                           '正反面未在此任务中自动配准或拼接；请分别分析并核对坐标方向。']
+    import importlib.util
+    viewer_spec = importlib.util.spec_from_file_location('_corrosion_surface_view',
+        Path(__file__).resolve().parents[1] / 'engine' / '01_运行程序与数据' / '04_交互查看腐蚀形貌.py')
+    viewer = importlib.util.module_from_spec(viewer_spec); viewer_spec.loader.exec_module(viewer)
+    viewer.configure_matplotlib()
+    figure = viewer.plot_surface_and_contour(result['surface_values_um'], result['max_locs'],
+        result['metadata']['space_xy_um'], spec['source_name'], dpi=160,
+        space_y=result['metadata']['dy_mm'] * 1000.0, surface_labels=True)
+    figure.savefig(output / 'surface_and_contour.png', dpi=160)
+    plt.close(figure)
     _atomic_json(output / 'analysis_report.json', report)
     _atomic_json(output / 'summary.json', report)
     if output == job_dir / 'outputs': write_morphology_archive(job_dir)
@@ -181,13 +188,6 @@ def _run_surface_morphology(spec, job_dir, progress=None, *, output=None):
 
 def run_morphology(spec,job_dir,progress=None, *, state=None, output=None):
     if spec.get('source_type') == 'mat_surface':
-        if spec['analysis_mode'] == 'both':
-            first = _run_surface_morphology(dict(spec, analysis_mode='ga'), job_dir, progress, output=(output or job_dir/'outputs')/'ga')
-            second = _run_surface_morphology(dict(spec, analysis_mode='detail'), job_dir, progress, output=(output or job_dir/'outputs')/'detail')
-            summary = {'modes': {'ga': first, 'detail': second}}
-            from .runner import _atomic_json
-            _atomic_json(job_dir/'outputs/summary.json', summary); write_morphology_archive(job_dir)
-            return summary
         return _run_surface_morphology(spec, job_dir, progress, output=output)
     if spec.get('npz_stages'):
         return run_morphology_batch(spec,job_dir,progress)

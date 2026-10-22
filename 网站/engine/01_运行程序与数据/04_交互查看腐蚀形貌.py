@@ -213,13 +213,15 @@ def plot_surface_and_contour(
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
     cmap: str | None = None,
+    space_y: float | None = None,
+    surface_labels: bool = False,
 ) -> None:
     """打开 3D 曲面 + 二维等高线交互窗口。"""
     import matplotlib.pyplot as plt
 
     rows, cols = surface_um.shape
     x = np.arange(cols) * float(space)
-    y = np.arange(rows) * float(space)
+    y = np.arange(rows) * float(space_y if space_y is not None else space)
     x_grid, y_grid = np.meshgrid(x, y)
 
     fig = plt.figure(
@@ -235,32 +237,34 @@ def plot_surface_and_contour(
         linewidth=float(FIGURE_CONFIG["surface_linewidth"]),
         antialiased=bool(FIGURE_CONFIG["surface_antialiased"]),
     )
-    ax3d.set_title("三维曲面极值点检测")
+    ax3d.set_title("三维曲面形貌" if surface_labels else "三维曲面极值点检测")
     ax3d.set_xlabel("X方向/μm")
     ax3d.set_ylabel("Y方向/μm")
-    ax3d.set_zlabel("腐蚀深度/μm")
+    value_label = "表面相对值/μm" if surface_labels else "腐蚀深度/μm"
+    ax3d.set_zlabel(value_label)
     if max_locs.size:
         rows0 = max_locs[:, 0].astype(int) - 1
         cols0 = max_locs[:, 1].astype(int) - 1
         valid = (rows0 >= 0) & (rows0 < rows) & (cols0 >= 0) & (cols0 < cols)
         rows0 = rows0[valid]
         cols0 = cols0[valid]
-        ax3d.scatter(cols0 * space, rows0 * space, surface_um[rows0, cols0], c="red", s=36, label="极大值点")
+        ax3d.scatter(cols0 * space, rows0 * (space_y if space_y is not None else space), surface_um[rows0, cols0], c="red", s=36, label="极大值点")
         ax3d.legend(loc="upper right")
-    fig.colorbar(surf, ax=ax3d, shrink=0.72, pad=0.08, label="腐蚀深度/μm")
+    fig.colorbar(surf, ax=ax3d, shrink=0.72, pad=0.08, label=value_label)
 
     ax2d = fig.add_subplot(1, 2, 2)
     plot_cmap = cmap or str(FIGURE_CONFIG["surface_cmap"])
     contour = ax2d.contourf(x_grid, y_grid, surface_um, levels=24, cmap=plot_cmap)
     ax2d.contour(x_grid, y_grid, surface_um, levels=24, colors="k", linewidths=0.45)
     if max_locs.size:
-        ax2d.scatter(cols0 * space, rows0 * space, marker="x", c="red", s=50, linewidths=2, label="极大值点")
-    ax2d.set_title("二维等高线极值点")
+        ax2d.scatter(cols0 * space, rows0 * (space_y if space_y is not None else space), marker="x", c="red", s=50, linewidths=2, label="极大值点")
+    ax2d.set_title("二维等高线形貌" if surface_labels else "二维等高线极值点")
     ax2d.set_xlabel("X方向/μm")
     ax2d.set_ylabel("Y方向/μm")
     ax2d.set_aspect("equal", adjustable="box")
-    ax2d.legend(loc="upper right")
-    fig.colorbar(contour, ax=ax2d, shrink=0.72, pad=0.05, label="腐蚀深度/μm")
+    if max_locs.size:
+        ax2d.legend(loc="upper right")
+    fig.colorbar(contour, ax=ax2d, shrink=0.72, pad=0.05, label=value_label)
     add_click_value_tool(ax2d, surface_um, x_grid, y_grid)
     ax3d.view_init(
         elev=float(FIGURE_CONFIG["surface_elev"]),

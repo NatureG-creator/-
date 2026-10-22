@@ -17,6 +17,12 @@ test('mode and source are explicit; geometry only fills missing source metadata'
  assert.throws(()=>morphologyPayload({mode:'fake',jobId:'123'}),/模式/);
  assert.throws(()=>morphologyPayload({mode:'ga'}),/来源/);
 });
+test('measured MAT payload and result stay separate from CA metrics',()=>{
+ const payload=morphologyPayload({mode:'surface',uploadId:'abc',sourceKind:'mat_surface',surfaceVariable:'F_filled',surfaceOptions:{unit:'mm',dx_mm:.3,dy_mm:.3}});
+ assert.equal(payload.analysis_mode,'surface');assert.equal(payload.source_kind,'mat_surface');assert.equal(payload.surface_variable,'F_filled');
+ const html=renderMorphologyResult({metadata:{source_type:'mat_surface',source_name:'C17.mat',source_variable:'F_filled',matrix_shape:[60,193],value_mode:'height',input_unit:'mm',dx_mm:.3,dy_mm:.3,surface_range_um:[0,300],surface_mean_um:120,surface_std_um:40,reference_assumption:'需要基准区确认'},extraction:'仅导出规则网格坐标'});
+ assert.match(html,/实测表面形貌/);assert.match(html,/不套用 CA\/GA/);assert.match(html,/surface_points\.xyz/);
+});
 test('external NPZ stage is included and must be a positive integer',()=>{
  assert.deepEqual(morphologyPayload({mode:'both',uploadId:'abc',sourceStage:2}),{kind:'morphology_analysis',analysis_mode:'both',upload_id:'abc',source_stage:2});
  assert.throws(()=>morphologyPayload({mode:'ga',uploadId:'abc',sourceStage:1.5}),/正整数/);

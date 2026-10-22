@@ -4,7 +4,6 @@ import csv
 import importlib.util
 import json
 import numpy as np
-from skimage import filters
 from corrosion_model.analysis import moving_avg_3d, expand_matrix, jixiantiqu_3d
 from unified_config import POSTPROCESS_CONFIG, MATLAB_CA_COMPARISON_CONFIG, matlab_ca_postprocess_settings
 from depth_distribution_diagnostics import (prepare_depth_samples, make_report, summarize_values,
@@ -13,12 +12,11 @@ from depth_distribution_diagnostics import (prepare_depth_samples, make_report, 
 MODE_LABELS = {'ga':'GA 同口径验收','detail':'精细形貌分析'}
 
 
-def analyze_surface_matrix(matrix, *, mode='ga', dx_mm, dy_mm, unit='mm', value_mode='height',
+def analyze_surface_matrix(matrix, *, dx_mm, dy_mm, unit='mm', value_mode='height',
                            reference_mode='maximum', reference_value=None, height_sign=1,
-                           layout='yx', transpose=False, flip_x=False, flip_y=False, postprocess=None):
-    """Analyze one measured 2-D surface matrix without inventing CA layers."""
-    if mode not in MODE_LABELS:
-        raise ValueError('analysis_mode 只能为 ga 或 detail')
+                           layout='yx', transpose=False, flip_x=False, flip_y=False,
+                           origin_x_mm=0.0, origin_y_mm=0.0):
+    """Describe one measured 2-D surface without applying CA/GA pit statistics."""
     values = np.asarray(matrix, dtype=np.float64)
     if values.ndim != 2 or min(values.shape) < 2 or not np.isfinite(values).all():
         raise ValueError('MAT 表面必须是有限二维数值矩阵，各维至少为2')
@@ -26,9 +24,10 @@ def analyze_surface_matrix(matrix, *, mode='ga', dx_mm, dy_mm, unit='mm', value_
         raise ValueError('MAT 单位或数值含义无效')
     if layout not in {'yx', 'xy'} or height_sign not in {1, -1}:
         raise ValueError('MAT 行列约定或高度方向无效')
-    for value, label in ((dx_mm, 'X 间距'), (dy_mm, 'Y 间距')):
-        if not np.isfinite(float(value)) or float(value) <= 0:
-            raise ValueError(f'{label}必须为正数')
+    for value, label in ((dx_mm, 'X 间距'), (dy_mm, 'Y 间距'),
+                         (origin_x_mm, 'X 原点'), (origin_y_mm, 'Y 原点')):
+        if not np.isfinite(float(value)) or (label.endswith('间距') and float(value) <= 0):
+            raise ValueError(f'{label}必须为{("正数" if label.endswith("间距") else "有限数值")}')
     if layout == 'xy':
         values = values.T
     if transpose:
@@ -40,7 +39,7 @@ def analyze_surface_matrix(matrix, *, mode='ga', dx_mm, dy_mm, unit='mm', value_
     scale_um = 1000.0 if unit == 'mm' else 1.0
     oriented = values * float(height_sign) * scale_um
     if value_mode == 'depth':
-        signal = oriented - float(np.min(oriented))
+        surface_um = oriented
         reference_um = None
     else:
         if reference_mode == 'maximum':
@@ -51,46 +50,30 @@ def analyze_surface_matrix(matrix, *, mode='ga', dx_mm, dy_mm, unit='mm', value_
             reference_um = float(reference_value) * float(height_sign) * scale_um
         else:
             raise ValueError('高度参考面无效')
-        signal = reference_um - oriented
-        signal -= float(np.min(signal))
-    pp = dict(POSTPROCESS_CONFIG if postprocess is None else postprocess)
-    window = int(pp['auto_plot_window_size'] if mode == 'ga' else pp['interactive_window_size'])
-    if window < 1 or window % 2 != 1:
-        raise ValueError('平滑窗口必须为正奇数')
-    baseline = filters.gaussian(signal, sigma=float(pp['gaussian_sigma']), preserve_range=True)
-    mc = MATLAB_CA_COMPARISON_CONFIG
-    if mode == 'ga':
-        threshold, nh = matlab_ca_postprocess_settings(float(np.ptp(baseline)))
-        prominence, distance = float(mc['min_prominence']), int(mc['min_distance'])
-    else:
-        threshold, nh = pp['watershed_threshold'], pp['neighborhood']
-        prominence, distance = pp['min_prominence'], pp['min_distance']
-    depths, ratios, diameters, peaks, _, _, boundaries = jixiantiqu_3d(
-        baseline, 1, {'MinProminence': prominence, 'MinDistance': distance,
-                      'Neighborhood': (nh, nh)}, threshold)
-    samples = prepare_depth_samples(depths, 1.0, pp['log_normalization'])
-    log_ratio = np.full(ratios.shape, np.nan)
-    valid = np.isfinite(ratios) & (ratios > 0)
-    log_ratio[valid] = np.log(1 / np.maximum(ratios[valid] / float(mc['sjb_divisor']), 1e-12))
-    metadata = dict(analysis_mode=mode, mode_label=MODE_LABELS[mode], source_type='mat_surface',
+        surface_um = reference_um - oriented
+    rows, cols = values.shape
+    metadata = dict(analysis_mode='surface', mode_label='实测表面形貌', source_type='mat_surface',
         state_shape=list(values.shape), matrix_shape=list(values.shape), physical_layers=None,
-        layer_rule='二维 MAT 表面：按选定单位和参考面直接分析，不转换为 CA 元胞层',
-        window_size=window, gaussian_sigma=float(pp['gaussian_sigma']), expand_factor=1,
-        min_prominence=float(prominence), min_distance=int(distance), neighborhood=int(nh),
-        threshold=float(threshold), sjb_divisor=float(mc['sjb_divisor']),
-        log_bin_width=float(mc['hist_bin_width']),
-        boundary_fallback_count=sum(x.size == 0 for x in boundaries),
-        pit_depth_definition='二维表面信号峰值相对全局最小值；未添加 CA 层厚度偏移',
+        layer_rule='二维 MAT 实测表面：保留规则网格，不转换为 CA 元胞层，不应用 GA 坑统计参数',
         space_xy_um=float(dx_mm) * 1000.0, space_z_um=1.0, dx_mm=float(dx_mm), dy_mm=float(dy_mm),
         input_unit=unit, value_mode=value_mode, height_sign=int(height_sign), layout=layout,
         transposed=bool(transpose), flipped_x=bool(flip_x), flipped_y=bool(flip_y),
-        reference_height_um=reference_um)
-    report = make_report(samples, metadata)
-    report['log_ratio'] = summarize_values(log_ratio)
-    report['objective_note'] = '二维 MAT 形貌按实测规则网格提取；点云坐标由行列索引和用户填写的 X/Y 间距生成。'
-    return dict(baseline=baseline, baseline_um=baseline, depth_map=signal, max_locs=peaks,
-        pit_depth_cells=depths, pit_diameter_cells=diameters, jsb=log_ratio, samples=samples,
-        metadata=metadata, report=report, oriented_values_um=oriented)
+        reference_height_um=reference_um, origin_x_mm=float(origin_x_mm), origin_y_mm=float(origin_y_mm),
+        x_extent_mm=(cols - 1) * float(dx_mm), y_extent_mm=(rows - 1) * float(dy_mm),
+        surface_range_um=[float(np.min(surface_um)), float(np.max(surface_um))],
+        surface_mean_um=float(np.mean(surface_um)),
+        surface_std_um=float(np.std(surface_um)),
+        reference_assumption=('矩阵最大值用作未腐蚀参考高度；需结合扫描基准区确认。'
+            if value_mode == 'height' and reference_mode == 'maximum' else
+            '参考面按用户输入设置；超出参考面的正负起伏均保留。' if value_mode == 'height' else
+            '输入数值按正向腐蚀深度保留；需确认其确为深度而非绝对高程。'))
+    report = dict(metadata=metadata, interpretation=metadata['reference_assumption'],
+                  extraction='仅将已测量二维网格作为表面显示并导出坐标；不识别腐蚀坑数量、直径或 CA 六指标。')
+    return dict(baseline=surface_um, baseline_um=surface_um, depth_map=surface_um,
+        max_locs=np.empty((0, 2), dtype=np.int64), pit_depth_cells=np.empty(0),
+        pit_diameter_cells=np.empty(0), jsb=np.empty(0), samples=None,
+        metadata=metadata, report=report, oriented_values_um=oriented,
+        surface_values_um=surface_um)
 
 
 def analyze_surface(state, *, mode='ga', space_xy_um, space_z_um, physical_layers=None, postprocess=None):
