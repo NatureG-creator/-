@@ -9,6 +9,7 @@
   <nav class="tabs" aria-label="工作区导航">
     <div class="nav-group" data-nav-group="采集与模拟"><span class="nav-group-title">采集与模拟</span>
       <button class="tab active" data-panel="pointcloud-panel" aria-current="page"><span class="nav-icon">◈</span><span>实测点云<small>预处理与六指标</small></span><span class="nav-number">01</span></button>
+      <button class="tab" data-panel="surface-generation-panel"><span class="nav-icon">⊞</span><span>独立点云 / MAT<small>190 · 60 · 50 mm · 自定义</small></span><span class="nav-number">01+</span></button>
       <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
     </div>
     <div class="nav-group" data-nav-group="验证与拟合"><span class="nav-group-title">验证与拟合</span>
@@ -42,6 +43,7 @@
     <div class="action-bar"><div><strong>MATLAB 六指标计算</strong><small>输入和结果保存在本次任务目录中</small></div><button id="run-pointcloud" class="button primary" disabled>运行点云处理 <span aria-hidden="true">→</span></button></div>
     <div id="pointcloud-message" class="message" role="status" aria-live="polite" hidden></div>
   </section>
+  <section id="surface-generation-panel" class="panel" aria-label="独立点云与MAT生成"></section>
   <section id="simulation-panel" class="panel" aria-labelledby="simulation-heading">
     <div class="section-heading"><div><div class="section-overline">02 / CORROSION EVOLUTION</div><h2 id="simulation-heading">CA–GA 腐蚀演化</h2><p>设定实测目标、计算模式与完整参数，先检查资源，再提交独立任务。</p></div><span class="badge" id="sim-backend">读取环境中</span></div>
     <div class="card settings-card"><div class="grid four"><div class="field"><label for="sim-mode">计算模式</label><select id="sim-mode"><option value="pycharm">PyCharm 高速（NumPy 多进程）</option><option value="strict">严格可复现（单进程）</option><option value="fast">Taichi 高速（需依赖）</option></select></div><div class="field"><label for="sim-run-mode">阶段方式</label><select id="sim-run-mode"><option value="staged">多阶段连续演化</option><option value="single">单阶段反演</option></select></div><div class="field"><label for="seed-mode">随机种子方式</label><select id="seed-mode"><option value="fixed">固定种子</option><option value="random">每次提交自动生成</option></select></div><div class="field"><label for="sim-seed">本次随机种子</label><input id="sim-seed" type="number" min="0" max="4294967295" step="1"></div></div><p id="mode-help" class="help-line"></p></div>
@@ -84,5 +86,5 @@
     <details class="card"><summary>腐蚀模拟中断后，怎样继续？</summary><p>在下方找到原任务，点击“恢复”，或“查看”后使用恢复按钮。后端会核对配置、输入和检查点；续算时不能修改参数或随机种子。</p><ul><li><strong>严格复现模式：</strong>从完整检查点恢复阶段、代/个体和随机状态，未保存的工作重新计算。</li><li><strong>PyCharm NumPy 模式：</strong>新任务保存每代状态及当前代已完成个体评价。点击“恢复（阶段内）”，未保存个体按原种子重算。旧任务仅能复用已完成阶段；没有检查点的历史任务无法补回进度。</li><li><strong>Taichi 模式：</strong>目前不支持续算。没有恢复按钮时，可能尚无完整检查点或运行模式不支持；“载入本次配置”后运行是新任务。</li></ul><p>隐藏的任务可勾选“包含已隐藏记录”找回；永久删除会同时清除续算所需的检查点。</p></details>
     <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-</main></div><script type="module" src="/app.js?v=20261022-result-explanation"></script>
+</main></div><script type="module" src="/app.js?v=20261022-independent-surface"></script>
 </body></html>

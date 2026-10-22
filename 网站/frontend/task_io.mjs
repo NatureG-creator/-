@@ -34,7 +34,7 @@ function readSettings(card) {
 }
 
 export function mountTaskIO(request) {
-  for(const panelId of ['pointcloud-panel','simulation-panel','benchmark-panel','finite-element-panel','fitting-panel','multivariate-panel']){
+  for(const panelId of ['pointcloud-panel','surface-generation-panel','simulation-panel','benchmark-panel','finite-element-panel','fitting-panel','multivariate-panel']){
     const panel=document.getElementById(panelId), id=`task-io-${panelId}`;
     if(!panel||document.getElementById(id))continue;
     panel.querySelector('.section-heading').after(settingsCard(id,request));
@@ -51,7 +51,7 @@ export function taskPayload(url, payload) {
   else if(url==='/api/fitting/jobs')panel=payload.mode==='multivariate2'?'multivariate-panel':'fitting-panel';
   else if(['/api/benchmarks','/api/benchmark-diagnostics'].includes(url))panel='benchmark-panel';
   else if(url==='/api/batches')panel='simulation-panel';
-  else if(url==='/api/jobs')panel={pointcloud:'pointcloud-panel',simulation:'simulation-panel',diagnostics:'benchmark-panel'}[payload?.kind];
+  else if(url==='/api/jobs')panel={pointcloud:'pointcloud-panel',surface_generation:'surface-generation-panel',simulation:'simulation-panel',diagnostics:'benchmark-panel'}[payload?.kind];
   else if(url==='/api/origin/jobs')panel='origin';
   const card=panel&&document.getElementById(`task-io-${panel}`);
   return card?withTaskSettings(payload,readSettings(card)):payload;
