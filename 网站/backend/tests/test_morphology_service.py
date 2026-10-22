@@ -5,11 +5,38 @@ import unittest
 import zipfile
 from pathlib import Path
 import numpy as np
+from scipy.io import savemat
 from unittest.mock import patch
 from backend.server import make_server
 
 
 class MorphologyServiceTests(unittest.TestCase):
+    def test_mat_surface_generates_morphology_and_rule_grid_point_cloud(self):
+        from backend.morphology_service import run_morphology
+        with tempfile.TemporaryDirectory() as tmp:
+            server = make_server(port=0, runtime=Path(tmp))
+            try:
+                matrix = np.ones((12, 16), dtype=float)
+                matrix[4:8, 6:10] = 0.8
+                stream = io.BytesIO(); savemat(stream, {'Z_filled': matrix}); stream.seek(0)
+                upload = server.upload('C17_100D.mat', stream, len(stream.getbuffer()))
+                job = server.create_job({'kind': 'morphology_analysis', 'upload_id': upload['id'],
+                    'source_kind': 'mat_surface', 'surface_variable': 'Z_filled',
+                    'surface_options': {'unit': 'mm', 'value_mode': 'height', 'dx_mm': .3,
+                        'dy_mm': .3, 'reference_mode': 'maximum', 'height_sign': 1,
+                        'layout': 'yx'}, 'analysis_mode': 'ga'}, launch=False)
+                folder = Path(tmp) / 'jobs' / job['id']
+                spec = json.loads((folder / 'spec.json').read_text(encoding='utf-8'))
+                report = run_morphology(spec, folder)
+                self.assertEqual(report['metadata']['source_type'], 'mat_surface')
+                self.assertEqual(report['metadata']['matrix_shape'], [12, 16])
+                self.assertTrue((folder / 'outputs' / 'surface_points.csv').is_file())
+                self.assertTrue((folder / 'outputs' / 'surface_points.xyz').is_file())
+                self.assertEqual(len((folder / 'outputs' / 'surface_points.xyz').read_text().splitlines()), 192)
+                self.assertTrue((folder / 'outputs' / 'surface_and_contour.png').is_file())
+            finally:
+                server.server_close()
+
     def test_dual_analysis_writes_preview_reports_without_vector_exports(self):
         from backend.morphology_service import run_morphology_pair
         with tempfile.TemporaryDirectory() as tmp:

@@ -11,15 +11,54 @@ from .apdl_npz import inspect_npz, read_npz_state, resolve_geometry
 from .system_info import sha256
 
 
+def _read_surface_matrix(path, variable):
+    from scipy.io import loadmat
+    if path.suffix.lower() != '.mat':
+        raise ValueError('二维表面形貌目前只接受 MAT 文件')
+    values = loadmat(path)
+    candidates = {name: value for name, value in values.items()
+                  if not name.startswith('__') and getattr(value, 'ndim', 0) == 2
+                  and getattr(getattr(value, 'dtype', None), 'kind', '') in 'fiu'}
+    selected = str(variable or '')
+    if not selected:
+        preferred = [name for name in ('Z_filled', 'F_filled') if name in candidates]
+        if len(preferred) == 1:
+            selected = preferred[0]
+        elif len(candidates) == 1:
+            selected = next(iter(candidates))
+        else:
+            raise ValueError('MAT 中存在多个二维数值变量，请先选择表面变量')
+    if selected not in candidates:
+        raise ValueError(f'MAT 中没有指定的二维变量：{selected}')
+    matrix = np.asarray(candidates[selected], dtype=np.float64)
+    if min(matrix.shape) < 2 or not np.isfinite(matrix).all():
+        raise ValueError('MAT 表面必须是有限二维数值矩阵，各维至少为2')
+    return selected, matrix
+
+
 def prepare_morphology(service, payload):
     started=time.perf_counter()
     mode=payload.get('analysis_mode','ga')
     if mode not in {'ga','detail','both'}: raise ValueError('analysis_mode 只能为 ga、detail 或 both')
+    mode_label={'ga':'GA同口径验收','detail':'精细形貌分析','both':'双模式对照'}[mode]
     if bool(payload.get('upload_id'))==bool(payload.get('source_job_id')):
         raise ValueError('请选择一个上传 NPZ 或一个已完成模拟任务')
     config=default_simulation_config()
     physical_layers=None
     provenance='当前配置复算；外部 NPZ 未冻结完整后处理配置，不能认定原优化过程完全重放'
+    source_type = 'npz'
+    if payload.get('upload_id') and payload.get('source_kind') == 'mat_surface':
+        record, path = service.get_upload(payload['upload_id'])
+        if path.suffix.lower() != '.mat':
+            raise ValueError('二维表面形貌来源必须是 MAT 文件')
+        name = record['name']; expected = record['sha256']; source_type = 'mat_surface'
+        variable, matrix = _read_surface_matrix(path, payload.get('surface_variable'))
+        spec = dict(kind='morphology_analysis', case_name=payload.get('case_name') or f'{name} · {variable} · {mode_label}',
+            analysis_mode=mode, source_type=source_type, source_name=name,
+            source_sha256=expected, source_variable=variable, matrix_shape=list(matrix.shape),
+            surface_options=dict(payload.get('surface_options') or {}),
+            configuration_provenance='二维 MAT 表面按上传时冻结的变量、单位、方向、参考面和网格间距分析；未伪装成 CA 状态')
+        return spec, path
     if payload.get('upload_id'):
         record,path=service.get_upload(payload['upload_id'])
         name=record['name'];expected=record['sha256']
@@ -68,9 +107,8 @@ def prepare_morphology(service, payload):
         raise ValueError('状态XY维与原任务 grid_w/grid_l 不匹配')
     if physical_layers is not None and shape[2] not in {physical_layers,physical_layers+1}:
         raise ValueError('状态Z维与原任务 grid_n 不匹配')
-    mode_label={'ga':'GA同口径验收','detail':'精细形貌分析','both':'双模式对照'}[mode]
     spec=dict(kind='morphology_analysis',case_name=payload.get('case_name') or f'{name} · {mode_label}',
-        analysis_mode=mode,config=config,geometry=geometry,physical_layers=physical_layers,
+        analysis_mode=mode,source_type=source_type,config=config,geometry=geometry,physical_layers=physical_layers,
         source_name=name,source_sha256=expected,configuration_provenance=provenance,
         npz_variable=info['default_variable'],npz_stage=stage,
         reading_seconds=time.perf_counter()-started)
@@ -81,11 +119,76 @@ def prepare_morphology(service, payload):
 
 
 def freeze_morphology(spec,source,job_dir):
-    dest=job_dir/'inputs/source.npz';shutil.copy2(source,dest)
+    suffix = '.mat' if spec.get('source_type') == 'mat_surface' else '.npz'
+    dest=job_dir/f'inputs/source{suffix}';shutil.copy2(source,dest)
     if sha256(dest)!=spec['source_sha256']:raise ValueError('NPZ 冻结副本校验失败')
 
 
+def _write_surface_point_cloud(result, output, source_name):
+    values = np.asarray(result['oriented_values_um'], dtype=float) / 1000.0
+    rows, cols = values.shape
+    dx, dy = result['metadata']['dx_mm'], result['metadata']['dy_mm']
+    csv_path, xyz_path = output / 'surface_points.csv', output / 'surface_points.xyz'
+    with csv_path.open('w', encoding='utf-8-sig', newline='') as handle:
+        import csv
+        writer = csv.writer(handle); writer.writerow(['x_mm', 'y_mm', 'z_mm'])
+        for row in range(rows):
+            for col in range(cols):
+                writer.writerow([f'{col*dx:.9g}', f'{row*dy:.9g}', f'{values[row,col]:.9g}'])
+    with xyz_path.open('w', encoding='utf-8') as handle:
+        for row in range(rows):
+            for col in range(cols):
+                handle.write(f'{col*dx:.9g} {row*dy:.9g} {values[row,col]:.9g}\n')
+    result['metadata']['point_cloud_files'] = ['surface_points.csv', 'surface_points.xyz']
+    result['metadata']['point_cloud_note'] = '由规则矩阵行列和 X/Y 间距展开；不是原始散乱扫描点云。'
+
+
+def _run_surface_morphology(spec, job_dir, progress=None, *, output=None):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from morphology_analysis import analyze_surface_matrix, export_analysis
+    from .runner import _atomic_json
+    path = next((job_dir / 'inputs').glob('source.mat'), None)
+    if path is None or sha256(path) != spec['source_sha256']:
+        raise ValueError('冻结 MAT 已改变或不存在')
+    variable, matrix = _read_surface_matrix(path, spec['source_variable'])
+    options = dict(spec.get('surface_options') or {})
+    if progress: progress({'phase': 'reading'})
+    result = analyze_surface_matrix(matrix, mode=spec['analysis_mode'] if spec['analysis_mode'] != 'both' else 'ga',
+        dx_mm=options.get('dx_mm'), dy_mm=options.get('dy_mm'), unit=options.get('unit', 'mm'),
+        value_mode=options.get('value_mode', 'height'), reference_mode=options.get('reference_mode', 'maximum'),
+        reference_value=options.get('reference_value'), height_sign=int(options.get('height_sign', 1)),
+        layout=options.get('layout', 'yx'), transpose=bool(options.get('transpose', False)),
+        flip_x=bool(options.get('flip_x', False)), flip_y=bool(options.get('flip_y', False)))
+    result['metadata'].update(source_name=spec['source_name'], source_variable=variable,
+                              source_sha256=spec['source_sha256'], configuration_provenance=spec['configuration_provenance'])
+    output = output or job_dir / 'outputs'; output.mkdir(parents=True, exist_ok=True)
+    _write_surface_point_cloud(result, output, spec['source_name'])
+    figures = export_analysis(result, output, source_name=spec['source_name'], formats=('png',))
+    for fig in figures: plt.close(fig)
+    report = result['report']
+    report['six_metrics'] = [report['raw_depth_um']['mean'],
+                             float(np.mean(result['depth_map'])), report['log_ratio']['mean'],
+                             report['log_depth']['mean'], report['log_ratio']['std'], report['log_depth']['std']]
+    report['warnings'] = [spec['configuration_provenance'], result['metadata']['layer_rule'],
+                          '正反面未在此任务中自动配准或拼接；请分别分析并核对坐标方向。']
+    _atomic_json(output / 'analysis_report.json', report)
+    _atomic_json(output / 'summary.json', report)
+    if output == job_dir / 'outputs': write_morphology_archive(job_dir)
+    return report
+
+
 def run_morphology(spec,job_dir,progress=None, *, state=None, output=None):
+    if spec.get('source_type') == 'mat_surface':
+        if spec['analysis_mode'] == 'both':
+            first = _run_surface_morphology(dict(spec, analysis_mode='ga'), job_dir, progress, output=(output or job_dir/'outputs')/'ga')
+            second = _run_surface_morphology(dict(spec, analysis_mode='detail'), job_dir, progress, output=(output or job_dir/'outputs')/'detail')
+            summary = {'modes': {'ga': first, 'detail': second}}
+            from .runner import _atomic_json
+            _atomic_json(job_dir/'outputs/summary.json', summary); write_morphology_archive(job_dir)
+            return summary
+        return _run_surface_morphology(spec, job_dir, progress, output=output)
     if spec.get('npz_stages'):
         return run_morphology_batch(spec,job_dir,progress)
     if spec['analysis_mode']=='both':
@@ -286,6 +389,7 @@ def prepare_export(service,payload):
     source_spec=source.get('spec') or {}
     return dict(kind='morphology_export',source_job_id=source_id,modes=modes,
                 source_name=source_spec.get('source_name'),source_sha256=source_spec.get('source_sha256'),
+                source_type=source_spec.get('source_type', 'npz'), source_variable=source_spec.get('source_variable'),
                 npz_variable=source_spec.get('npz_variable'),npz_stage=source_spec.get('npz_stage'),
                 npz_stages=stages,analysis_mode=source_spec.get('analysis_mode'),
                 formats=list(dict.fromkeys(formats)),case_name='形貌分析高清导出'),folder
@@ -294,7 +398,9 @@ def prepare_export(service,payload):
 def freeze_export(spec,source,job_dir):
     dest=job_dir/'inputs'
     # Include the frozen source and configuration for a self-contained archive.
-    shutil.copy2(source/'inputs/source.npz',dest/'source.npz')
+    source_file = next((source/'inputs').glob('source.*'), None)
+    if source_file is None: raise ValueError('来源任务缺少冻结源文件')
+    shutil.copy2(source_file, dest/source_file.name)
     shutil.copy2(source/'spec.json',dest/'source_spec.json')
     hashes={}
     for mode in spec['modes']:

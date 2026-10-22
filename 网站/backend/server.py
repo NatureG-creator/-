@@ -330,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
             if query.get('kind', ['target'])[0] == 'apdl_npz':
                 from .apdl_npz import inspect_uploaded_npz
                 return self._json(200, inspect_uploaded_npz(self.server, parts[2]))
+            if query.get('kind', ['target'])[0] == 'mat_surface':
+                from .apdl_matlab import inspect_mat_variables
+                _, source = self.server.get_upload(parts[2])
+                return self._json(200, {'variables': inspect_mat_variables(source)})
             _, source = self.server.get_upload(parts[2])
             if query.get("kind", ["target"])[0] == "pointcloud":
                 value = inspect_xyz(source)
