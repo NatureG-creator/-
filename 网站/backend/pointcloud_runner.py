@@ -159,8 +159,11 @@ def run_pointcloud(
     data = loadmat(target_file, simplify_cells=True)
     metrics = np.asarray(data.get("target_data"), dtype=float).reshape(-1)
     issues = data.get("calibration_issues", [])
+    warnings = data.get("calibration_warnings", [])
     if isinstance(issues, str):
         issues = [issues]
+    if isinstance(warnings, str):
+        warnings = [warnings]
     timing["postprocess_seconds"] = time.perf_counter() - postprocess_started
     timing["total_seconds"] = time.perf_counter() - started
     summary = {
@@ -172,6 +175,7 @@ def run_pointcloud(
         "six_metrics": [float(item) if math.isfinite(item) else None for item in metrics],
         "calibration_ready": bool(data.get("calibration_ready", False)),
         "calibration_issues": [str(item) for item in np.atleast_1d(issues)],
+        "calibration_warnings": [str(item) for item in np.atleast_1d(warnings)],
         "provenance": runtime_provenance(),
         "files": [str(path.relative_to(output)).replace("\\", "/")
                   for path in output.rglob("*") if path.is_file()],
