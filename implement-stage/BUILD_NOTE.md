@@ -9,7 +9,7 @@
 | F1 | 尺寸裁剪、方向、精确重采样 | python -m unittest backend.tests.test_surface_generation | MUST | passed |
 | F2 | XYZ/NPZ/源模拟、双面、预检 | python -m unittest backend.tests.test_surface_generation | MUST | passed |
 | F3 | 独立页面与结果展示 | node --test frontend/tests/surface_generation.test.mjs | MUST | passed |
-| F4 | 8560真实验收、GitHub及快捷方式 | python scripts/verify_surface_generation.py | MUST | local passed; GitHub sync pending |
+| F4 | 8560真实验收、GitHub及快捷方式 | python scripts/verify_surface_generation.py | MUST | passed |
 
 ## Run record
 F0：命令退出0；真实worker生成单变量double MAT、CSV/XYZ和ZIP；回读逐值相等。无占位输出。
@@ -20,6 +20,7 @@ F4：最终相关后端42项、全部前端181项通过；之后手动刷新来�
 Live：scripts/verify_surface_generation.py退出0，6项上传→预检→worker→下载ZIP→MAT/XYZ回读通过：实测50/60mm原网格、实测50mm精确插值、解析测试190mm双面、解析XYZ及NPZ阶段2。所有解析夹具标为ANALYTIC_TEST_ONLY，不视作实测腐蚀。
 Browser：最终页面真实上传C17_100D/190/z.mat并生成任务5043631df0d34989；状态已完成，65×167，49.8×19.2mm，10855点，0.3mm间距；ZIP按钮下载成功。截图保存在本地visualizations目录。
 Shortcut：桌面“腐蚀研究工作台.lnk”指向本仓库网站/launch_desktop.py；使用同一入口--no-browser启动成功，固定8560。仅重启HTTP监听进程，原模拟5281f5a8180b4c64的worker PID66492保留，重启后状态running。
+Sync：实现提交3db02d4273e8c1850dd232ec1989a5062c810fba已推送main和codex/common-xy-surface-mapping，git ls-remote确认两分支一致。8560运行源码指纹9c86c497de597c54dcf4faaf61012720ee19963f2e96cf61bcbf36b5f7cd3438与当前本地源码一致（包括保留的未提交视觉样式）。原有styles.css/index样式版本行未纳入本功能提交。网页实际下载的surface_bundle.zip再次核对单变量MAT与XYZ逐点相同。
 
 修复记录：显式模拟阶段读取a_sd，XYZ重采样标记，两面独立裁剪覆盖，非等距转置和非零原点，MAT多变量默认选择，传统MAT版本限制提示。来源列表改为按需刷新，避免无关慢请求覆盖成功预检说明。
 
