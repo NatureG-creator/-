@@ -40,6 +40,25 @@ class ApdlApiTests(unittest.TestCase):
         self.assertIn('load_displacement.png',[item['name'] for item in job['files']])
         np.testing.assert_array_equal(np.asarray(job['summary']['results']['curve']),rows)
 
+    def test_historical_failed_job_gets_read_only_completion_explanation(self):
+        from backend.tests.test_apdl_outcome import RECOVERED
+        self._saved_solved_apdl_job('b'*16,state='failed')
+        folder=self.server.runtime/'jobs'/('b'*16)
+        output=folder/'outputs'
+        summary={'kind':'apdl_tension','options':{'target_displacement_mm':11},
+                 'solve_state':'failed','solver':{'exit_code':1},'error':'exit 1'}
+        _atomic_json(output/'summary.json',summary)
+        (output/'mapdl.out').write_text(RECOVERED)
+        (output/'corrosion.rst').write_bytes(b'fixture')
+        (output/'force_displacement.csv').write_text('0.5,5.5,100,-100,.05,1\n1,11,200,-200,.1,2\n')
+        before={name:(folder/name).read_bytes() for name in ('status.json','outputs/summary.json')}
+        code,job=self.request('/api/jobs/'+'b'*16)
+        self.assertEqual(code,200,job)
+        self.assertEqual(job['state'],'failed')
+        self.assertTrue(job['summary']['result_explanation']['loading_complete'])
+        for name,value in before.items():
+            self.assertEqual((folder/name).read_bytes(),value)
+
     def test_completed_apdl_result_can_generate_stress_strain_plot_after_solving(self):
         rows=self._saved_solved_apdl_job('f'*16)
         seen=[]

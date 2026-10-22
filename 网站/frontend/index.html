@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css?v=20261022-readability"></head>
 <body data-ui-shell="research-workbench">
 <a href="#workspace" class="skip-link">跳转到工作区</a>
 <aside class="sidebar">
@@ -84,5 +84,5 @@
     <details class="card"><summary>腐蚀模拟中断后，怎样继续？</summary><p>在下方找到原任务，点击“恢复”，或“查看”后使用恢复按钮。后端会核对配置、输入和检查点；续算时不能修改参数或随机种子。</p><ul><li><strong>严格复现模式：</strong>从完整检查点恢复阶段、代/个体和随机状态，未保存的工作重新计算。</li><li><strong>PyCharm NumPy 模式：</strong>新任务保存每代状态及当前代已完成个体评价。点击“恢复（阶段内）”，未保存个体按原种子重算。旧任务仅能复用已完成阶段；没有检查点的历史任务无法补回进度。</li><li><strong>Taichi 模式：</strong>目前不支持续算。没有恢复按钮时，可能尚无完整检查点或运行模式不支持；“载入本次配置”后运行是新任务。</li></ul><p>隐藏的任务可勾选“包含已隐藏记录”找回；永久删除会同时清除续算所需的检查点。</p></details>
     <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-</main></div><script type="module" src="/app.js?v=20261021-baseline-smoothing"></script>
+</main></div><script type="module" src="/app.js?v=20261022-result-explanation"></script>
 </body></html>

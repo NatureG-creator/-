@@ -663,6 +663,12 @@ class JobService:
                 state['task_io']['last_export'] = {'state': 'failed',
                     'error': '成果复制进程已退出，可重新选择目录并导出；原任务成果保留。'}
             state["summary"] = json_record(folder / "outputs" / "summary.json")
+            if (state.get('kind') == 'apdl_tension' and state.get('state') in
+                    {'completed', 'failed', 'interrupted', 'stopped'} and state['summary']
+                    and state['summary'].get('execution_mode') != 'custom_commands'):
+                from .apdl_outcome import explain_result
+                state['summary']['result_explanation'] = explain_result(
+                    folder/'outputs', state['summary'], state['state'], state.get('error'))
             state["effective_config"] = json_record(folder / "outputs" / "effective_config.json")
             state["timing"] = json_record(folder / "outputs" / "timing.json")
             stage_exports = any((folder / "outputs").glob("stage_*.manifest.json")) if (folder / "outputs").is_dir() else False

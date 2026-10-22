@@ -112,7 +112,7 @@ def _solver_errors(output: Path) -> list[str]:
     return errors
 
 
-def run_mapdl(output: Path, options: dict, progress=None) -> dict:
+def run_mapdl(output: Path, options: dict, progress=None, *, allow_recovered=False) -> dict:
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     old_names = [name for name in ('force_displacement.csv', 'nodal_results.csv', 'mapdl.out',
@@ -161,16 +161,25 @@ def run_mapdl(output: Path, options: dict, progress=None) -> dict:
             except subprocess.TimeoutExpired as exc:
                 record['state'] = 'timeout'
                 raise RuntimeError(f'MAPDL求解超时（超过 {o["timeout_seconds"]} 秒）；监管组清理状态见执行记录。') from exc
-        if record['exit_code'] != 0:
-            raise RuntimeError(f'MAPDL进程退出码为 {record["exit_code"]}，请检查求解与许可证日志。')
         errors = _solver_errors(output)
         record['solver_errors'] = errors
-        if errors:
+        recovered = False
+        if allow_recovered and (errors or record['exit_code'] != 0):
+            from .apdl_outcome import explain_result
+            explanation = explain_result(output, dict(options=options, solver=record))
+            recovered = explanation['recovered_distortion']
+            record['result_explanation'] = explanation
+        if record['exit_code'] != 0 and not recovered:
+            raise RuntimeError(f'MAPDL进程退出码为 {record["exit_code"]}；请查看结果说明中的具体日志原因和最后完成子步。')
+        if errors and not recovered:
             raise RuntimeError('MAPDL日志包含错误或最终不收敛信息：'+errors[0])
+        if recovered:
+            record['warnings'].append('中途单元畸变后自动切步恢复；日志与曲线均达到目标加载，继续执行结果校核。')
         if not (output/'mapdl.out').is_file() or (output/'mapdl.out').stat().st_size == 0:
             raise RuntimeError('MAPDL未生成非空mapdl.out，不能确认批处理已执行。')
         record['state'] = 'process_finished'
-        record['message'] = 'MAPDL批处理退出且日志未发现明确错误；仍须验收RST和目标加载步结果。'
+        record['message'] = ('中途畸变试算已切步恢复并达到目标加载；继续核验数值输出，原错误保留为警告。' if recovered
+                             else 'MAPDL批处理退出且日志未发现明确错误；仍须验收RST和目标加载步结果。')
         return record
     except BaseException as exc:
         primary_error = exc

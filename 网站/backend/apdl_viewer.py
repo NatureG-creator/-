@@ -42,7 +42,9 @@ def viewer_source(service, job_id):
     views = [dict(id=key, label=label, note=note) for key, label, _, note in VIEWS
              if (has_results or key in {'model', 'mesh'}) and (key != 'plastic_strain' or plastic)]
     note = '读取最后一个已保存结果集；可在 APDL 中旋转、缩放和切换显示。'
-    if summary.get('solve_state') != 'solved' or job.get('state') != 'completed':
+    if summary.get('result_explanation', {}).get('loading_complete'):
+        note += ' 日志与曲线已确认达到目标加载；材料、网格及 RST 内容仍需复核。'
+    elif summary.get('solve_state') != 'solved' or job.get('state') != 'completed':
         note += ' 此任务未确认完整求解，已有结果可能仅为部分载荷。'
     if custom:
         note += ' 自定义命令的材料与单位需自行核对。'

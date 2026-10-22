@@ -153,3 +153,33 @@ footer{margin-top:60px;border-top:0;padding:28px 0 38px;font-size:12px;color:#71
 
 /* APDL pre-solve geometry inspector */
 .apdl-3d-preview{margin:20px 0;padding:16px;border:1px solid var(--line,#d4ddd0);border-radius:8px;background:#fff}.apdl-3d-preview h4{margin:0 0 12px}.apdl-3d-controls{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.apdl-3d-preview canvas{display:block;width:100%;height:420px;cursor:grab;touch-action:none;border:1px solid #d8e0d4;border-radius:6px}.apdl-3d-preview canvas:active{cursor:grabbing}.apdl-3d-preview canvas:focus-visible{outline:2px solid #416e50;outline-offset:3px}.apdl-3d-preview figcaption{font-size:13px;line-height:1.7;margin:10px 0}.apdl-3d-facts{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:16px;font-size:14px;line-height:1.8}.apdl-3d-facts p{margin:8px 0;overflow-wrap:anywhere}@media(max-width:800px){.apdl-3d-facts{grid-template-columns:1fr}.apdl-3d-controls .button{font-size:12px;padding:8px}}
+
+/* Research controls and result notes must remain readable without zooming. */
+body{--text-body:16px;line-height:1.75}
+.help-line,.preview,.parameter small,.field small,.card-heading p,.chart-caption,
+.apdl-preview-charts figcaption,.apdl-section figcaption,.apdl-orientation figcaption,
+.apdl-3d-preview figcaption,.plot-caption,.plot-caption span{font-size:14px;line-height:1.8;color:#405c50}
+.parameter label,.field label,.check-field,.apdl-curve>label{font-size:15px;line-height:1.6}
+input:not([type=file]):not([type=checkbox]),select,textarea,.button{font-size:15px}
+.parameter .parameter-meta,.parameter .parameter-path,.parameter-group>summary small,
+.apdl-group>summary small,.apdl-legacy>summary small{font-size:13px;color:#526d60}
+.apdl-group>summary,.apdl-legacy>summary,.apdl-source h4,.apdl-mapping summary{font-size:16px}
+.apdl-result h4{font-size:19px;line-height:1.5;margin:24px 0 12px}
+.apdl-result p,.apdl-result li,.apdl-result td,.apdl-result th{font-size:15px;line-height:1.8}
+.apdl-result small,.resource-grid small,.timing-grid small{font-size:14px;color:#405c50}
+.error-hint{font-size:14px;line-height:1.8;color:#9b3027}
+.badge.warning{background:#fff0d3;color:#794600;border:1px solid #e4bf7b}
+.apdl-explanation{margin:24px 0;padding:24px;background:#f6f9f5;border:1px solid #ccdbce;border-radius:12px;overflow-wrap:anywhere}
+.outcome-summary{font-weight:600;color:#244d3d;max-width:85ch}
+.outcome-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0}
+.outcome-facts div{padding:12px;background:#fff;border-radius:8px}
+.outcome-facts dt{font-size:14px;color:#405c50}.outcome-facts dd{margin:6px 0 0;font-size:17px;font-weight:650;font-variant-numeric:tabular-nums}
+.outcome-recovery{padding:14px 18px;border-left:4px solid #397351;background:#e8f2e9}
+.outcome-issue{margin:16px 0;padding:18px 20px;background:#fffaf0;border-left:4px solid #b57c27;border-radius:4px}
+.outcome-issue.outcome-error{background:#fff4f1;border-left-color:#af4436}
+.outcome-issue h5{margin:0 0 10px;font-size:17px;color:#654111}.outcome-error h5{color:#8d3026}
+.outcome-issue p{margin:8px 0;max-width:90ch}
+.outcome-issue details,.outcome-original{margin-top:14px}.apdl-explanation summary{cursor:pointer;font-size:14px;line-height:1.8;color:#405c50}
+.apdl-explanation pre,.log-card pre{font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:1100px){.outcome-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.apdl-explanation{padding:16px}.outcome-facts{grid-template-columns:1fr}.outcome-issue{padding:14px}}

@@ -470,7 +470,7 @@ def run_apdl_job(spec,job_dir,progress=None):
             from .apdl_solver import run_mapdl,read_tension_results
             result['solve_state']='running'
             with stage('solver','solver_seconds','apdl_solve'):
-                result['solver']=run_mapdl(output,spec['options'],progress=progress)
+                result['solver']=run_mapdl(output,spec['options'],progress=progress,allow_recovered=True)
             result['solve_state']='postprocessing'
             with stage('postprocess','postprocess_seconds','apdl_post'):
                 result['results']=read_tension_results(output,geometry['stats'],spec['options'],expected_nodes=geometry['nodes'])

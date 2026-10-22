@@ -34,14 +34,15 @@ def diagnose_output(output):
                 line = raw.strip()[:700]
                 error = bool(re.search(r'\*{3}\s*ERROR\s*\*{3}|SOLUTION\s+(?:DID\s+NOT\s+CONVERGE|NOT\s+CONVERGED)|UNCONVERGED\s+SOLUTION|^APDL_SELF_CHECK_FAILED', line, re.I))
                 warning = bool(re.search(r'\*{3}\s*WARNING\s*\*{3}', line, re.I))
-                converged = bool(re.search(r'LOAD STEP.*SUBSTEP.*COMPLETED|EQUILIBRIUM ITERATION.*CONVERGED', line, re.I))
+                converged = bool(re.search(r'LOAD STEP\s+\d+\s+SUBSTEP\s+\d+\s+COMPLETED\.|SOLUTION CONVERGED AFTER EQUILIBRIUM ITERATION', line, re.I))
                 if converged and not error:
                     last_converged = dict(file=name, line=number, text=line)
                 if error or warning:
                     counts['error' if error else 'warning'] += 1
                     remaining_context = 3
-                if (error or warning or remaining_context) and len(evidence) < 160:
-                    evidence.append(dict(file=name, line=number, level='error' if error else 'warning' if warning else 'context', text=line))
+                if error or warning or remaining_context:
+                    if len(evidence) < 160:
+                        evidence.append(dict(file=name, line=number, level='error' if error else 'warning' if warning else 'context', text=line))
                     for category, (pattern, _) in rules.items():
                         if re.search(pattern, line, re.I):
                             categories.add(category)
