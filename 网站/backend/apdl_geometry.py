@@ -1,6 +1,7 @@
 """Conforming solid mesh from positive depth[y, x] arrays, in millimetres.
 
-This adapter never interpolates, rescales, clips, or modifies the corrosion model.
+Input relief is not resampled or clipped. Explicit platform calibration translates
+the source heights and adds separately meshed flat and transition regions.
 """
 from __future__ import annotations
 
@@ -33,6 +34,9 @@ DEFAULTS = {
     'mapping_dx_mm': None, 'mapping_dy_mm': None,
     'local_corrosion': False, 'patch_offset_x_mm': None, 'patch_offset_y_mm': None,
     'patch_rotation_deg': 0, 'patch_flip_x': False, 'patch_flip_y': False,
+    'platform_enabled': False, 'platform_fixed_mm': 2.5, 'platform_loaded_mm': 2.5,
+    'platform_top_mean_depth_mm': None, 'platform_bottom_mean_depth_mm': None,
+    'thickness_layer_mode': 'element_layers', 'intermediate_node_layers': 10,
 }
 MODES = {'flat', 'single_top', 'single_bottom', 'double_independent', 'double_symmetric'}
 MESH_TYPES = {'solid185_hex', 'solid187_tetra', 'solid285_tetra'}
@@ -46,6 +50,21 @@ def normalise_options(options: dict) -> dict:
     if not isinstance(options, dict):
         raise ValueError('APDL options 必须是对象。')
     result = {key: options.get(key, value) for key, value in DEFAULTS.items()}
+    if result['thickness_layer_mode'] not in {'element_layers', 'intermediate_nodes'}:
+        raise ValueError('厚度层数方式必须为 element_layers 或 intermediate_nodes。')
+    value = result['intermediate_node_layers']
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or int(value) != value or value < 0:
+        raise ValueError('中间节点层数必须是不小于0的整数。')
+    result['intermediate_node_layers'] = int(value)
+    if result['thickness_layer_mode'] == 'intermediate_nodes':
+        result['layers'] = int(value) + 1
+    for key in ('platform_fixed_mm', 'platform_loaded_mm', 'platform_top_mean_depth_mm', 'platform_bottom_mean_depth_mm'):
+        value = result[key]
+        if value is None and key.endswith('mean_depth_mm'):
+            continue
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value < 0 or (key in ('platform_fixed_mm', 'platform_loaded_mm') and value == 0):
+            raise ValueError(f'{key} 必须是有限非负深度或正平台长度。')
+        result[key] = float(value)
     for key in ('thickness_mm', 'length_mm', 'width_mm', 'dx_mm', 'dy_mm',
                 'E_MPa', 'yield_MPa', 'target_displacement_mm'):
         value = result[key]
@@ -66,7 +85,7 @@ def normalise_options(options: dict) -> dict:
             raise ValueError(f'{key} 必须是范围内的整数（最小 {minimum}）。')
         result[key] = int(value)
     for key in ('large_deflection', 'export_full_field', 'export_force_displacement_plot',
-                'allow_negative_slope', 'local_corrosion'):
+                'allow_negative_slope', 'local_corrosion', 'platform_enabled'):
         if not isinstance(result[key], bool):
             raise ValueError(f'{key} 必须是布尔值。')
     for key in ('patch_offset_x_mm', 'patch_offset_y_mm'):
@@ -167,6 +186,9 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
                    options: dict) -> dict:
     o = normalise_options(options)
     mode = o['corrosion_mode']
+    platform = None
+    if o['platform_enabled'] and mode == 'flat':
+        raise ValueError('平台参考面计算需要选择腐蚀表面来源，不能使用无腐蚀模式。')
     if o['local_corrosion'] and mode == 'flat':
         raise ValueError('局部腐蚀区域需要选择单面或双面腐蚀模式。')
     if not o['local_corrosion'] and (o['patch_rotation_deg'] or o['patch_flip_x'] or o['patch_flip_y']):
@@ -194,7 +216,18 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
             bottom = top.copy()
         if top.shape != bottom.shape:
             raise ValueError('正反面行列数不同，不允许静默重采样。')
-        if o['local_corrosion']:
+        if o['platform_enabled']:
+            from .apdl_platform import add_platforms
+            platform = add_platforms(top, bottom, o)
+            top, bottom = platform['top'], platform['bottom']
+            ny, nx = top.shape
+            o.update(nx=nx, ny=ny, length_mm=float(platform['x'][-1]-platform['x'][0]),
+                     width_mm=float(platform['y'][-1]-platform['y'][0]))
+            axial_range = platform['report']['source_axial_range_mm']
+            corrosion_region = dict(x_range_mm=axial_range if o['tensile_direction']=='X' else [float(platform['x'][0]),float(platform['x'][-1])],
+                                    y_range_mm=axial_range if o['tensile_direction']=='Y' else [float(platform['y'][0]),float(platform['y'][-1])],
+                                    nx=platform['report']['source_shape'][1], ny=platform['report']['source_shape'][0])
+        elif o['local_corrosion']:
             rotation = o['patch_rotation_deg']
             if rotation:
                 top = np.rot90(top, k=rotation // 90)
@@ -270,8 +303,8 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     remaining = o['thickness_mm'] - top - bottom
     if not np.isfinite(remaining).all() or np.any(remaining <= 0):
         raise ValueError('腐蚀表面相交或穿透：剩余厚度必须处处大于 0；禁止自动裁剪修补。')
-    x = o['origin_x_mm'] + np.arange(nx, dtype=float)*o['dx_mm']
-    y = o['origin_y_mm'] + np.arange(ny, dtype=float)*o['dy_mm']
+    x = platform['x'] if platform else o['origin_x_mm'] + np.arange(nx, dtype=float)*o['dx_mm']
+    y = platform['y'] if platform else o['origin_y_mm'] + np.arange(ny, dtype=float)*o['dy_mm']
     if not np.isfinite(x).all() or not np.isfinite(y).all() or np.any(np.diff(x) <= 0) or np.any(np.diff(y) <= 0):
         raise ValueError('坐标数值范围导致非有限或退化间距，请调整原点和间距。')
     xx, yy = np.meshgrid(x, y)
@@ -302,7 +335,7 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         element_count = len(elements)
     # Bilinear vertical columns have exact volume = area * mean corner thickness.
     cell_thickness = (remaining[:-1, :-1]+remaining[:-1, 1:]+remaining[1:, :-1]+remaining[1:, 1:])/4
-    cell_volume = cell_thickness*o['dx_mm']*o['dy_mm']/o['layers']
+    cell_volume = cell_thickness*np.diff(y)[:,None]*np.diff(x)[None,:]/o['layers']
     total_volume = float(cell_volume.sum()*o['layers'])
     if tetra_stats:
         tetra_stats['bilinear_reference_volume_mm3'] = total_volume
@@ -338,6 +371,10 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         'nominal_area_mm2': nominal_area, 'mesh_type': o['mesh_type'],
     }
     stats.update(tetra_stats)
+    stats.update(intermediate_node_layers=o['layers']-1, node_plane_count=o['layers']+1)
+    if platform:
+        stats['platforms'] = platform['report']
+        stats['grip_tolerance_mm'] = float(min(np.min(np.diff(x)),np.min(np.diff(y)))*.01)
     if tetra_stats:
         coordinate = 1 if tensile_direction == 'X' else 2
         grip_axis = x if tensile_direction == 'X' else y
@@ -358,10 +395,15 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         warnings.append('双面对称模式明确复用同一正面深度，反面不另作独立随机生成。')
     if o['local_corrosion']:
         warnings.append('局部腐蚀贴片边缘按原始深度直接接入未腐蚀区域；未添加过渡带，边缘可能形成几何台阶。')
+    if platform:
+        warnings.append('平台模式按最低高程+实测输入深度建立参考面；该公式不保证校准后矩阵平均深度等于输入值，请核对平台报告。')
+        if any(face['protrudes_above_platform'] for face in platform['report']['faces'].values()):
+            warnings.append('实测输入深度小于表面起伏范围，部分腐蚀表面高于平台；已保留凸起，未裁剪。请复核高度方向、公式与试验输入。')
     if abs(tetra_stats.get('surface_volume_change_fraction', 0)) > .01:
         warnings.append('三角形表面与双线性参考面的总体积差超过1%；请复核表面离散及网格收敛性。')
     if mode == 'flat' and (o['boundary_mode'] != 'poisson_free' or o['material_model'] != 'elastic' or o['large_deflection']):
         warnings.append('EA/L、EAδ/L仅是小变形弹性自由泊松伸缩参考，当前约束或材料设置可能不满足其假设。')
     return dict(options=o, top_depth=top.copy(), bottom_depth=bottom.copy(),
                 remaining=remaining, x=x, y=y, nodes=nodes, elements=elements,
-                stats=stats, warnings=warnings, corrosion_region=corrosion_region)
+                stats=stats, warnings=warnings, corrosion_region=corrosion_region,
+                platforms=platform['report'] if platform else None)

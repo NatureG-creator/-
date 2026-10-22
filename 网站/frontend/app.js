@@ -3,7 +3,7 @@ import {mountMorphology,renderMorphologyResult,mountMorphologyExport} from './mo
 import {mountTaskIO,mountResultTaskIO,mountOriginTaskIO,taskPayload,taskLabel} from './task_io.mjs';
 import {mountBenchmark,renderBenchmarkResult,renderDiagnostics,bindBenchmarkResult,applicationPolicy} from './benchmark.mjs';
 import {renderTaskFiles} from './task_files.mjs';
-import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261022-result-explanation';
+import {mountApdl,renderApdlResult} from './apdl.mjs?v=20261022-platforms';
 import {mountBaseline,renderBaselineResult,baselineApdlDraft} from './baseline.mjs?v=20261021-baseline-smoothing';
 import {mountApdlViewer} from './apdl_viewer.mjs?v=20261018-apdl-viewer-results';
 import {mountMaterialTools,mountApdlResultTools} from './apdl_tools.mjs?v=20261021-postsolve-curves';

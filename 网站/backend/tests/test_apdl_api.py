@@ -111,6 +111,32 @@ class ApdlApiTests(unittest.TestCase):
         self.assertEqual(code,400)
         self.assertIn('不一致',error['error'])
 
+    def test_exact_platform_precheck_frozen_worker_and_bundle_agree(self):
+        stream=io.BytesIO();np.savetxt(stream,np.array([[.1,.2,.3],[.2,.4,.1]]),delimiter=',');data=stream.getvalue()
+        upload=self.server.upload('platform.csv',io.BytesIO(data),len(data))
+        payload={'options':{'corrosion_mode':'single_top','platform_enabled':True,
+                            'platform_top_mean_depth_mm':.5,'thickness_layer_mode':'intermediate_nodes',
+                            'intermediate_node_layers':10,'platform_fixed_mm':2.5,'platform_loaded_mm':2.5},
+                 'top_source':{'upload_id':upload['id'],'mapping':{'layout':'yx','dx_mm':.3,'dy_mm':.3}}}
+        code,preview=self.request('/api/apdl/precheck',payload)
+        self.assertEqual(code,200,preview)
+        p=preview['stats']['platforms']
+        self.assertEqual(preview['options']['layers'],11)
+        self.assertAlmostEqual(preview['stats']['length_mm'],6.2)
+        self.assertTrue(any(abs(x-2.5)<1e-12 for x in preview['preview']['x_mm']))
+        self.assertEqual(p['source_shape'],[2,3])
+        with patch.object(self.server,'launch'):
+            code,job=self.request('/api/apdl/jobs',payload)
+        self.assertEqual(code,201,job)
+        run_job(job['id'],self.server.runtime)
+        out=self.server.runtime/'jobs'/job['id']/'outputs'
+        summary=json.loads((out/'summary.json').read_text(encoding='utf-8'))
+        self.assertEqual(summary['stats'],preview['stats'])
+        self.assertEqual(json.loads((out/'platform_geometry.json').read_text(encoding='utf-8')),p)
+        with np.load(out/'surface_inputs.npz') as values:
+            self.assertAlmostEqual(values['x'][p['source_start_index']-1],2.5)
+            np.testing.assert_allclose(values['top_depth'][:,p['source_start_index']:p['source_stop_index']],[[.2,.3,.4],[.3,.5,.2]])
+
     def test_local_corrosion_precheck_reports_plate_and_patch_coordinates(self):
         stream=io.BytesIO();np.savetxt(stream,np.array([[.1,.2],[.3,.4]]),delimiter=',');data=stream.getvalue()
         upload=self.server.upload('local_patch.csv',io.BytesIO(data),len(data))

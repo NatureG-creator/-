@@ -156,11 +156,10 @@ def _write_preview(path: Path, geometry: dict) -> None:
     from matplotlib import pyplot as plt
 
     o = geometry['options']
-    extent = [geometry['x'][0], geometry['x'][-1], geometry['y'][0], geometry['y'][-1]]
     fig, axes = plt.subplots(1, 3, figsize=(13, 3.6), constrained_layout=True)
     try:
         for axis, key, title in zip(axes[:2], ('top_depth', 'remaining'), ('Top corrosion depth (mm)', 'Remaining thickness (mm)')):
-            image = axis.imshow(geometry[key], extent=extent, origin='lower', aspect='auto')
+            image = axis.pcolormesh(geometry['x'], geometry['y'], geometry[key], shading='nearest')
             axis.set(title=title, xlabel='X (mm)', ylabel='Y (mm)')
             fig.colorbar(image, ax=axis)
         direction = o.get('tensile_direction', 'X')
@@ -197,6 +196,10 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
                         top_depth=geometry['top_depth'], bottom_depth=geometry['bottom_depth'],
                         remaining=geometry['remaining'], x=geometry['x'], y=geometry['y'])
     files.append('surface_inputs.npz')
+    if geometry.get('platforms'):
+        (output_dir/'platform_geometry.json').write_text(
+            json.dumps(geometry['platforms'], ensure_ascii=False, indent=2), encoding='utf-8')
+        files.append('platform_geometry.json')
     if provenance.get('surface_mapping'):
         (output_dir/'surface_mapping.json').write_text(
             json.dumps(provenance['surface_mapping'], ensure_ascii=False, indent=2), encoding='utf-8')
@@ -283,7 +286,7 @@ def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) ->
 
 拉伸方向由 options.tensile_direction 选择 X 或 Y（默认 X）。相应两端选择全局 X/Y 端面并施加 UX/UY；位移、反力、标距和名义截面积随方向同步变化。
 poisson_free 模板：两端仅约束所选轴向位移，固定端角点去除横向/Z平移，第二角点用几何约束方程去除绕拉伸轴转动，保持泊松收缩可行。
-clamped_grips 模板：两端横向/Z位移为0，模拟夹持。模型不自动增加未腐蚀夹持段。
+clamped_grips 模板：两端横向/Z位移为0，模拟夹持。夹持约束不会增加几何；仅显式启用platform_enabled才添加平平台。
 legacy_recommended 模板保留原GitHub主宏的角点约束，并按所选拉伸轴映射到对应固定端。
 双线性等向硬化参数为屈服应力与屈服后切线模量；多线性等向硬化输入[塑性应变,应力MPa]，不包含断裂或材料失效。
 多线性曲线要求首应变0、应变严格递增；负斜率需要明确允许并输出TBEO,NEGSLOPE,1，不擅自平滑原曲线。
@@ -322,6 +325,13 @@ plots.mac 为独立原生云图宏：已有求解结果时，先 RESUME,corrosio
 输出末步总位移(mm)、节点平均等效应力(MPa)，弹塑性工况另输出节点平均等效塑性应变(无量纲)；真实变形比例1倍，FULL平均，不能当作积分点峰值。
 云图导出失败与物理解算状态分别记录，不修改材料曲线、几何、边界或加载。
 '''
+    if geometry.get('platforms'):
+        p=geometry['platforms']
+        readme += (f"\n## 两侧平平台\n固定端 {p['fixed_flat_length_mm']:g} mm、加载端 {p['loaded_flat_length_mm']:g} mm；"
+                   f"每侧另有 {p['transition_length_each_mm']:g} mm 连接段。宽度与腐蚀区一致，平台面位于0和{p['platform_separation_mm']:g} mm。\n"
+                   "参考面按朝外高程最低值+实测输入深度计算；不强制校准后矩阵均值等于输入值。全部参数与计算值见platform_geometry.json。\n"
+                   f"厚度含{o['layers']-1}层中间节点、{o['layers']+1}层节点平面、{o['layers']}层单元。\n"
+                   "平台节点与腐蚀区采用不同轴向点距，精确坐标见surface_inputs.npz中的x/y和nodes.dat；不可按单一dx/dy重建整板。\n")
     (output_dir/'README_zh.md').write_text(readme, encoding='utf-8')
     files.append('README_zh.md')
     summary = dict(analysis='tension', build_state='built', options=o,

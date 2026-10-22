@@ -372,6 +372,14 @@ def precheck_apdl(service,payload):
     # Keep both physical edges; stride slicing can omit the final row/column.
     rows=np.linspace(0,len(geometry['y'])-1,min(80,len(geometry['y'])),dtype=int)
     cols=np.linspace(0,len(geometry['x'])-1,min(80,len(geometry['x'])),dtype=int)
+    if geometry.get('platforms'):
+        p=geometry['platforms']
+        anchors=[p['source_start_index']-1,p['source_start_index'],
+                 p['source_stop_index']-1,p['source_stop_index']]
+        if p['tensile_direction']=='X':
+            cols=np.unique(np.concatenate((cols,anchors)))
+        else:
+            rows=np.unique(np.concatenate((rows,anchors)))
     preview={'x_mm':geometry['x'][cols].tolist(),'y_mm':geometry['y'][rows].tolist()}
     for name in ('top_depth','bottom_depth','remaining'):
         array=geometry[name]
