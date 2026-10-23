@@ -10,10 +10,14 @@ const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 
 test('workbench exposes grouped research flow and keeps every workflow panel', () => {
   assert.match(html, /data-layout="product-performs"/);
-  for (const label of ['采集与模拟', '验证与拟合', '结果与记录']) assert.match(html, new RegExp(label));
+  for (const label of ['采集与模拟', '拟合与绘图', '结果与记录']) assert.match(html, new RegExp(label));
   for (const id of ['pointcloud-panel', 'simulation-panel', 'benchmark-panel', 'finite-element-panel', 'fitting-panel', 'multivariate-panel', 'results-panel', 'history-panel']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.equal((html.match(/data-panel="fitting-panel"/g)||[]).length,1);
+  assert.match(html,/data-fit-mode="single"/);
+  assert.match(html,/data-fit-mode="multivariate"/);
+  assert.match(html,/id="fitting-content"/);
 });
 
 test('workbench defines readable typography and surface tokens', () => {

@@ -34,7 +34,7 @@ function readSettings(card) {
 }
 
 export function mountTaskIO(request) {
-  for(const panelId of ['pointcloud-panel','surface-generation-panel','simulation-panel','benchmark-panel','finite-element-panel','fitting-panel','multivariate-panel']){
+  for(const panelId of ['pointcloud-panel','surface-generation-panel','simulation-panel','benchmark-panel','finite-element-panel','fitting-panel']){
     const panel=document.getElementById(panelId), id=`task-io-${panelId}`;
     if(!panel||document.getElementById(id))continue;
     panel.querySelector('.section-heading').after(settingsCard(id,request));
@@ -48,7 +48,7 @@ export function taskPayload(url, payload) {
   let panel;
   if(url==='/api/finite-element/exports')panel='legacy';
   else if(url==='/api/apdl/jobs')panel='finite-element-panel';
-  else if(url==='/api/fitting/jobs')panel=payload.mode==='multivariate2'?'multivariate-panel':'fitting-panel';
+  else if(url==='/api/fitting/jobs')panel='fitting-panel';
   else if(['/api/benchmarks','/api/benchmark-diagnostics'].includes(url))panel='benchmark-panel';
   else if(url==='/api/batches')panel='simulation-panel';
   else if(url==='/api/jobs')panel={pointcloud:'pointcloud-panel',surface_generation:'surface-generation-panel',simulation:'simulation-panel',diagnostics:'benchmark-panel'}[payload?.kind];

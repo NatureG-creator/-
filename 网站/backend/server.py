@@ -146,6 +146,12 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/fitting/inspect":
             from .fitting_service import inspect_fitting
             return self._json(200, inspect_fitting(self.server, self._body()))
+        if method == "GET" and path == "/api/fitting/sources":
+            from .fitting_service import fitting_sources
+            return self._json(200, fitting_sources(self.server))
+        if method == "POST" and path == "/api/fitting/plot":
+            from .fitting_service import render_direct_plot
+            return self._json(200, render_direct_plot(self.server, self._body()))
         if method == "POST" and path == "/api/visualization/inspect":
             from .visualization_service import inspect_upload
             return self._json(200, inspect_upload(self.server, self._body()))

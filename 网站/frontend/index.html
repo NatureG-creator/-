@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css?v=20261022-readability"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css?v=20261023-fitting-flow"></head>
 <body data-ui-shell="research-workbench">
 <a href="#workspace" class="skip-link">跳转到工作区</a>
 <aside class="sidebar">
@@ -12,11 +12,10 @@
       <button class="tab" data-panel="surface-generation-panel"><span class="nav-icon">⊞</span><span>独立点云 / MAT<small>190 · 60 · 50 mm · 自定义</small></span><span class="nav-number">01+</span></button>
       <button class="tab" data-panel="simulation-panel"><span class="nav-icon">▦</span><span>腐蚀演化<small>CA–GA 参数反演</small></span><span class="nav-number">02</span></button>
     </div>
-    <div class="nav-group" data-nav-group="验证与拟合"><span class="nav-group-title">验证与拟合</span>
+    <div class="nav-group" data-nav-group="拟合与绘图"><span class="nav-group-title">拟合与绘图</span>
       <button class="tab" data-panel="benchmark-panel"><span class="nav-icon">▥</span><span>性能对比<small>固定种群 · 后端验证</small></span><span class="nav-number">02+</span></button>
       <button class="tab" data-panel="finite-element-panel"><span class="nav-icon">△</span><span>有限元耦合<small>建模 · 拉伸 · 结果校核</small></span><span class="nav-number">03</span></button>
-      <button class="tab" data-panel="fitting-panel"><span class="nav-icon">⌁</span><span>通用数据拟合<small>函数比较 · 科研绘图</small></span><span class="nav-number">04</span></button>
-      <button class="tab" data-panel="multivariate-panel"><span class="nav-icon">◇</span><span>双自变量拟合<small>响应面 · Origin XYZ</small></span><span class="nav-number">04+</span></button>
+      <button class="tab" data-panel="fitting-panel"><span class="nav-icon">⌁</span><span>拟合与绘图<small>自动识别 · 分析 · 导出</small></span><span class="nav-number">04</span></button>
     </div>
     <div class="nav-group" data-nav-group="结果与记录"><span class="nav-group-title">结果与记录</span>
       <button class="tab" data-panel="visualization-panel"><span class="nav-icon">▧</span><span>可视化中心<small>输入数据与结果图像</small></span><span class="nav-number">07</span></button>
@@ -62,8 +61,14 @@
     <div class="action-bar"><div><strong id="run-label">准备运行腐蚀演化</strong><small id="submit-help">严格模式：两个 GA 配置均为单进程，Taichi 关闭</small></div><button id="run-simulation" class="button primary" disabled>运行腐蚀模拟 <span aria-hidden="true">→</span></button></div><div id="sim-message" class="message" role="status" aria-live="polite" hidden></div>
   </section>
   <section id="benchmark-panel" class="panel" aria-label="性能对比"></section>
-  <section id="fitting-panel" class="panel" aria-label="通用数据拟合"></section>
-  <section id="multivariate-panel" class="panel" aria-label="双自变量拟合"></section>
+  <section id="fitting-panel" class="panel" aria-label="拟合与绘图">
+    <nav class="fit-mode-tabs" aria-label="拟合与绘图类型">
+      <button type="button" class="fit-mode-tab active" data-fit-mode="single" aria-pressed="true">普通绘图与单变量拟合</button>
+      <button type="button" class="fit-mode-tab" data-fit-mode="multivariate" aria-pressed="false">双自变量响应面</button>
+    </nav>
+    <div id="fitting-content"></div>
+    <div id="multivariate-panel" hidden aria-label="双自变量拟合"></div>
+  </section>
   <section id="visualization-panel" class="panel" aria-labelledby="visualization-heading">
     <div class="section-heading"><div><div class="section-overline">07 / VISUALIZATION</div><h2 id="visualization-heading">可视化中心</h2><p>从同一个入口预览实测数据、腐蚀阶段形貌和 APDL 求解云图；所有预览都保留来源与单位信息。</p></div><span class="badge neutral">只读预览</span></div>
     <div id="visualization-root"></div>

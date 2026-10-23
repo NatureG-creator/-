@@ -37,6 +37,17 @@ def fitting_catalog():
 
 def _source_table(service,source):
     if not isinstance(source,dict):raise ValueError('source必须是对象')
+    if source.get('source_job_id'):
+        job_id=service.validate_id(source['source_job_id'])
+        job=service.get_job(job_id)
+        if job.get('kind')!='apdl_tension' or job.get('state') not in {'completed','failed','interrupted','stopped','cancelled','canceled'}:
+            raise ValueError('科研绘图任务来源必须是已结束的 APDL 任务')
+        path=service.runtime/'jobs'/job_id/'outputs'/'force_displacement.csv'
+        if not path.is_file():raise ValueError('该 APDL 任务没有 force_displacement.csv')
+        digest=sha256(path)
+        table=load_table(path)
+        return table,dict(type='job',kind='apdl_tension',job_id=job_id,name='force_displacement.csv',sha256=digest,
+                          data_quality='complete' if job.get('state')=='completed' else 'partial'),path
     if source.get('upload_id'):
         if source.get('text'):raise ValueError('上传文件与粘贴文本只能选择一种')
         record,path=service.get_upload(source['upload_id'])
@@ -49,11 +60,74 @@ def _source_table(service,source):
     return table,dict(type='text',name='pasted_data.txt',sha256=hashlib.sha256(text.encode('utf-8')).hexdigest()),None
 
 
+def fitting_sources(service):
+    result=[]
+    for job in service.list_jobs(include_hidden=False,limit=500):
+        if job.get('kind')!='apdl_tension' or job.get('state') not in {'completed','failed','interrupted','stopped','cancelled','canceled'}:
+            continue
+        path=service.runtime/'jobs'/job['id']/'outputs'/'force_displacement.csv'
+        if path.is_file():
+            result.append(dict(id=job['id'],name=job.get('name') or job.get('case_name') or job['id'],
+                               state=job['state'],data_quality='complete' if job['state']=='completed' else 'partial'))
+    return result
+
+
 def inspect_fitting(service,source):
     started=time.perf_counter()
     table,info,_=_source_table(service,source)
     return dict(table,rows=table.get('category_rows',table['rows'])[:20],category_rows=table.get('category_rows',[])[:20],preview_rows=min(20,len(table['rows'])),source=info,
                 reading_seconds=time.perf_counter()-started)
+
+
+def render_direct_plot(service,payload):
+    import io
+    import math
+    import matplotlib
+    matplotlib.use('Agg')
+    from matplotlib import font_manager
+    import matplotlib.pyplot as plt
+
+    table,source,_=_source_table(service,payload.get('source',{}))
+    selection=payload.get('selection',{})
+    count=len(table['columns']);x_index=selection.get('x_column');y_indices=selection.get('y_columns')
+    if type(x_index) is not int or not 0<=x_index<count:raise ValueError('X列索引无效')
+    if not isinstance(y_indices,list) or not 1<=len(y_indices)<=20 or any(type(i)is not int or not 0<=i<count for i in y_indices):raise ValueError('请选择1到20个有效Y列')
+    if x_index in y_indices or len(set(y_indices))!=len(y_indices):raise ValueError('X列不能同时作为Y列，Y列也不能重复')
+    plot=payload.get('plot',{})
+    if not isinstance(plot,dict):raise ValueError('图形设置必须是对象')
+    kind=plot.get('kind','scatter')
+    if kind not in {'scatter','line'}:raise ValueError('图形类型仅支持散点图或折线图')
+    for font in ('Microsoft YaHei','SimHei','Noto Sans CJK SC','Arial Unicode MS'):
+        try:
+            font_manager.findfont(font_manager.FontProperties(family=font),fallback_to_default=False)
+            matplotlib.rcParams['font.sans-serif']=[font,'DejaVu Sans']
+            break
+        except ValueError:continue
+    def label(key,fallback):
+        value=plot.get(key,fallback)
+        if not isinstance(value,str) or len(value)>120:raise ValueError(f'{key}必须是120字以内文本')
+        return value
+    width,height,dpi=plot.get('width_mm',180),plot.get('height_mm',130),plot.get('dpi',150)
+    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (width,height,dpi)) or not 60<=width<=300 or not 60<=height<=300 or not 72<=dpi<=300:raise ValueError('图宽图高须为60–300 mm，DPI须为72–300')
+    fig,ax=plt.subplots(figsize=(width/25.4,height/25.4),dpi=dpi,layout='constrained')
+    colors=plt.rcParams['axes.prop_cycle'].by_key()['color'];series=[]
+    try:
+        for order,index in enumerate(y_indices):
+            points=[];skipped=0
+            for row in table['rows']:
+                x,y=row[x_index],row[index]
+                if type(x) not in (int,float) or type(y) not in (int,float) or not math.isfinite(x) or not math.isfinite(y):skipped+=1;continue
+                points.append((x,y))
+            if len(points)<2:raise ValueError(f'列“{table["columns"][index]}”有效数值点少于2个，无法绘图')
+            xs,ys=zip(*points);name=table['columns'][index];color=colors[order%len(colors)]
+            if kind=='line':ax.plot(xs,ys,label=name,color=color,linewidth=1.6,marker='o',markersize=2.5)
+            else:ax.scatter(xs,ys,label=name,color=color,s=18,alpha=.82)
+            series.append(dict(column=index,label=name,plotted=len(points),skipped=skipped))
+        ax.set_title(label('title','科研数据图'));ax.set_xlabel(label('x_label',table['columns'][x_index]));ax.set_ylabel(label('y_label','数值'))
+        ax.grid(True,alpha=.22);ax.legend(frameon=False);fig.patch.set_facecolor('white')
+        output=io.StringIO();fig.savefig(output,format='svg',facecolor='white');svg=output.getvalue()
+    finally:plt.close(fig)
+    return dict(svg=svg,source=source,plot=dict(kind=kind,x_column=x_index,y_columns=series),row_count=len(table['rows']))
 
 
 def _prepare(service,payload):
