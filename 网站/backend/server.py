@@ -431,6 +431,12 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 3 and method == "GET":
                 return self._json(200, self.server.get_job(job_id))
             if len(parts) == 4 and method == "POST":
+                if parts[3] == "pointcloud-region":
+                    from .pointcloud_regions import export_region
+                    body = self._body()
+                    result = export_region(folder, body.get("axis", "X"),
+                                           body.get("length_mm"), body.get("center_mm"))
+                    return self._json(201, result)
                 if parts[3] in {'hide', 'unhide'}:
                     return self._json(200, self.server.set_job_hidden(job_id, parts[3] == 'hide'))
                 if parts[3] == 'delete':

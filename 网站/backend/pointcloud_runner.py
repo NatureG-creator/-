@@ -108,7 +108,27 @@ def _export_smoothed_surface(data: dict, output: Path) -> dict:
     if matrix.ndim != 2 or min(matrix.shape) < 2 or not np.isfinite(matrix).all():
         raise RuntimeError('MATLAB平滑表面必须是有限二维矩阵')
     output.mkdir(parents=True, exist_ok=True)
-    savemat(output / 'measured_surface_smoothed.mat', {'Z_filled': matrix}, do_compression=True)
+    rows, columns = matrix.shape
+    spacing = data.get('spacing_um')
+    spacing_mm = float(spacing) / 1000 if spacing is not None else None
+    x = np.asarray(data.get('x_coordinates_mm', np.arange(columns) * (spacing_mm or 1)), dtype=float).reshape(-1)
+    y = np.asarray(data.get('y_coordinates_mm', np.arange(rows) * (spacing_mm or 1)), dtype=float).reshape(-1)
+    if x.size != columns or y.size != rows or not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise RuntimeError('MATLAB坐标向量必须分别匹配高程矩阵的列和行，且全部有限')
+    if columns > 1 and not np.all(np.diff(x) > 0) or rows > 1 and not np.all(np.diff(y) > 0):
+        raise RuntimeError('MATLAB分析坐标必须沿X/Y方向递增')
+    depth = np.max(matrix) - matrix
+    xx, yy = np.meshgrid(x, y)
+    xyz = np.column_stack((xx.ravel(), yy.ravel(), matrix.ravel()))
+    savemat(output / 'measured_surface_smoothed.mat', {
+        'Z_filled': matrix, 'height_matrix_mm': matrix,
+        'corrosion_depth_matrix_mm': depth, 'x_coordinates_mm': x,
+        'y_coordinates_mm': y, 'processed_xyz_mm': xyz,
+    }, do_compression=True)
+    np.savetxt(output / 'processed_pointcloud.csv',
+               np.column_stack((xyz, depth.ravel())), delimiter=',',
+               header='x_mm,y_mm,height_mm,relative_corrosion_depth_mm', comments='', fmt='%.9g')
+    np.savetxt(output / 'processed_pointcloud.xyz', xyz, delimiter=' ', fmt='%.9g')
     analysis = data.get('analysis_config', {})
     if not isinstance(analysis, dict):
         analysis = {}
@@ -118,18 +138,24 @@ def _export_smoothed_surface(data: dict, output: Path) -> dict:
         'smoothing': 'MATLAB existing H; no second smoothing',
         'gaussian_sigma': analysis.get('gaussian_sigma'),
         'value_range_mm': [float(matrix.min()), float(matrix.max())],
+        'coordinate_origin': 'analysis_local_origin',
+        'coordinate_note': 'X/Y为MATLAB分析局部坐标；Z为现有平滑高程。腐蚀深度另列为max(height)-height。',
+        'point_count': int(xyz.shape[0]),
+        'corrosion_depth_range_mm': [float(depth.min()), float(depth.max())],
     }
-    spacing = data.get('spacing_um')
-    if spacing is not None:
-        spacing_mm = float(spacing) / 1000
-        if math.isfinite(spacing_mm) and spacing_mm > 0:
-            metadata.update(dx_mm=spacing_mm, dy_mm=spacing_mm,
-                            size_x_mm=(matrix.shape[1]-1)*spacing_mm,
-                            size_y_mm=(matrix.shape[0]-1)*spacing_mm)
+    if spacing_mm is not None and math.isfinite(spacing_mm) and spacing_mm > 0:
+        metadata.update(dx_mm=spacing_mm, dy_mm=spacing_mm)
+    metadata.update(size_x_mm=float(x[-1]-x[0]), size_y_mm=float(y[-1]-y[0]),
+                    x_range_mm=[float(x[0]), float(x[-1])],
+                    y_range_mm=[float(y[0]), float(y[-1])])
     (output / 'measured_surface_smoothed.json').write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
     return dict(metadata, files=['pointcloud/measured_surface_smoothed.mat',
-                                 'pointcloud/measured_surface_smoothed.json'])
+                                 'pointcloud/measured_surface_smoothed.json',
+                                 'pointcloud/processed_pointcloud.csv',
+                                 'pointcloud/processed_pointcloud.xyz'],
+                preview_xyz=xyz[::max(1, math.ceil(len(xyz)/2500))].tolist(),
+                preview_depth_mm=depth.ravel()[::max(1, math.ceil(depth.size/2500))].tolist())
 
 
 def run_pointcloud(

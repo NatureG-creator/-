@@ -129,6 +129,13 @@ if relative_only
     result.negative_fraction=NaN;
     result.original_Z_filled_raw=sources.height_raw_mm;
     result.original_Z_filled_smoothed=sources.height_smoothed_mm;
+    assert(isfield(sources,'x_coordinates_mm')&&isfield(sources,'y_coordinates_mm')&& ...
+        numel(sources.x_coordinates_mm)==size(smooth_filled,2)&& ...
+        numel(sources.y_coordinates_mm)==size(smooth_filled,1)&& ...
+        all(isfinite(sources.x_coordinates_mm(:)))&&all(isfinite(sources.y_coordinates_mm(:))), ...
+        'export:InvalidCoordinates','处理后高程必须带有与矩阵匹配的有限X/Y坐标。');
+    result.x_coordinates_mm=reshape(sources.x_coordinates_mm,1,[]);
+    result.y_coordinates_mm=reshape(sources.y_coordinates_mm,[],1);
     result.reference_metadata.formula='H: original 50 mm height; D_relative=max(H)-H; total=H0-H only with verified H0';
     result.reference_metadata.separate_190_and_50_scans=true;
     result.reference_metadata.uniform_origin='unknown; separate 190 mm diagnostic is not a verified 50 mm baseline';

@@ -69,8 +69,32 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             self.assertEqual(result["smoothed_surface"]["size_x_mm"], 1.)
             from scipy.io import loadmat
             values = loadmat(job / "outputs" / "pointcloud" / "measured_surface_smoothed.mat")
-            self.assertEqual([key for key in values if not key.startswith('__')], ['Z_filled'])
+            self.assertEqual([key for key in values if not key.startswith('__')],
+                             ['Z_filled', 'height_matrix_mm', 'corrosion_depth_matrix_mm',
+                              'x_coordinates_mm', 'y_coordinates_mm', 'processed_xyz_mm'])
             np.testing.assert_array_equal(values['Z_filled'], np.arange(6.).reshape(2, 3))
+            np.testing.assert_array_equal(values['x_coordinates_mm'].ravel(), [0, .5, 1])
+            self.assertEqual(values['processed_xyz_mm'].shape, (6, 3))
+
+    def test_processed_pointcloud_region_preserves_coordinates_and_depth(self):
+        from scipy.io import savemat, loadmat
+        from backend.pointcloud_regions import export_region
+        with tempfile.TemporaryDirectory() as folder:
+            job = Path(folder)
+            output = job / 'outputs' / 'pointcloud'
+            output.mkdir(parents=True)
+            height = np.arange(20., dtype=float).reshape(4, 5)
+            x, y = np.arange(5.), np.arange(4.)
+            savemat(output / 'measured_surface_smoothed.mat', {
+                'height_matrix_mm': height, 'corrosion_depth_matrix_mm': height.max() - height,
+                'x_coordinates_mm': x, 'y_coordinates_mm': y,
+            })
+            result = export_region(job, 'X', 2, 2)
+            self.assertEqual(result['actual_range_mm'], [1., 3.])
+            values = loadmat(output / 'regions' / result['region_id'] / 'processed_region.mat')
+            np.testing.assert_array_equal(values['x_coordinates_mm'].ravel(), [1, 2, 3])
+            np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
+            np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
 
 
 class ExcelTargetTests(unittest.TestCase):
