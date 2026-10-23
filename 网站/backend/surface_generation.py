@@ -10,6 +10,7 @@ from scipy.io import savemat, whosmat
 from scipy.io.matlab import MatReadError
 from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter, uniform_filter
 
 from .morphology_service import _read_surface_matrix
 from .runner import _atomic_json
@@ -57,6 +58,36 @@ def orient_matrix(matrix, options):
     if options.get('flip_y', False):
         matrix = matrix[::-1, :]
     return matrix * (sign / 1000 if options.get('unit') == 'um' else sign)
+
+
+def smooth_surface(matrix, options):
+    """Apply the same Gaussian-then-moving-average order as baseline export."""
+    enabled = bool(options.get('smooth_enabled', False))
+    window = options.get('smooth_window_size', 1)
+    sigma = options.get('smooth_gaussian_sigma', 0)
+    if window in (None, ''):
+        window = 1
+    if sigma in (None, ''):
+        sigma = 0
+    if isinstance(window, bool):
+        raise ValueError('平滑窗口必须为1至101的奇数')
+    try:
+        numeric_window = float(window)
+        window = int(numeric_window)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError('平滑窗口必须为1至101的奇数') from exc
+    if window != numeric_window or window < 1 or window > 101 or window % 2 != 1:
+        raise ValueError('平滑窗口必须为1至101的奇数')
+    sigma = number({'smooth_gaussian_sigma': sigma}, 'smooth_gaussian_sigma')
+    if sigma < 0 or sigma > 100:
+        raise ValueError('高斯 sigma 必须为0至100')
+    result = np.asarray(matrix, dtype=np.float64)
+    if enabled and sigma > 0:
+        result = gaussian_filter(result, sigma=sigma, radius=math.ceil(2*sigma), mode='nearest')
+    if enabled and window > 1:
+        result = uniform_filter(result, size=window, mode='reflect')
+    return result, dict(smooth_enabled=enabled, smooth_window_size=window,
+        smooth_gaussian_sigma=sigma, smoothing_order='Gaussian → 对称均值窗口' if enabled else '未启用')
 
 
 def crop_surface(matrix, x, y, options):
@@ -143,7 +174,7 @@ def load_xyz(path, options):
         point_cloud_note='由散乱XYZ线性网格化；最近邻填补数量单列报告，非原始散乱点序列。')
 
 
-def process_face(path, face):
+def process_face(path, face, *, apply_smoothing=True):
     o = face['options']
     extra = {}
     if path.suffix.lower() == '.mat':
@@ -183,6 +214,10 @@ def process_face(path, face):
         dx, dy = float(x[1]-x[0]), float(y[1]-y[0])
     source_size = [float(x[-1]-x[0]), float(y[-1]-y[0])]
     matrix, x, y, crop = crop_surface(matrix, x, y, o)
+    smoothing = dict(smooth_enabled=False, smooth_window_size=1,
+        smooth_gaussian_sigma=0, smoothing_order='未启用')
+    if apply_smoothing:
+        matrix, smoothing = smooth_surface(matrix, o)
     metadata = dict(crop, source_variable=variable, value_mode=o.get('value_mode', 'height'),
         input_unit=o.get('unit', 'mm'), input_shape=list(raw.shape),
         input_dx_mm=dy if o.get('transpose', False) else dx, input_dy_mm=dx if o.get('transpose', False) else dy,
@@ -190,6 +225,7 @@ def process_face(path, face):
         orientation={key: o.get(key, default) for key, default in [('transpose', False), ('flip_x', False), ('flip_y', False), ('height_sign', 1)]})
     metadata.update(extra)
     metadata['resampled'] = crop['resampled'] or extra.get('source_resampled', False)
+    metadata.update(smoothing)
     return matrix, x, y, metadata
 
 
@@ -234,7 +270,10 @@ def prepare_generation(service, payload):
         item = dict(side=side, source_name=record['name'], source_sha256=record['sha256'],
             variable=variable, stage=face.get('stage'), source_geometry=source_geometry,
             source_job_id=face.get('source_job_id'), options=options, frozen_path=frozen)
-        matrix, x, y, metadata = process_face(path, item)
+        matrix, x, y, metadata = process_face(path, item, apply_smoothing=False)
+        if options.get('smooth_enabled'):
+            _, smoothing = smooth_surface(matrix, options)
+            item['smoothing_preview'] = smoothing
         item['preview'] = dict(metadata, side=side, source_name=record['name'], matrix_shape=list(matrix.shape), point_count=int(matrix.size),
             size_x_mm=float(x[-1]-x[0]), size_y_mm=float(y[-1]-y[0]),
             dx_mm=float(x[1]-x[0]), dy_mm=float(y[1]-y[0]), z_range_mm=[float(matrix.min()), float(matrix.max())])
@@ -250,22 +289,24 @@ def freeze_generation(spec, sources, job_dir):
             raise ValueError('表面来源冻结失败')
 
 
-def write_face(output, matrix, x, y, metadata):
+def write_face(output, matrix, x, y, metadata, *, variant='raw'):
     output.mkdir(parents=True, exist_ok=True)
     variable = 'Z_filled' if metadata['side'] == 'front' else 'F_filled'
-    savemat(output / f'{variable}.mat', {variable: np.asarray(matrix, dtype=np.float64)}, do_compression=True)
-    with (output / 'surface_points.csv').open('w', encoding='utf-8-sig', newline='') as c, \
-            (output / 'surface_points.xyz').open('w', encoding='utf-8') as xyz:
+    suffix = '' if variant == 'raw' else '_smoothed'
+    savemat(output / f'{variable}{suffix}.mat', {variable: np.asarray(matrix, dtype=np.float64)}, do_compression=True)
+    with (output / f'surface_points{suffix}.csv').open('w', encoding='utf-8-sig', newline='') as c, \
+            (output / f'surface_points{suffix}.xyz').open('w', encoding='utf-8') as xyz:
         writer = csv.writer(c); writer.writerow(['x_mm', 'y_mm', 'z_mm'])
         for row, yy in enumerate(y):
             for col, xx in enumerate(x):
                 values = [format(float(v), '.17g') for v in (xx, yy, matrix[row, col])]
                 writer.writerow(values); xyz.write(' '.join(values) + '\n')
-    info = dict(metadata, output_variable=variable, matrix_shape=list(matrix.shape),
+    info = dict(metadata, output_variable=variable, output_variant=variant, matrix_shape=list(matrix.shape),
         point_count=int(matrix.size), unit='mm', layout='rows_y_columns_x',
         dx_mm=float(x[1]-x[0]), dy_mm=float(y[1]-y[0]),
         origin_x_mm=float(x[0]), origin_y_mm=float(y[0]),
         size_x_mm=float(x[-1]-x[0]), size_y_mm=float(y[-1]-y[0]))
+    info['z_range_mm'] = [float(matrix.min()), float(matrix.max())]
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -280,23 +321,29 @@ def write_face(output, matrix, x, y, metadata):
     plot = ax2.imshow(matrix, origin='lower', extent=[x[0], x[-1], y[0], y[-1]], aspect='auto', cmap='viridis')
     ax2.set(xlabel='X / mm', ylabel='Y / mm', title=variable)
     figure.colorbar(plot, ax=ax2, label='Z / mm'); figure.tight_layout()
-    figure.savefig(output / 'surface_preview.png', dpi=150); plt.close(figure)
-    _atomic_json(output / 'manifest.json', info)
+    figure.savefig(output / f'surface_preview{suffix}.png', dpi=150); plt.close(figure)
+    _atomic_json(output / f'manifest{suffix}.json', info)
     return info
 
 
 def run_generation(spec, job_dir, progress=None):
     reports = []
+    smoothed_reports = []
     output = job_dir / 'outputs'; output.mkdir(exist_ok=True)
     for face in spec['faces']:
         path = job_dir / face['frozen_path']
         if sha256(path) != face['source_sha256']:
             raise ValueError('冻结来源文件已改变')
         if progress: progress(dict(phase='compute', label=face['side']))
-        matrix, x, y, metadata = process_face(path, face)
-        reports.append(write_face(output / face['side'], matrix, x, y,
-            dict(metadata, side=face['side'], source_name=face['source_name'], source_sha256=face['source_sha256'])))
-    summary = dict(faces=reports, actual_backend='NumPy / SciPy', note='各面独立输出，未自动配准或拼接。')
+        raw_face = dict(face, options=dict(face['options'], smooth_enabled=False))
+        matrix, x, y, metadata = process_face(path, raw_face, apply_smoothing=False)
+        base_metadata = dict(metadata, side=face['side'], source_name=face['source_name'], source_sha256=face['source_sha256'])
+        reports.append(write_face(output / face['side'], matrix, x, y, base_metadata, variant='raw'))
+        if face['options'].get('smooth_enabled'):
+            smoothed, smoothing = smooth_surface(matrix, face['options'])
+            smoothed_metadata = dict(base_metadata, **smoothing)
+            smoothed_reports.append(write_face(output / face['side'], smoothed, x, y, smoothed_metadata, variant='smoothed'))
+    summary = dict(faces=reports, smoothed_faces=smoothed_reports, actual_backend='NumPy / SciPy', note='各面独立输出，未自动配准或拼接。')
     _atomic_json(output / 'summary.json', summary)
     _atomic_json(output / 'manifest.json', dict(summary, options=spec['faces']))
     with zipfile.ZipFile(output / 'surface_bundle.zip', 'w', zipfile.ZIP_DEFLATED) as archive:

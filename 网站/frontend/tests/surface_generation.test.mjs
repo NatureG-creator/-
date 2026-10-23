@@ -39,7 +39,13 @@ test('result reports actual dimensions and interpolation instead of nominal size
 });
 test('independent workflow exposes all agreed inputs and clear output contract',()=>{
  const html=generationPage();
- for(const label of ['190 mm','60 mm','50 mm','自定义','完整来源','裁剪 X 起始偏移','裁剪 Y 起始偏移','原模拟 XY','Z_filled','F_filled','surface_bundle.zip','最近邻填补'])assert.ok(html.includes(label),label);
+ for(const label of ['190 mm','60 mm','50 mm','自定义','完整来源','裁剪 X 起始偏移','裁剪 Y 起始偏移','原模拟 XY','Z_filled','F_filled','surface_bundle.zip','最近邻填补','同时生成平滑 MAT','平滑窗口（奇数）','高斯 sigma'])assert.ok(html.includes(label),label);
  assert.match(html,/单面即可运行/);assert.match(html,/value="preserve"/);
  assert.equal((html.match(/data-face="/g)||[]).length,2);
+});
+test('summary reports optional smoothed output and preserves raw output',()=>{
+ const html=renderGenerationSummary({faces:[{side:'front',source_name:'scan.mat',source_variable:'Z_filled',matrix_shape:[3,4],point_count:12,size_x_mm:0.9,size_y_mm:0.6,dx_mm:.3,dy_mm:.3,actual_length_mm:.9,actual_width_mm:.6}],smoothed_faces:[{side:'front',smooth_gaussian_sigma:1,smooth_window_size:3}]});
+ assert.match(html,/已另存平滑 MAT/);assert.match(html,/原始 MAT 保持不变/);assert.match(html,/高斯 sigma/);
+ const preview=renderGenerationSummary({preview_only:true,faces:[{side:'front'}],smoothed_faces:[{side:'front',smooth_gaussian_sigma:1,smooth_window_size:3}]});
+ assert.match(preview,/将另存平滑 MAT/);assert.doesNotMatch(preview,/已另存平滑 MAT/);
 });

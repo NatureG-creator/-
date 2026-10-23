@@ -9,6 +9,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
+
 from backend.batch_service import batch_archive_bytes, retry_failed_batch, stop_batch
 from backend.config import default_simulation_config
 from backend.pointcloud_runner import inspect_xyz, run_pointcloud
@@ -47,6 +49,8 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
                 run.return_value.returncode = 0
                 with patch("backend.pointcloud_runner.loadmat", return_value={
                     "target_data": [1, 2, 3, 4, 5, 6],
+                    "height_smoothed_mm": np.arange(6., dtype=float).reshape(2, 3),
+                    "spacing_um": 500.,
                     "calibration_ready": True,
                     "calibration_issues": [],
                 }):
@@ -58,6 +62,15 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             self.assertEqual(result["timing"]["matlab_seconds"], timing["matlab_seconds"])
             self.assertEqual(timing["matlab_preprocess_seconds"], .2)
             self.assertEqual(timing["matlab_plot_export_seconds"], .5)
+            self.assertTrue((job / "outputs" / "pointcloud" / "measured_surface_smoothed.mat").is_file())
+            self.assertTrue((job / "outputs" / "pointcloud" / "measured_surface_smoothed.json").is_file())
+            self.assertEqual(result["smoothed_surface"]["source_variable"], "height_smoothed_mm")
+            self.assertEqual(result["smoothed_surface"]["dx_mm"], .5)
+            self.assertEqual(result["smoothed_surface"]["size_x_mm"], 1.)
+            from scipy.io import loadmat
+            values = loadmat(job / "outputs" / "pointcloud" / "measured_surface_smoothed.mat")
+            self.assertEqual([key for key in values if not key.startswith('__')], ['Z_filled'])
+            np.testing.assert_array_equal(values['Z_filled'], np.arange(6.).reshape(2, 3))
 
 
 class ExcelTargetTests(unittest.TestCase):

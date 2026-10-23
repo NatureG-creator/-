@@ -308,7 +308,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'POST' and path == '/api/surface-generation/inspect':
             from .surface_generation import prepare_generation
             spec, _ = prepare_generation(self.server, self._body())
-            return self._json(200, {'faces': [face['preview'] for face in spec['faces']]})
+            return self._json(200, {'preview_only': True, 'faces': [face['preview'] for face in spec['faces']],
+                'smoothed_faces': [dict(face['smoothing_preview'], side=face['side'])
+                                   for face in spec['faces'] if 'smoothing_preview' in face]})
         if method == "POST" and path == "/api/finite-element/exports":
             body = self._body()
             body["kind"] = "finite_element"

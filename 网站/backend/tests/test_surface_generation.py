@@ -9,7 +9,7 @@ from scipy.io import savemat, loadmat
 
 from backend.server import make_server
 from backend.worker import run_job
-from backend.surface_generation import crop_surface, orient_matrix, process_face, prepare_generation, load_xyz, inspect_surface_mat
+from backend.surface_generation import crop_surface, orient_matrix, process_face, prepare_generation, load_xyz, inspect_surface_mat, smooth_surface
 
 
 class SurfaceGenerationTests(unittest.TestCase):
@@ -24,6 +24,26 @@ class SurfaceGenerationTests(unittest.TestCase):
             path.write_bytes(b'unsupported MAT')
             with self.assertRaisesRegex(ValueError, '另存'):
                 process_face(path, dict(options={}))
+
+    def test_smoothing_is_optional_and_matches_gaussian_then_window(self):
+        raw = np.arange(25., dtype=float).reshape(5, 5)
+        unchanged, metadata = smooth_surface(raw, {'smooth_enabled': False})
+        np.testing.assert_array_equal(unchanged, raw)
+        self.assertEqual(metadata['smooth_window_size'], 1)
+        empty_values, _ = smooth_surface(raw, {'smooth_enabled': True,
+                                                'smooth_window_size': None,
+                                                'smooth_gaussian_sigma': None})
+        np.testing.assert_array_equal(empty_values, raw)
+        smoothed, metadata = smooth_surface(raw, {'smooth_enabled': True,
+                                                   'smooth_window_size': 3,
+                                                   'smooth_gaussian_sigma': 1})
+        from scipy.ndimage import gaussian_filter, uniform_filter
+        expected = uniform_filter(gaussian_filter(raw, sigma=1, radius=2, mode='nearest'), size=3, mode='reflect')
+        np.testing.assert_allclose(smoothed, expected)
+        self.assertEqual(metadata['smoothing_order'], 'Gaussian → 对称均值窗口')
+        for value in (3.5, True, 0, 2, 103, float('inf')):
+            with self.assertRaises(ValueError):
+                smooth_surface(raw, {'smooth_enabled': True, 'smooth_window_size': value})
 
     def test_transpose_preserves_anisotropic_mat_geometry(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +115,41 @@ class SurfaceGenerationTests(unittest.TestCase):
                 import zipfile
                 with zipfile.ZipFile(output/'surface_bundle.zip') as archive:
                     self.assertIn('back/manifest.json', archive.namelist())
+            finally:
+                server.server_close()
+
+    def test_smoothing_keeps_raw_and_writes_smoothed_mat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = make_server(port=0, runtime=Path(tmp))
+            try:
+                matrix = np.arange(30, dtype=float).reshape(5, 6)/100
+                stream = io.BytesIO(); savemat(stream, {'Z_filled': matrix}); stream.seek(0)
+                record = server.upload('face.mat', stream, len(stream.getbuffer()))
+                job = server.create_job(dict(kind='surface_generation', faces=[dict(side='front',
+                    upload_id=record['id'], variable='Z_filled', options={
+                        'smooth_enabled': True, 'smooth_window_size': 3,
+                        'smooth_gaussian_sigma': 1})]), launch=False)
+                run_job(job['id'], Path(tmp))
+                output = Path(tmp)/'jobs'/job['id']/'outputs'/'front'
+                raw = loadmat(output/'Z_filled.mat')['Z_filled']
+                smoothed = loadmat(output/'Z_filled_smoothed.mat')['Z_filled']
+                np.testing.assert_array_equal(raw, matrix)
+                self.assertEqual(raw.dtype, np.float64)
+                self.assertEqual(smoothed.shape, raw.shape)
+                self.assertEqual(smoothed.dtype, np.float64)
+                self.assertEqual([key for key in loadmat(output/'Z_filled_smoothed.mat')
+                                  if not key.startswith('__')], ['Z_filled'])
+                self.assertFalse(np.array_equal(smoothed, raw))
+                expected, _ = smooth_surface(matrix, dict(smooth_enabled=True,
+                    smooth_window_size=3, smooth_gaussian_sigma=1))
+                np.testing.assert_array_equal(smoothed, expected)
+                points = np.loadtxt(output/'surface_points_smoothed.xyz')
+                np.testing.assert_array_equal(points[:, 2].reshape(matrix.shape), smoothed)
+                csv_points = np.loadtxt(output/'surface_points_smoothed.csv', delimiter=',', skiprows=1, encoding='utf-8-sig')
+                np.testing.assert_array_equal(csv_points, points)
+                manifest = json.loads((output/'manifest_smoothed.json').read_text(encoding='utf-8'))
+                self.assertEqual(manifest['output_variant'], 'smoothed')
+                self.assertTrue((output/'surface_points_smoothed.xyz').is_file())
             finally:
                 server.server_close()
 
@@ -183,6 +238,6 @@ class SurfaceGenerationTests(unittest.TestCase):
                 self.assertEqual(values['F_filled'].dtype, np.float64)
                 self.assertEqual(len((folder/'back/surface_points.xyz').read_text().splitlines()), 30)
                 self.assertTrue((folder/'surface_bundle.zip').is_file())
-                self.assertEqual(json.loads((folder/'back/manifest.json').read_text())['matrix_shape'], [5, 6])
+                self.assertEqual(json.loads((folder/'back/manifest.json').read_text(encoding='utf-8'))['matrix_shape'], [5, 6])
             finally:
                 server.server_close()

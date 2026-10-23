@@ -39,5 +39,50 @@
     "A-016: UI prefers unique Z_filled/F_filled; ambiguous variables remain unselected and backend rejects missing selection.",
     "A-017: dedicated upload inspector and generator both use SciPy MAT support and explain v7.3 conversion; no MATLAB fallback mismatch."
   ],
-  "final_review_limit": "Two-round budget reached; round-2 fixes verified deterministically, not re-reviewed. No independent scientific-method correctness claim."
+  "final_review_limit": "Two-round budget reached; round-2 fixes verified deterministically, not re-reviewed. No independent scientific-method correctness claim.",
+  "smoothed_mat_extension": {
+    "base_commit": "66098e54924417b6f7bf61f99bc1a19a9cc33834",
+    "review_independence": "same-family",
+    "acceptance_status": "provisional",
+    "reviewer": "/root/surface_assumptions",
+    "rounds": [
+      {
+        "undeclared": [
+          {
+            "site": "网站/backend/pointcloud_runner.py:115-123",
+            "decision": "实测平滑MAT的配套JSON省略来源网格间距和实际XY尺寸，虽然matlab_target.mat已有spacing_um。",
+            "why_it_matters": "真实下载后重新上传会丢失物理几何；默认0.3mm可能错误解释非0.3mm来源。",
+            "class": "semantic"
+          },
+          {
+            "site": "网站/frontend/surface_generation.mjs:21,43",
+            "decision": "平滑开关、窗口和sigma为双面共用设置，公共值覆盖各面已有平滑选项。",
+            "why_it_matters": "界面无法只平滑一面或设置两套平滑参数，清单需明确。",
+            "class": "interface"
+          },
+          {
+            "site": "网站/backend/server.py:308-313；网站/frontend/surface_generation.mjs:33,93",
+            "decision": "预检与已生成成果共用分支显示已另存平滑MAT。",
+            "why_it_matters": "尚未创建任务或写文件时不应宣称已保存。",
+            "class": "interface"
+          }
+        ],
+        "stale_rows": [],
+        "semantic_undeclared": 1,
+        "verdict": "gaps"
+      },
+      {
+        "undeclared": [],
+        "stale_rows": [],
+        "semantic_undeclared": 0,
+        "verdict": "clean"
+      }
+    ],
+    "executor_resolutions": [
+      "A-022: export spacing_um as mm spacing and actual spans in JSON.",
+      "A-019: declare shared smoothing options and explain in UI.",
+      "A-023: preview_only renders planned rather than saved output."
+    ],
+    "limit": "Same-family review cannot establish scientific correctness; final verdict is provisional."
+  }
 }

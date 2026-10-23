@@ -29,3 +29,17 @@ MAT v7.3/HDF5需在MATLAB中另存-v7后上传，页面与上传检查均说明�
 
 ## Blockers
 无。
+
+## 2026-10-23 平滑 MAT 扩展
+
+数值含义：实测直接导出height_smoothed_mm（MATLAB已有H），不二次平滑；独立来源在方向、单位、裁剪/网格化之后可选Gaussian→reflect均值窗口。默认关闭，空参数为窗口1/sigma0；开启后两面共用参数，原始输出与平滑输出分别保存。Gaussian边界nearest、半径ceil(2*sigma)，sigma为网格格数。普通表面不应用N放大；baseline.mat继续表示元胞层号。实测旁置JSON保存原XY间距和跨度，重新导入时按JSON填写。
+
+确定性验证：相关后端52项、前端182项通过；node语法检查与git diff --check通过。测试覆盖不开启/零参数逐值不变、窗口非整数拒绝、滤波顺序/边界与SciPy一致、raw和平滑单变量double MAT、CSV/XYZ逐点一致，以及实测高程不二次平滑。
+
+Live：scripts/verify_surface_generation.py退出0，7项上传→预检→worker→ZIP下载→数值回读通过。新增实测C17平滑任务66ca55c0d9724bcd，65×167、49.8×19.2mm；原矩阵精确等于C17原始子矩阵，平滑矩阵等于SciPy参考且XYZ逐点相等。
+
+复核：两轮same-family假设审查；首轮发现3项（几何元数据、两面共用设置、预检措辞）均已修正或记录，第二轮返回undeclared=0、stale_rows=0。仅provisional，不代表独立科学方法审计。无占位实现。
+
+真实MATLAB：新建验收任务954ac8586e614921完成，导出65×195、58.2×19.2mm、sigma1.5平滑高程。通过HTTP下载MAT回读确认只含二维float64 Z_filled，与源matlab_target.mat/height_smoothed_mm逐值相同，JSON网格间距0.3mm与源spacing_um一致。浏览器结果页显示专用下载卡并真实下载到Downloads/measured_surface_smoothed.mat。
+
+启动验证：仅重启原8560 HTTP监听，worker 66492和任务5281f5a8180b4c64保留。launch_desktop.py与网站快捷启动/启动工作台.py均以--no-browser返回8560；桌面lnk仍指向本仓库launch_desktop.py。API源码指纹5f3afb49c37ed10a6e654e9c17b7702adafba7719796d916065a8961d2259fce与当前源码相同（包括原有未提交index/styles视觉改动）；本次提交排除这两个文件。

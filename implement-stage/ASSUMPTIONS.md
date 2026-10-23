@@ -20,3 +20,9 @@
 | A-015 | 转置物理几何 | MAT、XYZ和NPZ转置均交换XY及间距，保留原物理尺度；输入间距指转置前的行列 | semantic | sweep |
 | A-016 | MAT变量默认值 | 优先唯一Z_filled/F_filled，否则只有一个候选时自动选择；多候选需手选，UI与后端一致 | semantic | sweep |
 | A-017 | MAT版本 | 本入口支持SciPy可读的传统MAT（v4/v5至v7.2），不支持v7.3/HDF5；上传识别即明确提示用MATLAB另存-v7 | interface | sweep |
+| A-018 | 实测平滑MAT | 直接导出当前MATLAB height_smoothed_mm（H）高程，不二次平滑；输出单变量Z_filled，单位mm、行Y列X；不把历史相对深度变量当高程回退 | semantic | user / default |
+| A-019 | 独立表面平滑 | 默认关闭；开启后在单位/方向、裁剪或网格化之后依次Gaussian和对称均值窗口，另存*_smoothed，保留原始输出；空参数回退窗口1、sigma0（不滤波）；界面两面共用开关、窗口和sigma | semantic | user / default / sweep |
+| A-020 | 平滑边界与参数 | Gaussian使用nearest边界及ceil(2*sigma)半径，均值窗口使用reflect；窗口必须1至101奇整数，sigma为0至100；sigma单位为网格格数，非mm | semantic | default |
+| A-021 | 输出数值类别 | 普通MAT/XYZ为mm高程或深度，不应用N放大倍数；baseline.mat仍为元胞层号矩阵；独立输出平滑MAT、CSV/XYZ、预览和旁置manifest，实测输出MAT及JSON | interface | user / default |
+| A-022 | 实测MAT几何 | 单变量MAT配套JSON记录原spacing_um换算的XY间距与实际跨度；重新导入时须按JSON填写间距，单变量MAT不包含坐标 | semantic | sweep |
+| A-023 | 预检措辞 | 预检仅说明将生成平滑MAT；仅任务完成结果说明已另存 | interface | sweep |

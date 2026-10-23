@@ -9,3 +9,8 @@ Base commit: b214d9e753cb55dce0f21e83c89cbc5995c6cbb1
 Success command: Python unittest backend.tests.test_surface_generation；Node frontend/tests/surface_generation.test.mjs；8560 真实上传、下载、MAT 回读检查。
 
 边界：不生成随机腐蚀形貌，不运行六指标或 CA/GA，不自动配准拼接双面，不补造来源不足的长度。保留已有未提交视觉样式，新增导航相关更改单独提交。
+
+## 2026-10-23 平滑 MAT 扩展
+Extension base commit: 66098e54924417b6f7bf61f99bc1a19a9cc33834
+
+实测点云任务将已有 MATLAB 平滑高程直接导出为 measured_surface_smoothed.mat（仅Z_filled）；独立表面页面可选Gaussian→对称均值平滑，保留原始MAT并另存平滑MAT、CSV/XYZ、预览与metadata。均为二维double，行Y列X，mm。不改变六指标算法，不把baseline元胞层号矩阵当mm高程，不对普通表面使用N放大倍数。

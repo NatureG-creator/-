@@ -54,6 +54,22 @@ def run_case(name, faces):
             np.testing.assert_array_equal(points[:, 2].reshape(matrix.shape), matrix)
             assert len(points) == matrix.size
             assert len(archive.read(f'{side}/surface_preview.png')) > 1000
+            if face.get('options', {}).get('smooth_enabled'):
+                from scipy.ndimage import gaussian_filter, uniform_filter
+                options = face['options']
+                sigma, window = options['smooth_gaussian_sigma'], options['smooth_window_size']
+                expected = uniform_filter(gaussian_filter(matrix, sigma=sigma,
+                    radius=int(np.ceil(2*sigma)), mode='nearest'), size=window, mode='reflect')
+                smooth_values = loadmat(io.BytesIO(archive.read(f'{side}/{variable}_smoothed.mat')))
+                assert [key for key in smooth_values if not key.startswith('__')] == [variable]
+                smoothed = smooth_values[variable]
+                assert smoothed.dtype == np.float64
+                np.testing.assert_array_equal(smoothed, expected)
+                points = np.loadtxt(io.BytesIO(archive.read(f'{side}/surface_points_smoothed.xyz')))
+                np.testing.assert_array_equal(points[:, 2].reshape(matrix.shape), smoothed)
+                metadata = json.loads(archive.read(f'{side}/manifest_smoothed.json'))
+                assert metadata['smooth_gaussian_sigma'] == sigma
+                assert metadata['smooth_window_size'] == window
     return dict(job_id=job['id'], preview=preview['faces'], bundle_bytes=len(bundle))
 
 
@@ -72,6 +88,11 @@ def main():
     records.append(run_case('验收_实测C17_50mm_精确插值', [dict(real, options=dict(dx_mm=.3, dy_mm=.3,
         length_mm=50, grid_mode='exact', offset_x_mm=0))]))
     assert abs(records[-1]['preview'][0]['actual_length_mm']-50) < 1e-10
+    result = run_case('验收_实测C17_50mm_保留原始及平滑MAT', [dict(real, options=dict(
+        length_mm=50, offset_x_mm=0, smooth_enabled=True, smooth_window_size=3, smooth_gaussian_sigma=1))])
+    output = loadmat(io.BytesIO(request(f"/api/jobs/{result['job_id']}/download/front/Z_filled.mat")))['Z_filled']
+    np.testing.assert_array_equal(output, loadmat(SAMPLE)['Z_filled'][:, :output.shape[1]])
+    records.append(result)
     try:
         request('/api/surface-generation/inspect', dict(faces=[dict(real, options=dict(length_mm=190))]))
     except urllib.error.HTTPError as error:
