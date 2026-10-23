@@ -9,8 +9,11 @@ import io
 import json
 import os
 import re
+import subprocess
+import sys
 import time
 import uuid
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Callable
 
@@ -91,6 +94,53 @@ def _stage_manifest(path: Path, fingerprint: str, engine_fingerprint: str) -> di
     return manifest
 
 
+def _legacy_engine_compatible(job_dir: Path, recorded_engine: str) -> bool:
+    """Allow old checkpoints after non-scientific changes when their source is unchanged."""
+    summary_path = Path(job_dir) / "outputs" / "summary.json"
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        provenance = summary["provenance"]
+        versions = provenance["versions"]
+        commit = provenance["git_commit"]
+        if summary.get("engine_fingerprint") != recorded_engine:
+            return False
+        expected_versions = {"python": sys.version.split()[0], "numpy": np.__version__,
+                             "scipy": package_version("scipy")}
+        if any(versions.get(name) != value for name, value in expected_versions.items()):
+            return False
+        created_at = json.loads((Path(job_dir) / "status.json").read_text(encoding="utf-8"))["created_at"]
+        skimage = package_version("scikit-image")
+        distribution = __import__("importlib.metadata", fromlist=["distribution"]).distribution("scikit-image")
+        metadata_path = distribution.locate_file("scikit_image-" + skimage + ".dist-info/METADATA")
+        if not Path(metadata_path).is_file() or Path(metadata_path).stat().st_mtime > created_at:
+            return False
+        repository = Path(__file__).resolve().parents[2]
+        paths = ["网站/engine", "网站/backend/strict_ga.py", "网站/backend/scientific_outputs.py"]
+        result = subprocess.run(["git", "-C", str(repository), "diff", "--quiet", commit, "--", *paths],
+                                check=False, capture_output=True)
+        if result.returncode != 0:
+            return False
+        untracked = subprocess.run(["git", "-C", str(repository), "ls-files", "--others",
+                                    "--exclude-standard", "--", "网站/engine"],
+                                   check=False, capture_output=True, text=True, encoding="utf-8")
+        return untracked.returncode == 0 and not any(line.endswith(".py") for line in untracked.stdout.splitlines())
+    except (OSError, KeyError, TypeError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+def _resume_engine_fingerprint(job_dir: Path, current_engine: str) -> str:
+    request_path = Path(job_dir) / "request.json"
+    if not request_path.is_file():
+        return current_engine
+    old = json.loads(request_path.read_text(encoding="utf-8"))
+    recorded = old.get("engine_fingerprint")
+    if recorded in {None, current_engine}:
+        return current_engine
+    if _legacy_engine_compatible(job_dir, recorded):
+        return recorded
+    raise ValueError("已冻结任务引擎或数值环境与当前任务不一致；核心代码、Python、NumPy、SciPy 或 scikit-image 已变化")
+
+
 def precheck_resume(spec: dict, job_dir: Path) -> dict:
     """Read-only binding/integrity check used before spawning a resumed worker."""
     config = validate_simulation_config(spec["config"])
@@ -98,7 +148,7 @@ def precheck_resume(spec: dict, job_dir: Path) -> dict:
     if config["mode"] not in {"strict", "pycharm"}:
         raise ValueError("Taichi 高速模式不提供阶段恢复；请创建新任务")
     fingerprint = fingerprint_config(spec)
-    engine = engine_environment_fingerprint()
+    engine = _resume_engine_fingerprint(job_dir, engine_environment_fingerprint())
     request_path = Path(job_dir) / "request.json"
     if request_path.exists():
         old = json.loads(request_path.read_text(encoding="utf-8"))
@@ -176,7 +226,9 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
     output.mkdir(parents=True, exist_ok=True)
     frozen = freeze_spec(spec)
     fingerprint = fingerprint_config(spec)
-    engine_fingerprint = engine_environment_fingerprint()
+    engine_fingerprint = (_resume_engine_fingerprint(job_dir, engine_environment_fingerprint())
+                          if config["mode"] in {"strict", "pycharm"} and (job_dir / "request.json").exists()
+                          else engine_environment_fingerprint())
     provenance = runtime_provenance()
     frozen.update(fingerprint=fingerprint, engine_fingerprint=engine_fingerprint)
     _atomic_json(job_dir / "request.json", frozen)
