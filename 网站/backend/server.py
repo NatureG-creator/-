@@ -304,6 +304,29 @@ class Handler(BaseHTTPRequestHandler):
             # Existing data-source selectors still see hidden task results.
             return self._json(200, self.server.list_jobs(
                 include_hidden=query.get('include_hidden', ['1'])[0] != '0'))
+        if method == 'GET' and path == '/api/project-library':
+            from .project_library import library_list
+            return self._json(200, library_list(self.server, query.get('folder', [''])[0]))
+        if method == 'GET' and path == '/api/project-library/jobs':
+            jobs = self.server.list_jobs(include_hidden=True)
+            return self._json(200, [dict(id=job['id'], name=job.get('display_name') or job.get('case_name') or job['id'],
+                kind=job.get('kind'), state=job.get('state'), files=job.get('files', [])) for job in jobs])
+        if method == 'POST' and path == '/api/project-library/folders':
+            from .project_library import create_folder
+            return self._json(201, create_folder(self.server, self._body()))
+        if method == 'POST' and path == '/api/project-library/save-task':
+            from .project_library import save_task_outputs
+            return self._json(201, save_task_outputs(self.server, self._body()))
+        if method == 'POST' and path == '/api/project-library/save-upload':
+            from .project_library import save_uploaded_file
+            return self._json(201, save_uploaded_file(self.server, self._body()))
+        if method == 'POST' and path == '/api/project-library/import':
+            from .project_library import import_library_file
+            return self._json(201, import_library_file(self.server, self._body()))
+        if len(parts) == 3 and parts[:2] == ['api', 'project-library'] and parts[2] in {'view', 'download'} and method == 'GET':
+            from .project_library import library_file
+            path_value = query.get('path', [''])[0]
+            return self._file(library_file(self.server, path_value), download=parts[2] == 'download')
         if method == 'POST' and path == '/api/local-directory':
             from .task_io import choose_directory
             return self._json(200, choose_directory())
