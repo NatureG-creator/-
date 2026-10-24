@@ -53,6 +53,7 @@ def website_default_simulation_config() -> dict:
     config["TAICHI_CONFIG"]["use_taichi"] = False
     for group in ("STAGE_GA_CONFIG", "SINGLE_STAGE_GA_CONFIG"):
         config[group]["parallel_workers"] = 10
+        config[group]["reuse_process_pool"] = True
     return config
 
 

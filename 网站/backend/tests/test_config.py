@@ -29,6 +29,8 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(config["TAICHI_CONFIG"]["use_taichi"])
         self.assertEqual(config["STAGE_GA_CONFIG"]["parallel_workers"], 10)
         self.assertEqual(config["SINGLE_STAGE_GA_CONFIG"]["parallel_workers"], 10)
+        self.assertTrue(config["STAGE_GA_CONFIG"]["reuse_process_pool"])
+        self.assertTrue(config["SINGLE_STAGE_GA_CONFIG"]["reuse_process_pool"])
         config["mode"] = "pycharm"
         self.assertIs(validate_simulation_config(config), config)
         config["TAICHI_CONFIG"]["use_taichi"] = True

@@ -67,8 +67,8 @@ HELP = {
     "GA_PARAMETER_UPPER_BOUNDS": "10个GA参数的上界，与下界按同一顺序一一对应；扩大区间会改变搜索空间，需要重新验证拟合结果。",
     "TARGET_SOURCE": "matlab表示从上传MAT中选定六指标变量，manual表示手工输入六指标。网站任务以实际上传选择或手工表格冻结目标，不读取引擎中的本地源路径。",
     "GA_CONFIG.seed": "随机种子控制初始种群、交叉、变异与个体随机种子。严格模式在同一引擎和环境下支持随机数状态恢复；更改种子会创建不同寻优轨迹。",
-    "STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
-    "SINGLE_STAGE_GA_CONFIG.reuse_process_pool": "默认关闭。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker；阶段结束或异常时关闭。严格模式不支持。",
+    "STAGE_GA_CONFIG.reuse_process_pool": "网页新任务默认开启。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker以减少进程启动开销；阶段结束或异常时关闭。只改变进程生命周期，不改变每代评价和随机种子；严格模式不支持。",
+    "SINGLE_STAGE_GA_CONFIG.reuse_process_pool": "网页新任务默认开启。PyCharm/高速模式且内部并行进程数大于1时，在当前GA阶段的各代之间复用worker以减少进程启动开销；阶段结束或异常时关闭。只改变进程生命周期，不改变每代评价和随机种子；严格模式不支持。",
 }
 
 
