@@ -99,6 +99,36 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
             np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
 
+    def test_processed_pointcloud_region_crops_xy_rectangle_and_reports_partial_coverage(self):
+        from scipy.io import savemat, loadmat
+        from backend.pointcloud_regions import export_region
+        with tempfile.TemporaryDirectory() as folder:
+            job = Path(folder)
+            output = job / 'outputs' / 'pointcloud'
+            output.mkdir(parents=True)
+            height = np.arange(35., dtype=float).reshape(5, 7)
+            x, y = np.arange(7.), np.arange(5.)
+            savemat(output / 'measured_surface_smoothed.mat', {
+                'height_matrix_mm': height, 'corrosion_depth_matrix_mm': height.max() - height,
+                'x_coordinates_mm': x, 'y_coordinates_mm': y,
+            })
+            result = export_region(job, 'X', 4, source_kind='pointcloud', width_mm=2,
+                                   center_x_mm=3, center_y_mm=2,
+                                   specimen_length_mm=190, specimen_width_mm=20,
+                                   specimen_thickness_mm=6)
+            self.assertEqual(result['actual_bounds_mm'], {'x': [1., 5.], 'y': [1., 3.]})
+            self.assertEqual(result['shape'], [3, 5])
+            self.assertEqual(result['geometric_coverage_fraction'], 1.0)
+            self.assertEqual(result['specimen_dimensions_mm']['thickness_mm'], 6)
+            values = loadmat(output / 'regions' / result['region_id'] / 'processed_region.mat')
+            np.testing.assert_array_equal(values['height_matrix_mm'], height[1:4, 1:6])
+            np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[1:4, 1:6])
+
+            partial = export_region(job, 'X', 4, source_kind='pointcloud', width_mm=2,
+                                    center_x_mm=0, center_y_mm=2)
+            self.assertEqual(partial['actual_bounds_mm']['x'], [0., 2.])
+            self.assertLess(partial['geometric_coverage_fraction'], 1.0)
+
     def test_independent_generated_surface_can_be_cropped(self):
         from scipy.io import savemat, loadmat
         from backend.pointcloud_regions import export_region

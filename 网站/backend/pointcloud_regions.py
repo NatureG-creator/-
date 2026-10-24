@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import secrets
 from pathlib import Path
@@ -12,7 +13,11 @@ from scipy.io import loadmat, savemat
 
 def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float | None = None,
                   source_kind: str = "pointcloud", side: str | None = None,
-                  variant: str = "raw") -> dict:
+                  variant: str = "raw", *, width_mm: float | None = None,
+                  center_x_mm: float | None = None, center_y_mm: float | None = None,
+                  specimen_length_mm: float | None = None,
+                  specimen_width_mm: float | None = None,
+                  specimen_thickness_mm: float | None = None) -> dict:
     if axis not in {"X", "Y"}:
         raise ValueError("裁剪方向只能选择X或Y")
     try:
@@ -46,7 +51,6 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         manifest = output_root / side / f"manifest{suffix}.json"
         if not manifest.is_file():
             raise ValueError("该任务没有指定的独立表面结果")
-        import json
         metadata = json.loads(manifest.read_text(encoding="utf-8"))
         source = output_root / side / f"{metadata['output_variable']}{suffix}.mat"
         if not source.is_file():
@@ -70,22 +74,64 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         raise ValueError("点云包含非有限数值")
     if x.size < 2 or y.size < 2 or not np.all(np.diff(x) > 0) or not np.all(np.diff(y) > 0):
         raise ValueError("已处理点云的X/Y坐标必须至少包含两个递增网格点")
-    coordinates = x if axis == "X" else y
-    if center_mm is None:
-        center_mm = float((coordinates[0] + coordinates[-1]) / 2)
-    low, high = center_mm - length_mm / 2, center_mm + length_mm / 2
-    keep = (coordinates >= low) & (coordinates <= high)
-    indices = np.flatnonzero(keep)
-    if indices.size < 2:
-        raise ValueError("该区域不足两个网格点；请增大长度或调整中心坐标")
-    if axis == "X":
-        height, x = height[:, indices], x[indices]
-        if depth is not None:
-            depth = depth[:, indices]
+    def optional_positive(value, label):
+        if value is None or value == "":
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label}必须是正数") from exc
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{label}必须是正数")
+        return value
+
+    specimen = {
+        "length_mm": optional_positive(specimen_length_mm, "试件长度"),
+        "width_mm": optional_positive(specimen_width_mm, "试件宽度"),
+        "thickness_mm": optional_positive(specimen_thickness_mm, "试件厚度"),
+    }
+    # Legacy one-axis requests remain supported; new requests select an X/Y rectangle.
+    source_x_bounds = [float(x[0]), float(x[-1])]
+    source_y_bounds = [float(y[0]), float(y[-1])]
+    if width_mm is None:
+        selected_axis = x if axis == "X" else y
+        if center_mm is None:
+            center_mm = float((selected_axis[0] + selected_axis[-1]) / 2)
+        low, high = center_mm - length_mm / 2, center_mm + length_mm / 2
+        keep = (selected_axis >= low) & (selected_axis <= high)
+        indices = np.flatnonzero(keep)
+        if indices.size < 2:
+            raise ValueError("该区域不足两个网格点；请增大长度或调整中心坐标")
+        if axis == "X":
+            height, x = height[:, indices], x[indices]
+            if depth is not None:
+                depth = depth[:, indices]
+            center_x_mm = center_mm
+            center_y_mm = float((y[0] + y[-1]) / 2) if center_y_mm is None else center_y_mm
+            requested_x, requested_y = [low, high], [float(y[0]), float(y[-1])]
+        else:
+            height, y = height[indices, :], y[indices]
+            if depth is not None:
+                depth = depth[indices, :]
+            center_y_mm = center_mm
+            center_x_mm = float((x[0] + x[-1]) / 2) if center_x_mm is None else center_x_mm
+            requested_x, requested_y = [float(x[0]), float(x[-1])], [low, high]
     else:
-        height, y = height[indices, :], y[indices]
+        width_mm = optional_positive(width_mm, "裁剪宽度")
+        center_x_mm = float((x[0] + x[-1]) / 2) if center_x_mm is None else float(center_x_mm)
+        center_y_mm = float((y[0] + y[-1]) / 2) if center_y_mm is None else float(center_y_mm)
+        if not math.isfinite(center_x_mm) or not math.isfinite(center_y_mm):
+            raise ValueError("区域中心坐标必须是有限数值")
+        requested_x = [center_x_mm - length_mm / 2, center_x_mm + length_mm / 2]
+        requested_y = [center_y_mm - width_mm / 2, center_y_mm + width_mm / 2]
+        ix = np.flatnonzero((x >= requested_x[0]) & (x <= requested_x[1]))
+        iy = np.flatnonzero((y >= requested_y[0]) & (y <= requested_y[1]))
+        if ix.size < 2 or iy.size < 2:
+            raise ValueError("裁剪区域在X或Y方向不足两个网格点；请增大尺寸或调整中心坐标")
+        height = height[np.ix_(iy, ix)]
         if depth is not None:
-            depth = depth[indices, :]
+            depth = depth[np.ix_(iy, ix)]
+        x, y = x[ix], y[iy]
     xx, yy = np.meshgrid(x, y)
     xyz = np.column_stack((xx.ravel(), yy.ravel(), height.ravel()))
     region_id = secrets.token_hex(6)
@@ -103,11 +149,35 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
                header="x_mm,y_mm,z_mm,corrosion_depth_mm" if depth is not None else "x_mm,y_mm,z_mm",
                comments="", fmt="%.9g")
     np.savetxt(folder / "processed_region.xyz", xyz, delimiter=" ", fmt="%.9g")
+    actual_x = [float(x[0]), float(x[-1])]
+    actual_y = [float(y[0]), float(y[-1])]
+    x_coverage = min(source_x_bounds[1], requested_x[1]) - max(source_x_bounds[0], requested_x[0])
+    y_coverage = min(source_y_bounds[1], requested_y[1]) - max(source_y_bounds[0], requested_y[0])
+    coverage = max(0.0, x_coverage) * max(0.0, y_coverage) / (
+        (requested_x[1] - requested_x[0]) * (requested_y[1] - requested_y[0]))
+    metadata = {
+        "source_kind": source_kind, "region_id": region_id,
+        "specimen_dimensions_mm": specimen,
+        "requested_bounds_mm": {"x": requested_x, "y": requested_y},
+        "actual_bounds_mm": {"x": actual_x, "y": actual_y},
+        "geometric_coverage_fraction": min(1.0, max(0.0, coverage)),
+        "grid_shape_rows_y_columns_x": list(height.shape),
+        "grid_point_count": int(xyz.shape[0]),
+        "depth_semantics": "relative_to_full_surface_max; not verified pristine-reference depth"
+        if source_kind == "pointcloud" else ("input depth matrix; reference provenance depends on source" if depth is not None else "not calibrated"),
+    }
+    (folder / "region_metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
         "region_id": region_id, "axis": axis, "requested_length_mm": length_mm,
-        "requested_range_mm": [low, high],
-        "actual_range_mm": [float(coordinates[indices[0]]), float(coordinates[indices[-1]])],
-        "center_mm": center_mm, "shape": list(height.shape), "point_count": int(xyz.shape[0]),
+        "requested_range_mm": requested_x if width_mm is None and axis == "X" else requested_y if width_mm is None else None,
+        "actual_range_mm": actual_x if width_mm is None and axis == "X" else actual_y if width_mm is None else None,
+        "requested_bounds_mm": {"x": requested_x, "y": requested_y},
+        "actual_bounds_mm": {"x": actual_x, "y": actual_y},
+        "geometric_coverage_fraction": min(1.0, max(0.0, coverage)),
+        "specimen_dimensions_mm": specimen,
+        "center_mm": center_mm, "center_x_mm": center_x_mm, "center_y_mm": center_y_mm,
+        "shape": list(height.shape), "point_count": int(xyz.shape[0]),
         "corrosion_depth_available": depth is not None,
         "corrosion_depth_range_mm": [float(depth.min()), float(depth.max())] if depth is not None else None,
         "depth_source": depth_source,
@@ -117,6 +187,7 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.mat",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.csv",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.xyz",
+            f"{folder.relative_to(job_dir / 'outputs').as_posix()}/region_metadata.json",
         ], "preview_xyz": xyz[::max(1, math.ceil(len(xyz) / 2500))].tolist(),
         "preview_depth_mm": depth.ravel()[::max(1, math.ceil(len(depth.ravel()) / 2500))].tolist() if depth is not None else [],
     }

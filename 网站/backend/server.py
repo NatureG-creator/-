@@ -442,7 +442,13 @@ class Handler(BaseHTTPRequestHandler):
                     result = export_region(folder, body.get("axis", "X"),
                                            body.get("length_mm"), body.get("center_mm"),
                                            body.get("source_kind", "pointcloud"), body.get("side"),
-                                           body.get("variant", "raw"))
+                                           body.get("variant", "raw"),
+                                           width_mm=body.get("width_mm"),
+                                           center_x_mm=body.get("center_x_mm"),
+                                           center_y_mm=body.get("center_y_mm"),
+                                           specimen_length_mm=body.get("specimen_length_mm"),
+                                           specimen_width_mm=body.get("specimen_width_mm"),
+                                           specimen_thickness_mm=body.get("specimen_thickness_mm"))
                     return self._json(201, result)
                 if parts[3] in {'hide', 'unhide'}:
                     return self._json(200, self.server.set_job_hidden(job_id, parts[3] == 'hide'))
