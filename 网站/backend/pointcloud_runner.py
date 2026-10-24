@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 from scipy.io import loadmat, savemat
 
+from .pointcloud_preview import grid_preview
+
 from .pointcloud_config import validate_pointcloud_config
 from .system_info import runtime_provenance
 
@@ -152,12 +154,59 @@ def _export_smoothed_surface(data: dict, output: Path) -> dict:
                     y_range_mm=[float(y[0]), float(y[-1])])
     (output / 'measured_surface_smoothed.json').write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+    preview_xyz, preview_depth = grid_preview(x, y, matrix, depth)
     return dict(metadata, files=['pointcloud/measured_surface_smoothed.mat',
                                  'pointcloud/measured_surface_smoothed.json',
                                  'pointcloud/processed_pointcloud.csv',
                                  'pointcloud/processed_pointcloud.xyz'],
-                preview_xyz=xyz[::max(1, math.ceil(len(xyz)/2500))].tolist(),
-                preview_depth_mm=depth.ravel()[::max(1, math.ceil(depth.size/2500))].tolist())
+                preview_xyz=preview_xyz.tolist(),
+                preview_depth_mm=preview_depth.tolist())
+
+
+def _export_full_reference_surface(data: dict, output: Path) -> dict | None:
+    """Export the independently levelled full reference scan, without implying corrosion depth."""
+    required = ('reference_190_height_mm', 'reference_190_x_coordinates_mm',
+                'reference_190_y_coordinates_mm')
+    if not all(name in data for name in required):
+        return None
+    height = np.asarray(data[required[0]], dtype=float)
+    x = np.asarray(data[required[1]], dtype=float).reshape(-1)
+    y = np.asarray(data[required[2]], dtype=float).reshape(-1)
+    if height.ndim != 2 or height.shape != (y.size, x.size) or min(height.shape) < 2:
+        raise RuntimeError('完整参考表面矩阵与X/Y坐标尺寸不匹配')
+    if not np.isfinite(height).all() or not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise RuntimeError('完整参考表面包含非有限数值')
+    if not np.all(np.diff(x) > 0) or not np.all(np.diff(y) > 0):
+        raise RuntimeError('完整参考表面X/Y坐标必须递增')
+    output.mkdir(parents=True, exist_ok=True)
+    xx, yy = np.meshgrid(x, y)
+    xyz = np.column_stack((xx.ravel(), yy.ravel(), height.ravel()))
+    savemat(output / 'reference_surface_190mm.mat', {
+        'height_matrix_mm': height, 'x_coordinates_mm': x,
+        'y_coordinates_mm': y, 'processed_xyz_mm': xyz,
+        'z_value_mode': 'height_independent_reference_scan',
+    }, do_compression=True)
+    np.savetxt(output / 'reference_surface_190mm.csv', xyz, delimiter=',',
+               header='x_mm,y_mm,height_mm', comments='', fmt='%.9g')
+    np.savetxt(output / 'reference_surface_190mm.xyz', xyz, delimiter=' ', fmt='%.9g')
+    metadata = {
+        'matrix_shape': list(height.shape), 'layout': 'rows_y_columns_x', 'unit': 'mm',
+        'point_count': int(xyz.shape[0]), 'x_range_mm': [float(x[0]), float(x[-1])],
+        'y_range_mm': [float(y[0]), float(y[-1])],
+        'size_x_mm': float(x[-1] - x[0]), 'size_y_mm': float(y[-1] - y[0]),
+        'height_range_mm': [float(height.min()), float(height.max())],
+        'surface_kind': 'independently_levelled_full_reference_scan',
+        'depth_available': False,
+        'note': '完整参考扫描单独找平；不与局部细节扫描拼接，也不代表已校准的绝对腐蚀深度。',
+        'files': ['pointcloud/reference_surface_190mm.mat',
+                  'pointcloud/reference_surface_190mm.csv',
+                  'pointcloud/reference_surface_190mm.xyz'],
+    }
+    (output / 'reference_surface_190mm.json').write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+    preview_xyz, _ = grid_preview(x, y, height, None)
+    return dict(metadata, files=[*metadata['files'], 'pointcloud/reference_surface_190mm.json'],
+                preview_xyz=preview_xyz.tolist())
 
 
 def run_pointcloud(
@@ -227,6 +276,7 @@ def run_pointcloud(
     if isinstance(warnings, str):
         warnings = [warnings]
     smoothed_surface = _export_smoothed_surface(data, output / 'pointcloud')
+    full_reference_surface = _export_full_reference_surface(data, output / 'pointcloud')
     timing["postprocess_seconds"] = time.perf_counter() - postprocess_started
     timing["total_seconds"] = time.perf_counter() - started
     summary = {
@@ -240,6 +290,7 @@ def run_pointcloud(
         "calibration_issues": [str(item) for item in np.atleast_1d(issues)],
         "calibration_warnings": [str(item) for item in np.atleast_1d(warnings)],
         "smoothed_surface": smoothed_surface,
+        "full_reference_surface": full_reference_surface,
         "provenance": runtime_provenance(),
         "files": [str(path.relative_to(output)).replace("\\", "/")
                   for path in output.rglob("*") if path.is_file()],

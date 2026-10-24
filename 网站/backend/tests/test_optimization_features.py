@@ -19,6 +19,24 @@ from backend.git_sync import _git
 
 
 class PointCloudDiagnosticsTests(unittest.TestCase):
+    def test_full_reference_surface_export_has_no_corrosion_depth(self):
+        from backend.pointcloud_runner import _export_full_reference_surface
+        from scipy.io import loadmat
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder)
+            height = np.arange(15., dtype=float).reshape(3, 5)
+            result = _export_full_reference_surface({
+                'reference_190_height_mm': height,
+                'reference_190_x_coordinates_mm': np.arange(5.) * .3,
+                'reference_190_y_coordinates_mm': np.arange(3.) * .3,
+            }, output)
+            self.assertFalse(result['depth_available'])
+            self.assertEqual(result['point_count'], 15)
+            self.assertIn('reference_surface_190mm.mat', result['files'][0])
+            saved = loadmat(output / 'reference_surface_190mm.mat')
+            np.testing.assert_array_equal(saved['height_matrix_mm'], height)
+            self.assertNotIn('corrosion_depth_matrix_mm', saved)
+
     def test_inspect_xyz_reports_duplicates_and_axis_health(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "scan.xyz"
@@ -50,6 +68,9 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
                 with patch("backend.pointcloud_runner.loadmat", return_value={
                     "target_data": [1, 2, 3, 4, 5, 6],
                     "height_smoothed_mm": np.arange(6., dtype=float).reshape(2, 3),
+                    "reference_190_height_mm": np.arange(20., dtype=float).reshape(4, 5),
+                    "reference_190_x_coordinates_mm": np.arange(5.) * .3,
+                    "reference_190_y_coordinates_mm": np.arange(4.) * .3,
                     "spacing_um": 500.,
                     "calibration_ready": True,
                     "calibration_issues": [],
@@ -64,6 +85,7 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             self.assertEqual(timing["matlab_plot_export_seconds"], .5)
             self.assertTrue((job / "outputs" / "pointcloud" / "measured_surface_smoothed.mat").is_file())
             self.assertTrue((job / "outputs" / "pointcloud" / "measured_surface_smoothed.json").is_file())
+            self.assertTrue((job / 'outputs' / 'pointcloud' / 'reference_surface_190mm.mat').is_file())
             self.assertEqual(result["smoothed_surface"]["source_variable"], "height_smoothed_mm")
             self.assertEqual(result["smoothed_surface"]["dx_mm"], .5)
             self.assertEqual(result["smoothed_surface"]["size_x_mm"], 1.)
@@ -75,6 +97,7 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             np.testing.assert_array_equal(values['Z_filled'], np.arange(6.).reshape(2, 3))
             np.testing.assert_array_equal(values['x_coordinates_mm'].ravel(), [0, .5, 1])
             self.assertEqual(values['processed_xyz_mm'].shape, (6, 3))
+            self.assertEqual(result['full_reference_surface']['point_count'], 20)
 
     def test_processed_pointcloud_region_preserves_coordinates_and_depth(self):
         from scipy.io import savemat, loadmat
@@ -98,6 +121,27 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             np.testing.assert_array_equal(values['x_coordinates_mm'].ravel(), [1, 2, 3])
             np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
             np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
+
+    def test_full_reference_surface_region_crop_has_no_corrosion_depth(self):
+        from scipy.io import savemat, loadmat
+        from backend.pointcloud_regions import export_region
+        with tempfile.TemporaryDirectory() as folder:
+            job = Path(folder)
+            output = job / 'outputs' / 'pointcloud'
+            output.mkdir(parents=True)
+            height = np.arange(35., dtype=float).reshape(5, 7)
+            savemat(output / 'reference_surface_190mm.mat', {
+                'height_matrix_mm': height,
+                'x_coordinates_mm': np.arange(7.), 'y_coordinates_mm': np.arange(5.),
+            })
+            result = export_region(job, 'X', 4, source_kind='reference190', width_mm=2,
+                                   center_x_mm=3, center_y_mm=2)
+            self.assertEqual(result['actual_bounds_mm'], {'x': [1., 5.], 'y': [1., 3.]})
+            self.assertFalse(result['corrosion_depth_available'])
+            self.assertEqual(result['preview_depth_mm'], [])
+            saved = loadmat(output / 'regions' / result['region_id'] / 'processed_region.mat')
+            np.testing.assert_array_equal(saved['height_matrix_mm'], height[1:4, 1:6])
+            self.assertEqual(saved['corrosion_depth_matrix_mm'].size, 0)
 
     def test_processed_pointcloud_region_crops_xy_rectangle_and_reports_partial_coverage(self):
         from scipy.io import savemat, loadmat

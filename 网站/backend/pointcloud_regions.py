@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 from scipy.io import loadmat, savemat
 
+from .pointcloud_preview import grid_preview
+
 
 def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float | None = None,
                   source_kind: str = "pointcloud", side: str | None = None,
@@ -42,6 +44,20 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         coordinate_origin = "analysis_local_origin"
         value_mode = "height"
         depth_source = "relative_to_full_surface_max"
+    elif source_kind == "reference190":
+        source = job_dir / "outputs" / "pointcloud" / "reference_surface_190mm.mat"
+        output_root = source.parent
+        region_root = output_root
+        if not source.is_file():
+            raise ValueError("任务没有完整190 mm参考表面结果")
+        data = loadmat(source)
+        height = np.asarray(data.get("height_matrix_mm", []), dtype=float)
+        x = np.asarray(data.get("x_coordinates_mm", []), dtype=float).reshape(-1)
+        y = np.asarray(data.get("y_coordinates_mm", []), dtype=float).reshape(-1)
+        depth = None
+        coordinate_origin = "independently_levelled_full_reference_scan"
+        value_mode = "height"
+        depth_source = None
     elif source_kind == "surface_generation":
         if side not in {"front", "back"} or variant not in {"raw", "smoothed"}:
             raise ValueError("独立表面裁剪需指定正/反面及原始/平滑版本")
@@ -163,11 +179,16 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         "geometric_coverage_fraction": min(1.0, max(0.0, coverage)),
         "grid_shape_rows_y_columns_x": list(height.shape),
         "grid_point_count": int(xyz.shape[0]),
-        "depth_semantics": "relative_to_full_surface_max; not verified pristine-reference depth"
-        if source_kind == "pointcloud" else ("input depth matrix; reference provenance depends on source" if depth is not None else "not calibrated"),
+        "depth_semantics": ("independent reference surface; no calibrated corrosion depth"
+                            if source_kind == "reference190" else
+                            "relative_to_full_surface_max; not verified pristine-reference depth"
+                            if source_kind == "pointcloud" else
+                            "input depth matrix; reference provenance depends on source"
+                            if depth is not None else "not calibrated"),
     }
     (folder / "region_metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    preview_xyz, preview_depth = grid_preview(x, y, height, depth)
     return {
         "region_id": region_id, "axis": axis, "requested_length_mm": length_mm,
         "requested_range_mm": requested_x if width_mm is None and axis == "X" else requested_y if width_mm is None else None,
@@ -181,13 +202,17 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         "corrosion_depth_available": depth is not None,
         "corrosion_depth_range_mm": [float(depth.min()), float(depth.max())] if depth is not None else None,
         "depth_source": depth_source,
-        "depth_semantics": "full_surface_max_minus_height; not verified pristine-reference depth"
-        if source_kind == "pointcloud" else ("input depth matrix; reference provenance depends on source" if depth is not None else "not calibrated"),
+        "depth_semantics": ("independent reference surface; no calibrated corrosion depth"
+                            if source_kind == "reference190" else
+                            "full_surface_max_minus_height; not verified pristine-reference depth"
+                            if source_kind == "pointcloud" else
+                            "input depth matrix; reference provenance depends on source"
+                            if depth is not None else "not calibrated"),
         "coordinate_origin": coordinate_origin, "files": [
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.mat",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.csv",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.xyz",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/region_metadata.json",
-        ], "preview_xyz": xyz[::max(1, math.ceil(len(xyz) / 2500))].tolist(),
-        "preview_depth_mm": depth.ravel()[::max(1, math.ceil(len(depth.ravel()) / 2500))].tolist() if depth is not None else [],
+        ], "preview_xyz": preview_xyz.tolist(),
+        "preview_depth_mm": preview_depth.tolist() if preview_depth is not None else [],
     }
