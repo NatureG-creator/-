@@ -31,6 +31,17 @@ def service_at(port: int) -> bool:
         return False
 
 
+def service_for_checkout(port: int) -> bool:
+    """Recognize this checkout's existing service after files changed in place."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=1) as response:
+            info = json.load(response)
+        return (info.get("service") == "corrosion-research-workbench" and
+                Path(info.get("site_root", "")).resolve() == ROOT)
+    except (OSError, ValueError):
+        return False
+
+
 def launch(*, open_browser=True, preferred_port=8560, runtime=None, fixed_port=True):
     runtime = Path(runtime) if runtime is not None else DEFAULT_RUNTIME
     runtime.mkdir(parents=True, exist_ok=True)
@@ -42,7 +53,7 @@ def launch(*, open_browser=True, preferred_port=8560, runtime=None, fixed_port=T
         except (ValueError, KeyError):
             pass
     for port in dict.fromkeys(ports):
-        if service_at(port):
+        if service_for_checkout(port):
             url = f"http://127.0.0.1:{port}/"
             if open_browser:
                 webbrowser.open(url)

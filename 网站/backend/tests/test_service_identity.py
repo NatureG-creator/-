@@ -31,6 +31,17 @@ class ServiceIdentityTests(unittest.TestCase):
                                   return_value=io.BytesIO(json.dumps(health).encode())):
                     self.assertEqual(launcher.service_at(8536), expected)
 
+    def test_existing_same_checkout_service_is_reused_after_source_update(self):
+        health = {'service': 'corrosion-research-workbench', 'site_root': str(ROOT),
+                  'source_revision': 'older'}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(launcher.urllib.request, 'urlopen',
+                              side_effect=lambda *args, **kwargs: io.BytesIO(json.dumps(health).encode())):
+                self.assertTrue(launcher.service_for_checkout(8536))
+                self.assertEqual(launcher.launch(open_browser=False, preferred_port=8536,
+                                                 runtime=Path(directory)),
+                                 'http://127.0.0.1:8536/')
+
     def test_source_change_invalidates_revision_but_runtime_does_not(self):
         from backend.service_identity import source_revision
         with tempfile.TemporaryDirectory() as directory:
