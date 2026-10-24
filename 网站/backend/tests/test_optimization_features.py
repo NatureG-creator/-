@@ -96,6 +96,27 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
             np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
 
+    def test_independent_generated_surface_can_be_cropped(self):
+        from scipy.io import savemat, loadmat
+        from backend.pointcloud_regions import export_region
+        with tempfile.TemporaryDirectory() as folder:
+            job = Path(folder)
+            output = job / 'outputs' / 'front'
+            output.mkdir(parents=True)
+            height = np.arange(20., dtype=float).reshape(4, 5)
+            savemat(output / 'Z_filled.mat', {'Z_filled': height})
+            (output / 'manifest.json').write_text(json.dumps({
+                'output_variable': 'Z_filled', 'matrix_shape': [4, 5],
+                'origin_x_mm': 0, 'origin_y_mm': 0, 'dx_mm': 1, 'dy_mm': 1,
+                'value_mode': 'height',
+            }), encoding='utf-8')
+            result = export_region(job, 'X', 2, 2, 'surface_generation', 'front', 'raw')
+            self.assertEqual(result['actual_range_mm'], [1., 3.])
+            self.assertTrue(result['files'][0].startswith('front/regions/'))
+            values = loadmat(job / 'outputs' / result['files'][0])
+            np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
+            np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
+
 
 class ExcelTargetTests(unittest.TestCase):
     def test_xlsx_header_and_rows_are_read_as_six_metrics(self):

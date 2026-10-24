@@ -434,8 +434,15 @@ class Handler(BaseHTTPRequestHandler):
                 if parts[3] == "pointcloud-region":
                     from .pointcloud_regions import export_region
                     body = self._body()
+                    job = self.server.get_job(job_id)
+                    if body.get("source_kind", "pointcloud") == "surface_generation" and job["kind"] != "surface_generation":
+                        raise ValueError("裁剪来源与任务类型不匹配")
+                    if body.get("source_kind", "pointcloud") == "pointcloud" and job["kind"] != "pointcloud":
+                        raise ValueError("裁剪来源与任务类型不匹配")
                     result = export_region(folder, body.get("axis", "X"),
-                                           body.get("length_mm"), body.get("center_mm"))
+                                           body.get("length_mm"), body.get("center_mm"),
+                                           body.get("source_kind", "pointcloud"), body.get("side"),
+                                           body.get("variant", "raw"))
                     return self._json(201, result)
                 if parts[3] in {'hide', 'unhide'}:
                     return self._json(200, self.server.set_job_hidden(job_id, parts[3] == 'hide'))
