@@ -12,7 +12,7 @@ import {mountOrigin,renderOriginResult} from './origin.mjs';
 import {mountMultivariate,renderMultivariateResult} from './fitting_multivariate.mjs';
 import {mountVisualization} from './visualization.mjs?v=20261019-visualization-center';
 import {mountProjectLibrary} from './project_library.mjs?v=20261023-project-library';
-import {mountSurfaceGeneration,renderGenerationSummary} from './surface_generation.mjs?v=20261024-pointcloud-flow';
+import {mountSurfaceGeneration,renderGenerationSummary} from './surface_generation.mjs?v=20261024-measured-region-crop';
 import {historyControls,bindHistoryActions,resumeNotice,checkpointNotice} from './job_history.mjs?v=20261018-history';
 import {clone,createWorkspace,importSimulation,setPath,getPath,applyMode,parseTyped,simulationPayload,pointcloudPayload,applyTransfer,normaliseCatalog,catalogFromConfig,validateTargets,prepareBatch,isTerminal,updateCaseDraft,resetSimulation,finiteElementDefaults,finiteElementPayload} from './state.mjs';
 const $=selector=>document.querySelector(selector),$$=selector=>Array.from(document.querySelectorAll(selector));

@@ -10,6 +10,22 @@ export function defaultSurfaceVariable(variables){
  return preferred.length===1?preferred[0].name:variables.length===1?variables[0].name:'';
 }
 
+export function measuredRegionSources(jobs){
+ const sources=[];
+ for(const job of Array.isArray(jobs)?jobs:jobs?.jobs||[]){
+  if(job.kind!=='pointcloud'||job.state!=='completed')continue;
+  const summary=job.summary||job.result?.summary||job.result||{},name=job.display_name||job.spec?.case_name||job.case_name||job.id;
+  for(const [key,sourceKind,label] of [['smoothed_surface','pointcloud','实测处理局部表面（含相对深度）'],['full_reference_surface','reference190','完整参考扫描（无腐蚀深度）']]){
+   const surface=summary[key];if(!surface)continue;
+   const sizeX=Number(surface.size_x_mm),sizeY=Number(surface.size_y_mm);
+   if(!Number.isFinite(sizeX)||!Number.isFinite(sizeY)||sizeX<=0||sizeY<=0)continue;
+   sources.push({jobId:job.id,sourceKind,label:`${name} · ${label} · ${fmt(sizeX)} × ${fmt(sizeY)} mm`,sizeX,sizeY,
+    xRange:surface.x_range_mm||[0,sizeX],yRange:surface.y_range_mm||[0,sizeY],depthAvailable:sourceKind==='pointcloud'});
+  }
+ }
+ return sources;
+}
+
 export function generationPayload(faces,options){
  const active=faces.filter(face=>face.enabled);
  if(!active.length)throw new Error('至少选择正面或反面');
@@ -35,6 +51,7 @@ export function renderGenerationSummary(summary,jobId=null){
 
 export function generationPage(){
  return `<div class="section-heading generation-heading"><div><div class="section-overline">POINT CLOUD / OUTPUT</div><h2>独立点云 / MAT 与区域裁剪</h2><p>与上方实测点云处理共用一个工作流入口。这里可从 MAT、NPZ、XYZ 或已完成模拟生成指定长度表面；生成后同样可裁剪、预览并导出局部点云。</p></div><span class="badge neutral">处理 · 生成 · 裁剪</span></div>
+ <div class="card wide" id="measured-region-card"><h3>从实测点云处理结果直接裁剪</h3><p class="help-line">直接读取已完成实测任务生成的表面 MAT，不用下载后重传，也不重复找平、插值或平滑。局部处理表面带全幅相对深度（不等同于已验证的绝对腐蚀深度）；完整参考扫描约可覆盖190 mm，但独立找平，不能提供腐蚀深度。</p><div class="actions"><button class="button secondary" type="button" id="measured-region-refresh">刷新实测处理任务</button><label>来源表面<select id="measured-region-source"><option value="">请刷新并选择已完成任务</option></select></label><small id="measured-region-source-info" class="help-line">裁剪只保留来源网格中已有节点。</small></div><div class="grid four"><label>长度预设<select id="measured-region-preset"><option value="full">完整来源</option><option value="190">190 mm</option><option value="60">60 mm</option><option value="50">50 mm</option><option value="custom">自定义</option></select></label><label>目标 X 长度 / mm<input id="measured-region-length" type="number" min="0.001" step="any"></label><label>目标 Y 宽度 / mm<input id="measured-region-width" type="number" min="0.001" step="any"></label><label>中心 X / mm（空=居中）<input id="measured-region-center-x" type="number" step="any"></label><label>中心 Y / mm（空=居中）<input id="measured-region-center-y" type="number" step="any"></label><button class="button primary" type="button" id="measured-region-export">裁剪并导出 MAT / CSV / XYZ</button></div><p id="measured-region-message" class="help-line" role="status" aria-live="polite"></p></div>
  <div class="card"><h3>1 · 选择表面来源</h3><p class="help-line">从已有表面裁剪或网格化；不会凭空合成腐蚀。XYZ无需第二份参考扫描。NPZ读取所选阶段的模拟深度。单面即可运行，也可同时生成正反面。</p><div class="actions"><button class="button secondary" id="surface-refresh">刷新已完成模拟</button><small id="surface-source-message">选择模拟任务前请刷新；上传文件无需刷新。</small></div></div>
  ${sides.map(([side,label])=>`<details class="card" data-face="${side}" open><summary><strong>${label}</strong></summary><div class="actions">${check('enabled','生成本面',side==='front')}</div><div class="grid two">${select('origin','读取方式',[['upload','上传文件'],['task','已完成模拟']])}<div class="field" data-upload-row><label>表面文件（MAT / NPZ / XYZ / TXT / CSV / TSV）<input data-surface="file" type="file" accept=".mat,.npz,.xyz,.txt,.csv,.tsv"></label><small data-upload-note>请选择本面的数据文件。MAT支持传统格式至v7.2；v7.3请用MATLAB另存-v7。</small></div><div class="field" data-task-row hidden><label>模拟任务<select data-surface="job"><option value="">请刷新并选择</option></select></label></div><div class="field" data-variable-row hidden><label>表面 / 状态变量<select data-surface="variable"></select></label></div><div data-npz-row hidden>${field('stage','NPZ 阶段（留空=最后阶段）','','已完成模拟按历史阶段从1编号；外部NPZ按所选变量内部顺序。perfect_a只含最终快照（仅1帧），历史阶段应选a_sd。')}</div></div>
  <div data-mat-xyz-row><div class="grid four">${select('unit','文件数值单位',[['mm','mm'],['um','μm']])}${select('value_mode','Z数值含义',[['height','表面高程'],['depth','正向腐蚀深度']])}${field('dx_mm','输入 X 网格间距 / mm',.3,'默认0.3 mm，请按来源核对；MAT原始列间距，XYZ网格化间距。')}${field('dy_mm','输入 Y 网格间距 / mm',.3,'MAT的行间距；XYZ的网格化间距。')}</div><div class="grid two" data-mat-row>${field('origin_x_mm','MAT X 坐标原点 / mm',0)}${field('origin_y_mm','MAT Y 坐标原点 / mm',0)}</div><div data-xyz-row hidden>${check('fill_missing','允许最近邻填补未覆盖格（含边缘外推）')}<p class="help-line">默认拒绝未覆盖格；启用后在结果中报告填补数量。同一XY多个Z取均值。</p></div></div>
@@ -49,6 +66,7 @@ export function mountSurfaceGeneration(root,{get,post,openJob}){
  root.innerHTML=generationPage();
  const q=s=>root.querySelector(s), records={front:{},back:{}}, revisions={front:0,back:0};
  let pending=0,busy=false;
+ let regionSources=[];
  const note=(message,error=false)=>{q('#surface-message').textContent=message;q('#surface-message').classList.toggle('error-hint',error);};
  const buttons=()=>{for(const id of ['#surface-inspect','#surface-run'])q(id).disabled=busy||pending>0;};
  const read=container=>Object.fromEntries([...container.querySelectorAll('[data-surface]')].filter(el=>!['file','origin','job','variable','stage','enabled'].includes(el.dataset.surface)).map(el=>[el.dataset.surface,el.type==='checkbox'?el.checked:el.type==='number'?(el.value===''?null:Number(el.value)):el.value]));
@@ -59,6 +77,13 @@ export function mountSurfaceGeneration(root,{get,post,openJob}){
  function visibility(){for(const [side] of sides){const box=q(`[data-face="${side}"]`),task=box.querySelector('[data-surface="origin"]').value==='task',ext=records[side].extension||'',npz=task||ext==='.npz',xyz=ext&&ext!=='.mat'&&!npz;
   for(const [selector,hidden] of [['[data-upload-row]',task],['[data-task-row]',!task],['[data-npz-row]',!npz],['[data-cell-row]',!npz],['[data-mat-xyz-row]',npz],['[data-xyz-row]',!xyz],['[data-mat-row]',xyz],['[data-variable-row]',task||!['.mat','.npz'].includes(ext)]])box.querySelector(selector).hidden=hidden;
  }const preset=q('[data-surface="preset"]').value;q('[data-surface="length_mm"]').disabled=preset!=='custom';q('#surface-exact-fields').hidden=q('[data-surface="grid_mode"]').value!=='exact';}
+ function selectedRegionSource(){return regionSources.find(source=>`${source.jobId}|${source.sourceKind}`===q('#measured-region-source').value);}
+ function setRegionSource(){const source=selectedRegionSource(),info=q('#measured-region-source-info');if(!source){info.textContent='裁剪只保留来源网格中已有节点。';return;}q('#measured-region-length').value=source.sizeX;q('#measured-region-width').value=source.sizeY;info.textContent=`X ${fmt(source.xRange[0])} ～ ${fmt(source.xRange[1])} mm；Y ${fmt(source.yRange[0])} ～ ${fmt(source.yRange[1])} mm。${source.depthAvailable?'颜色/深度沿用局部处理 MAT 中的全幅相对深度，不重新归零。':'该来源只表示完整参考表面高程，不生成腐蚀深度。'}`;}
+ async function refreshRegionSources(){const select=q('#measured-region-source'),previous=select.value,jobs=await get('/api/jobs');regionSources=measuredRegionSources(jobs);select.innerHTML='<option value="">请选择已完成实测处理任务</option>'+regionSources.map(source=>`<option value="${esc(source.jobId)}|${source.sourceKind}">${esc(source.label)}</option>`).join('');if(regionSources.some(source=>`${source.jobId}|${source.sourceKind}`===previous))select.value=previous;else if(regionSources.length===1)select.value=`${regionSources[0].jobId}|${regionSources[0].sourceKind}`;setRegionSource();}
+ q('#measured-region-refresh').addEventListener('click',async event=>{const button=event.currentTarget,message=q('#measured-region-message');button.disabled=true;message.textContent='正在读取已完成实测处理任务…';try{await refreshRegionSources();message.textContent=regionSources.length?'已载入 '+regionSources.length+' 个可用表面来源。':'未找到包含可裁剪表面的已完成实测任务。';}catch(error){message.textContent=error.message;}finally{button.disabled=false;}});
+ q('#measured-region-source').addEventListener('change',setRegionSource);
+ q('#measured-region-preset').addEventListener('change',event=>{const source=selectedRegionSource(),preset=event.currentTarget.value;q('#measured-region-length').value=preset==='full'?(source?.sizeX??''):preset==='custom'?'':preset;});
+ q('#measured-region-export').addEventListener('click',async event=>{const button=event.currentTarget,message=q('#measured-region-message'),source=selectedRegionSource(),length=Number(q('#measured-region-length').value),width=Number(q('#measured-region-width').value);if(!source){message.textContent='请先刷新并选择实测处理结果。';return;}if(!Number.isFinite(length)||length<=0||!Number.isFinite(width)||width<=0){message.textContent='裁剪长、宽必须为有限正数。';return;}button.disabled=true;message.textContent='正在读取已处理 MAT 并导出区域…';try{const result=await post(`/api/jobs/${encodeURIComponent(source.jobId)}/pointcloud-region`,{source_kind:source.sourceKind,length_mm:length,width_mm:width,center_x_mm:q('#measured-region-center-x').value||null,center_y_mm:q('#measured-region-center-y').value||null});message.textContent=`已裁剪 ${result.point_count} 点；X ${result.actual_bounds_mm.x.map(fmt).join(' ～ ')} mm，Y ${result.actual_bounds_mm.y.map(fmt).join(' ～ ')} mm；请求区域覆盖率 ${fmt(result.geometric_coverage_fraction*100)}%。${result.corrosion_depth_available?`相对全幅深度 ${result.corrosion_depth_range_mm.map(fmt).join(' ～ ')} mm（非已验证绝对腐蚀深度）。`:'该来源没有可用的腐蚀深度矩阵。'}`;for(const file of result.files){const link=document.createElement('a');link.href=`/api/jobs/${encodeURIComponent(source.jobId)}/download/${file.split('/').map(encodeURIComponent).join('/')}`;link.download='';link.textContent=' 下载 '+file.split('/').at(-1);message.append(link);}}catch(error){message.textContent=error.message;}finally{button.disabled=false;}});
  async function refresh(){const jobs=await get('/api/jobs');for(const [side] of sides){const el=q(`[data-face="${side}"] [data-surface="job"]`),old=el.value;el.innerHTML='<option value="">请选择已完成模拟</option>'+(Array.isArray(jobs)?jobs:jobs.jobs||[]).filter(j=>j.kind==='simulation'&&j.state==='completed').map(j=>`<option value="${esc(j.id)}">${esc(j.display_name||j.spec?.case_name||j.case_name||j.id)} · ${esc(j.id)}</option>`).join('');el.value=old;}}
  root.addEventListener('input',()=>{q('#surface-preview').innerHTML='';});
  root.addEventListener('change',async event=>{
