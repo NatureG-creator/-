@@ -35,6 +35,8 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         x = np.asarray(data.get("x_coordinates_mm", []), dtype=float).reshape(-1)
         y = np.asarray(data.get("y_coordinates_mm", []), dtype=float).reshape(-1)
         coordinate_origin = "analysis_local_origin"
+        value_mode = "height"
+        depth_source = "relative_to_full_surface_max"
     elif source_kind == "surface_generation":
         if side not in {"front", "back"} or variant not in {"raw", "smoothed"}:
             raise ValueError("独立表面裁剪需指定正/反面及原始/平滑版本")
@@ -54,16 +56,18 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         height = np.asarray(data.get(variable, []), dtype=float)
         x = float(metadata["origin_x_mm"]) + np.arange(height.shape[1]) * float(metadata["dx_mm"])
         y = float(metadata["origin_y_mm"]) + np.arange(height.shape[0]) * float(metadata["dy_mm"])
-        depth = height if metadata.get("value_mode") == "depth" else np.max(height) - height
+        value_mode = metadata.get("value_mode", "height")
+        depth = height if value_mode == "depth" else None
+        depth_source = "input_depth_matrix" if depth is not None else None
         coordinate_origin = "generated_surface_coordinates"
     else:
         raise ValueError("不支持的已处理点云来源")
     if not source.is_file():
         raise ValueError("任务没有可裁剪的已处理点云")
-    if height.ndim != 2 or depth.shape != height.shape or height.shape != (y.size, x.size):
-        raise ValueError("已处理点云的高程、腐蚀深度和X/Y坐标尺寸不匹配")
-    if not np.isfinite(height).all() or not np.isfinite(depth).all():
-        raise ValueError("已处理点云包含非有限高程或腐蚀深度")
+    if height.ndim != 2 or (depth is not None and depth.shape != height.shape) or height.shape != (y.size, x.size):
+        raise ValueError("点云数值矩阵、腐蚀深度和X/Y坐标尺寸不匹配")
+    if not np.isfinite(height).all() or (depth is not None and not np.isfinite(depth).all()):
+        raise ValueError("点云包含非有限数值")
     if x.size < 2 or y.size < 2 or not np.all(np.diff(x) > 0) or not np.all(np.diff(y) > 0):
         raise ValueError("已处理点云的X/Y坐标必须至少包含两个递增网格点")
     coordinates = x if axis == "X" else y
@@ -75,33 +79,44 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
     if indices.size < 2:
         raise ValueError("该区域不足两个网格点；请增大长度或调整中心坐标")
     if axis == "X":
-        height, depth, x = height[:, indices], depth[:, indices], x[indices]
+        height, x = height[:, indices], x[indices]
+        if depth is not None:
+            depth = depth[:, indices]
     else:
-        height, depth, y = height[indices, :], depth[indices, :], y[indices]
+        height, y = height[indices, :], y[indices]
+        if depth is not None:
+            depth = depth[indices, :]
     xx, yy = np.meshgrid(x, y)
     xyz = np.column_stack((xx.ravel(), yy.ravel(), height.ravel()))
     region_id = secrets.token_hex(6)
     folder = region_root / "regions" / region_id
     folder.mkdir(parents=True, exist_ok=False)
     savemat(folder / "processed_region.mat", {
-        "height_matrix_mm": height, "corrosion_depth_matrix_mm": depth,
+        "height_matrix_mm": height, "z_value_mode": value_mode,
+        "corrosion_depth_matrix_mm": depth if depth is not None else np.empty((0, 0)),
+        "depth_source": depth_source or "not_calibrated",
         "x_coordinates_mm": x, "y_coordinates_mm": y,
         "processed_xyz_mm": xyz,
     }, do_compression=True)
-    table = np.column_stack((xyz, depth.ravel()))
+    table = np.column_stack((xyz, depth.ravel())) if depth is not None else xyz
     np.savetxt(folder / "processed_region.csv", table, delimiter=",",
-               header="x_mm,y_mm,height_mm,relative_corrosion_depth_mm", comments="", fmt="%.9g")
+               header="x_mm,y_mm,z_mm,corrosion_depth_mm" if depth is not None else "x_mm,y_mm,z_mm",
+               comments="", fmt="%.9g")
     np.savetxt(folder / "processed_region.xyz", xyz, delimiter=" ", fmt="%.9g")
     return {
         "region_id": region_id, "axis": axis, "requested_length_mm": length_mm,
         "requested_range_mm": [low, high],
         "actual_range_mm": [float(coordinates[indices[0]]), float(coordinates[indices[-1]])],
         "center_mm": center_mm, "shape": list(height.shape), "point_count": int(xyz.shape[0]),
-        "corrosion_depth_range_mm": [float(depth.min()), float(depth.max())],
+        "corrosion_depth_available": depth is not None,
+        "corrosion_depth_range_mm": [float(depth.min()), float(depth.max())] if depth is not None else None,
+        "depth_source": depth_source,
+        "depth_semantics": "full_surface_max_minus_height; not verified pristine-reference depth"
+        if source_kind == "pointcloud" else ("input depth matrix; reference provenance depends on source" if depth is not None else "not calibrated"),
         "coordinate_origin": coordinate_origin, "files": [
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.mat",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.csv",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.xyz",
         ], "preview_xyz": xyz[::max(1, math.ceil(len(xyz) / 2500))].tolist(),
-        "preview_depth_mm": depth.ravel()[::max(1, math.ceil(len(depth.ravel()) / 2500))].tolist(),
+        "preview_depth_mm": depth.ravel()[::max(1, math.ceil(len(depth.ravel()) / 2500))].tolist() if depth is not None else [],
     }

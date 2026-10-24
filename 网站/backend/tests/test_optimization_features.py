@@ -91,6 +91,9 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             })
             result = export_region(job, 'X', 2, 2)
             self.assertEqual(result['actual_range_mm'], [1., 3.])
+            self.assertTrue(result['corrosion_depth_available'])
+            self.assertEqual(result['depth_source'], 'relative_to_full_surface_max')
+            self.assertIn('not verified pristine-reference depth', result['depth_semantics'])
             values = loadmat(output / 'regions' / result['region_id'] / 'processed_region.mat')
             np.testing.assert_array_equal(values['x_coordinates_mm'].ravel(), [1, 2, 3])
             np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
@@ -115,7 +118,30 @@ class PointCloudDiagnosticsTests(unittest.TestCase):
             self.assertTrue(result['files'][0].startswith('front/regions/'))
             values = loadmat(job / 'outputs' / result['files'][0])
             np.testing.assert_array_equal(values['height_matrix_mm'], height[:, 1:4])
-            np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], (height.max() - height)[:, 1:4])
+            self.assertFalse(result['corrosion_depth_available'])
+            self.assertEqual(values['corrosion_depth_matrix_mm'].size, 0)
+            self.assertEqual(values['depth_source'], 'not_calibrated')
+            self.assertEqual(result['preview_depth_mm'], [])
+
+    def test_independent_depth_input_is_preserved_without_recalculation(self):
+        from scipy.io import savemat, loadmat
+        from backend.pointcloud_regions import export_region
+        with tempfile.TemporaryDirectory() as folder:
+            job = Path(folder)
+            output = job / 'outputs' / 'front'
+            output.mkdir(parents=True)
+            depth = np.arange(20., dtype=float).reshape(4, 5) / 10
+            savemat(output / 'a_sd.mat', {'a_sd': depth})
+            (output / 'manifest.json').write_text(json.dumps({
+                'output_variable': 'a_sd', 'matrix_shape': [4, 5],
+                'origin_x_mm': 0, 'origin_y_mm': 0, 'dx_mm': 1, 'dy_mm': 1,
+                'value_mode': 'depth',
+            }), encoding='utf-8')
+            result = export_region(job, 'X', 2, 2, 'surface_generation', 'front', 'raw')
+            values = loadmat(job / 'outputs' / result['files'][0])
+            self.assertTrue(result['corrosion_depth_available'])
+            self.assertEqual(result['depth_source'], 'input_depth_matrix')
+            np.testing.assert_array_equal(values['corrosion_depth_matrix_mm'], depth[:, 1:4])
 
 
 class ExcelTargetTests(unittest.TestCase):

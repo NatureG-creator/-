@@ -140,6 +140,8 @@ def _export_smoothed_surface(data: dict, output: Path) -> dict:
         'value_range_mm': [float(matrix.min()), float(matrix.max())],
         'coordinate_origin': 'analysis_local_origin',
         'coordinate_note': 'X/Y为MATLAB分析局部坐标；Z为现有平滑高程。腐蚀深度另列为max(height)-height。',
+        'depth_semantics': 'max(height over full processed surface)-height; relative surface relief, not verified pristine-reference corrosion depth',
+        'pristine_reference_verified': False,
         'point_count': int(xyz.shape[0]),
         'corrosion_depth_range_mm': [float(depth.min()), float(depth.max())],
     }
