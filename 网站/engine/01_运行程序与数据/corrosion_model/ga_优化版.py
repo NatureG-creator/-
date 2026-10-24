@@ -17,6 +17,8 @@ from .fitness_优化版 import FitnessResult, evaluate_population, recover_indiv
 from .progress import ProgressTarget, emit_progress
 from unified_config import GA_PARAMETER_LOWER_BOUNDS, GA_PARAMETER_UPPER_BOUNDS
 
+CHECKPOINT_BATCH_SIZE = 5
+
 
 @dataclass
 class GAConfig:
@@ -265,10 +267,15 @@ def run_ga(
         last_gen = int(state["last_generation"])
     def numeric_list(values):
         return [float(x) if np.isfinite(x) else str(float(x)) for x in values]
+    pending_checkpoint_individuals = 0
     def save_individual(index, row):
+        nonlocal pending_checkpoint_individuals
         state["scores"][str(index)] = numeric_list(row)
         state["next_individual"] = len(state["scores"])
-        checkpoint.save(state)
+        pending_checkpoint_individuals += 1
+        if pending_checkpoint_individuals >= CHECKPOINT_BATCH_SIZE:
+            checkpoint.save(state)
+            pending_checkpoint_individuals = 0
     emit_progress(verbose, f"[{progress_label}] 开始寻优：最大代数={config.maxgen}, 种群={config.nind}, Taichi={use_taichi}")
     for gen in range(int(state["generation"]), config.maxgen) if not state["completed"] else ():
         last_gen = gen
@@ -331,6 +338,7 @@ def run_ga(
                 )
                 perfect_a, perfect_d, perfect_cl = best.a, best.d, best.cl_concentration
         def save_generation(completed):
+            nonlocal pending_checkpoint_individuals
             if checkpoint is None: return
             # Large arrays change only when the global best improves.
             if state["best_result"] != numeric_list(perfect_result) or state["best_state"] is None:
@@ -340,6 +348,7 @@ def run_ga(
                          generation=gen+1, chrom=chrom.tolist(), rng_state=rng.bit_generator.state,
                          evaluation_seed=None, scores={}, next_individual=0, completed=completed)
             checkpoint.save(state)
+            pending_checkpoint_individuals = 0
         if np.sum(perfect_result) <= 0.01:
             save_generation(True)
             break

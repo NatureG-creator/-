@@ -52,22 +52,30 @@ def find_local_extrema(
     min_vals: list[float] = []
     nh_radius = (neighborhood[0] // 2, neighborhood[1] // 2)
     rows, cols = data.shape
-    for i in range(rows):
-        for j in range(cols):
-            row_start = max(0, i - nh_radius[0])
-            row_stop = min(rows, i + nh_radius[0] + 1)
-            col_start = max(0, j - nh_radius[1])
-            col_stop = min(cols, j + nh_radius[1] + 1)
-            region = data[row_start:row_stop, col_start:col_stop]
-            center = data[i, j]
-            region_mean = float(np.mean(region))
-            prominence = abs(center - region_mean)
-            if center == np.max(region) and center > region_mean and prominence >= min_prominence:
-                max_locs.append([i + 1, j + 1])
-                max_vals.append(float(center))
-            if center == np.min(region) and center < region_mean and prominence >= min_prominence:
-                min_locs.append([i + 1, j + 1])
-                min_vals.append(float(center))
+    # 先用窗口最大/最小筛掉不可能的点；候选的局部均值仍按原切片和 np.mean 计算，
+    # 以保持边缘截断、并列极值和突出度阈值的既有语义。
+    size = tuple(2 * radius + 1 for radius in nh_radius)
+    if np.all(np.isfinite(data)):
+        local_max = ndimage.maximum_filter(data, size=size, mode="constant", cval=-np.inf)
+        local_min = ndimage.minimum_filter(data, size=size, mode="constant", cval=np.inf)
+        candidates = np.argwhere((data == local_max) | (data == local_min))
+    else:
+        candidates = np.argwhere(np.ones(data.shape, dtype=bool))
+    for i, j in candidates:
+        row_start = max(0, i - nh_radius[0])
+        row_stop = min(rows, i + nh_radius[0] + 1)
+        col_start = max(0, j - nh_radius[1])
+        col_stop = min(cols, j + nh_radius[1] + 1)
+        region = data[row_start:row_stop, col_start:col_stop]
+        center = data[i, j]
+        region_mean = float(np.mean(region))
+        prominence = abs(center - region_mean)
+        if center == np.max(region) and center > region_mean and prominence >= min_prominence:
+            max_locs.append([i + 1, j + 1])
+            max_vals.append(float(center))
+        if center == np.min(region) and center < region_mean and prominence >= min_prominence:
+            min_locs.append([i + 1, j + 1])
+            min_vals.append(float(center))
     max_arr = _apply_nms(np.array(max_locs, dtype=np.int64), np.array(max_vals), min_distance, "desc")
     min_arr = _apply_nms(np.array(min_locs, dtype=np.int64), np.array(min_vals), min_distance, "asc")
     return max_arr, min_arr

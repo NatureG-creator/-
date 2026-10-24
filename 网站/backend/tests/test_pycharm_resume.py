@@ -14,7 +14,7 @@ from corrosion_model.ga_优化版 import GAConfig, run_ga
 class PyCharmResumeTests(unittest.TestCase):
     def run_case(self, checkpoint=None, verbose=False):
         return run_ga(5,6,4,10,np.array([10,2,1,3,.2,.3]),None,2,1,25,None,None,
-                      seed=17,config=GAConfig(nind=4,selected_count=1,maxgen=4),
+                      seed=17,config=GAConfig(nind=8,selected_count=1,maxgen=4),
                       parallel_workers=2,checkpoint=checkpoint,verbose=verbose)
 
     def assert_same(self, left, right):
@@ -27,13 +27,13 @@ class PyCharmResumeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             store=CheckpointStore(Path(folder),'case',engine_fingerprint='test')
             def stop(message):
-                if '已完成 1/4 个体' in message:raise InterruptedError('power loss')
+                if '已完成 5/8 个体' in message:raise InterruptedError('power loss')
             # Resolve genuine worker futures in reverse index order.
             with patch('corrosion_model.fitness_优化版.as_completed',side_effect=lambda futures:reversed(futures)):
                 with self.assertRaises(InterruptedError):self.run_case(store,stop)
             state=store.load()
-            self.assertEqual(set(state['scores']),{'3'})
-            self.assertEqual(precheck_checkpoint(Path(folder),'case',engine_fingerprint='test')['completed_individuals'],1)
+            self.assertEqual(set(state['scores']),{'3','4','5','6','7'})
+            self.assertEqual(precheck_checkpoint(Path(folder),'case',engine_fingerprint='test')['completed_individuals'],5)
             from concurrent.futures import ProcessPoolExecutor
             submitted=[]
             original_submit=ProcessPoolExecutor.submit
@@ -42,8 +42,8 @@ class PyCharmResumeTests(unittest.TestCase):
                 return original_submit(pool,worker,task)
             with patch.object(ProcessPoolExecutor,'submit',submit):
                 resumed=self.run_case(store)
-            self.assertNotIn(3,submitted[:3])
-            self.assertEqual(len(submitted),11)  # 3 unfinished + 2 complete generations.
+            self.assertEqual(submitted[:3],[0,1,2])
+            self.assertEqual(len(submitted),19)  # 3 unfinished; the remaining run converges after 2 generations.
             self.assert_same(baseline,resumed)
             self.assertTrue(store.load()['completed'])
             # A completed checkpoint returns the saved result, without reevaluation.
@@ -67,21 +67,21 @@ class PyCharmResumeTests(unittest.TestCase):
         cfg['mode']='pycharm'
         cfg['TAICHI_CONFIG']['use_taichi']=False
         cfg['GEOMETRY_CONFIG'].update(grid_w=5,grid_l=6,grid_n=4)
-        cfg['STAGE_GA_CONFIG'].update(F=2,nind=4,selected_count=1,maxgen=3,parallel_workers=2)
+        cfg['STAGE_GA_CONFIG'].update(F=2,nind=8,selected_count=1,maxgen=3,parallel_workers=2)
         spec=dict(kind='simulation',run_mode='staged',config=cfg,targets=[[10,2,1,3,.2,.3],[12,3,1,4,.2,.3]])
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
             with patch('backend.runner._plot_stage'):
                 run_simulation(spec,root/'full')
                 def stop(event):
-                    if event.get('stage')==2 and '已完成 1/4 个体' in event.get('label',''):
+                    if event.get('stage')==2 and '已完成 5/8 个体' in event.get('label',''):
                         raise InterruptedError('interrupt second stage')
                 with self.assertRaises(InterruptedError):
                     run_simulation(spec,root/'resume',progress=stop)
                 checked=precheck_resume(spec,root/'resume')
                 self.assertTrue(checked['available'])
                 self.assertTrue(checked['stages'][0]['stage_exported'])
-                self.assertEqual(checked['stages'][1]['completed_individuals'],1)
+                self.assertEqual(checked['stages'][1]['completed_individuals'],5)
                 run_simulation(spec,root/'resume')
             with np.load(root/'full/outputs/simulation.npz',allow_pickle=False) as full:
                 with np.load(root/'resume/outputs/simulation.npz',allow_pickle=False) as resumed:

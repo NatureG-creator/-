@@ -123,6 +123,53 @@ def convex_rupture_points(
     return np.empty((0, 2), dtype=np.int64), 1.0
 
 
+def scan_ca_state(
+    a: np.ndarray, w: int, l: int, p_o: float, max_gaocha: float, n: int
+) -> tuple[np.ndarray, float, np.ndarray]:
+    """Compute convex rupture points and the 3D boundary from shared state masks."""
+    a = np.asarray(a)
+    if a.ndim != 3:
+        raise ValueError("输入 a 必须是三维数组")
+    if n < 1:
+        raise ValueError("n 必须是正数")
+
+    metal_mask = a[:, :, :n] == 1
+    has_metal = np.any(metal_mask, axis=2)
+    first_idx = np.argmax(metal_mask, axis=2) + 1
+    depth_map = np.where(has_metal, first_idx, n + 1).astype(np.float64)
+    gaocha = float(np.max(depth_map) - np.min(depth_map))
+    if gaocha >= 2:
+        threshold = 0.05 * gaocha + float(np.min(depth_map))
+        rows, cols = np.nonzero(depth_map >= threshold)
+        convex_points = np.column_stack([rows + 1, cols + 1]).astype(np.int64)
+        p_tuwei = ((gaocha / max_gaocha) * (p_o - 1.0) + 1.0
+                   if gaocha <= max_gaocha else p_o)
+    else:
+        convex_points = np.empty((0, 2), dtype=np.int64)
+        p_tuwei = 1.0
+
+    zero_mask = a == 0
+    z_nonzero = np.flatnonzero(np.any(zero_mask, axis=(0, 1)))
+    if z_nonzero.size == 0:
+        boundary = np.empty((0, 3), dtype=np.int64)
+    else:
+        jizhun_z_0based = min(z_nonzero[-1] + 1, n)
+        process_depth = min(jizhun_z_0based + 1, a.shape[2])
+        zero_mask_process = zero_mask[:, :, :process_depth]
+        structure = np.zeros((3, 3, 3), dtype=bool)
+        structure[1, 1, 0] = True
+        structure[1, 1, 2] = True
+        structure[1, 0, 1] = True
+        structure[1, 2, 1] = True
+        structure[0, 1, 1] = True
+        structure[2, 1, 1] = True
+        expanded_zero = ndimage.binary_dilation(
+            zero_mask_process, structure=structure, border_value=0
+        )
+        boundary = np.argwhere((~zero_mask_process) & expanded_zero).astype(np.int64) + 1
+    return convex_points, float(p_tuwei), boundary
+
+
 def first_metal_depth(a: np.ndarray, w: int, l: int, n: int) -> np.ndarray:
     """Find first `a==1` layer like MATLAB `find(..., 1, 'first')`.
 
@@ -312,18 +359,15 @@ def run_ca(
     emit_progress(verbose, f"[{progress_label}] 开始：F={F}, 网格={w}x{l}x{n}, Taichi={taichi_ok}")
     for k in range(1, F + 1):
         k_completed = k
-        convex_points, p_tuwei = convex_rupture_points(
-            a,
-            w,
-            l,
-            p_o,
-            float(CA_CONFIG["convex_height_limit"]),
-            n,
-        )
         if taichi_ok:
+            convex_points, p_tuwei = convex_rupture_points(
+                a, w, l, p_o, float(CA_CONFIG["convex_height_limit"]), n
+            )
             boundary = detect_boundary_taichi(a, n)
         else:
-            boundary = detect_boundary_3d(a, n)
+            convex_points, p_tuwei, boundary = scan_ca_state(
+                a, w, l, p_o, float(CA_CONFIG["convex_height_limit"]), n
+            )
         boundary_count = int(boundary.shape[0]) if boundary.size != 0 else 0
         if boundary.size != 0:
             convex_mask = None

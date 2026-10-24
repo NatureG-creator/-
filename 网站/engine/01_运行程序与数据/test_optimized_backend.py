@@ -21,6 +21,54 @@ TARGET = np.array([50.,20.,2.,4.,.6,.3])
 
 
 class OptimizedBackendTests(unittest.TestCase):
+    def test_shared_ca_scan_matches_original_scans(self):
+        rng = np.random.default_rng(71)
+        states = [np.ones((7, 8, 6)), np.zeros((7, 8, 6))]
+        for _ in range(8):
+            states.append(rng.choice([0., 1., 2.], size=(7, 8, 6), p=[.15, .8, .05]))
+        for state in states:
+            expected_points, expected_probability = ca.convex_rupture_points(
+                state, 7, 8, .4, 12., 5
+            )
+            expected_boundary = ca.detect_boundary_3d(state, 5)
+            points, probability, boundary = ca.scan_ca_state(state, 7, 8, .4, 12., 5)
+            np.testing.assert_array_equal(points, expected_points)
+            np.testing.assert_equal(probability, expected_probability)
+            np.testing.assert_array_equal(boundary, expected_boundary)
+
+    def test_live_extrema_matches_original_loop_oracle(self):
+        def original(data, min_prominence, min_distance, neighborhood):
+            max_locs, max_vals, min_locs, min_vals = [], [], [], []
+            radius = neighborhood[0] // 2, neighborhood[1] // 2
+            rows, cols = data.shape
+            for i in range(rows):
+                for j in range(cols):
+                    region = data[max(0, i-radius[0]):min(rows, i+radius[0]+1),
+                                  max(0, j-radius[1]):min(cols, j+radius[1]+1)]
+                    center = data[i, j]
+                    mean = float(np.mean(region))
+                    prominence = abs(center - mean)
+                    if center == np.max(region) and center > mean and prominence >= min_prominence:
+                        max_locs.append([i+1, j+1]); max_vals.append(float(center))
+                    if center == np.min(region) and center < mean and prominence >= min_prominence:
+                        min_locs.append([i+1, j+1]); min_vals.append(float(center))
+            return (analysis._apply_nms(np.array(max_locs, dtype=np.int64), np.array(max_vals), min_distance, "desc"),
+                    analysis._apply_nms(np.array(min_locs, dtype=np.int64), np.array(min_vals), min_distance, "asc"))
+
+        rng = np.random.default_rng(123)
+        surfaces = [rng.normal(size=(19, 23)), np.ones((9, 8)),
+                    rng.integers(0, 5, (18, 20)).astype(float),
+                    np.array([[0., 3., 1.], [4., 1., 2.]]),
+                    np.array([[0., np.nan, 1.], [4., 1., 2.]])]
+        for surface in surfaces:
+            for neighborhood in ((1, 1), (4, 6), (35, 35)):
+                for distance in (0, 3):
+                    for prominence in (0., .05, 1.):
+                        expected = original(surface, prominence, distance, neighborhood)
+                        actual = analysis.find_local_extrema(surface, prominence, distance, neighborhood)
+                        for first, second in zip(expected, actual):
+                            np.testing.assert_array_equal(first, second)
+
     def test_taichi_initializers_reject_non_cpu_architecture(self):
         for backend in (taichi_accel, fast_taichi):
             with self.subTest(backend=backend.__name__):

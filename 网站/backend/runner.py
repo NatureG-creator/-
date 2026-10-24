@@ -252,7 +252,7 @@ def run_simulation(spec: dict, job_dir: Path, progress: Callable[[dict], None] |
         workers = int(settings["parallel_workers"])
         reuse_pool = bool(settings.get("reuse_process_pool", False))
         pool_note = "；GA阶段内跨代复用worker" if reuse_pool else "；每代重建worker池"
-        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}{pool_note}；每代及已完成个体评价保存检查点，未保存个体按原种子重算。")
+        warnings.append(f"PyCharm模式使用 NumPy ProcessPool，多进程数={workers}{pool_note}；每累计5个已完成个体及每代结束保存检查点，中断时未落盘个体按原种子重算。")
 
     def timing_doc():
         document = dict(timing)
