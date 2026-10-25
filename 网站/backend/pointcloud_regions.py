@@ -19,7 +19,8 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
                   center_x_mm: float | None = None, center_y_mm: float | None = None,
                   specimen_length_mm: float | None = None,
                   specimen_width_mm: float | None = None,
-                  specimen_thickness_mm: float | None = None) -> dict:
+                  specimen_thickness_mm: float | None = None,
+                  confirmation: dict | None = None) -> dict:
     if axis not in {"X", "Y"}:
         raise ValueError("裁剪方向只能选择X或Y")
     try:
@@ -30,6 +31,22 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
     if not math.isfinite(length_mm) or length_mm <= 0:
         raise ValueError("裁剪长度必须是有限正数")
     job_dir = Path(job_dir)
+    empirical_reference = None
+    if source_kind == "common_reference":
+        from .pointcloud_view import _common_preview
+        status = json.loads((job_dir / "status.json").read_text(encoding="utf-8"))
+        spec = json.loads((job_dir / "spec.json").read_text(encoding="utf-8"))
+        if spec.get("kind") != "pointcloud" or status.get("state") != "completed":
+            raise ValueError("共同坐标裁剪只接受已完成的点云任务")
+        if not isinstance(confirmation, dict) or width_mm is None:
+            raise ValueError("请先确认共同坐标裁剪范围")
+        common = _common_preview(job_dir, spec)["common_reference"]
+        empirical_reference = {key: common[key] for key in (
+            "cache_key", "complete_surface_sha256", "depth_sha256", "reference_height_mm",
+            "reference_column_count", "reference_ratio", "original_thickness_mm",
+            "physical_pristine_reference_verified")}
+        if confirmation.get("reference") != empirical_reference:
+            raise ValueError("预览来源或20%经验参考链已变化，请重新预览并确认")
     if source_kind == "pointcloud":
         source = job_dir / "outputs" / "pointcloud" / "measured_surface_smoothed.mat"
         output_root = source.parent
@@ -44,7 +61,7 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         coordinate_origin = "analysis_local_origin"
         value_mode = "height"
         depth_source = "relative_to_full_surface_max"
-    elif source_kind == "reference190":
+    elif source_kind in {"reference190", "common_reference"}:
         source = job_dir / "outputs" / "pointcloud" / "reference_surface_190mm.mat"
         output_root = source.parent
         region_root = output_root
@@ -55,7 +72,8 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         x = np.asarray(data.get("x_coordinates_mm", []), dtype=float).reshape(-1)
         y = np.asarray(data.get("y_coordinates_mm", []), dtype=float).reshape(-1)
         depth = None
-        coordinate_origin = "independently_levelled_full_reference_scan"
+        coordinate_origin = ("verified_common_scan_coordinates" if empirical_reference else
+                             "independently_levelled_full_reference_scan")
         value_mode = "height"
         depth_source = None
     elif source_kind == "surface_generation":
@@ -150,6 +168,13 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         x, y = x[ix], y[iy]
     xx, yy = np.meshgrid(x, y)
     xyz = np.column_stack((xx.ravel(), yy.ravel(), height.ravel()))
+    if empirical_reference:
+        expected = {"requested_bounds_mm": {"x": requested_x, "y": requested_y},
+                    "actual_bounds_mm": {"x": [float(x[0]), float(x[-1])],
+                                         "y": [float(y[0]), float(y[-1])]},
+                    "shape": list(height.shape), "point_count": int(xyz.shape[0])}
+        if any(confirmation.get(key) != value for key, value in expected.items()):
+            raise ValueError("裁剪参数或节点范围与确认时不一致，请重新确认")
     region_id = secrets.token_hex(6)
     folder = region_root / "regions" / region_id
     folder.mkdir(parents=True, exist_ok=False)
@@ -159,6 +184,8 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         "depth_source": depth_source or "not_calibrated",
         "x_coordinates_mm": x, "y_coordinates_mm": y,
         "processed_xyz_mm": xyz,
+        **({"empirical_reference_json": json.dumps(empirical_reference, ensure_ascii=False)}
+           if empirical_reference else {}),
     }, do_compression=True)
     table = np.column_stack((xyz, depth.ravel())) if depth is not None else xyz
     np.savetxt(folder / "processed_region.csv", table, delimiter=",",
@@ -180,12 +207,15 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         "grid_shape_rows_y_columns_x": list(height.shape),
         "grid_point_count": int(xyz.shape[0]),
         "depth_semantics": ("independent reference surface; no calibrated corrosion depth"
-                            if source_kind == "reference190" else
+                            if source_kind in {"reference190", "common_reference"} else
                             "relative_to_full_surface_max; not verified pristine-reference depth"
                             if source_kind == "pointcloud" else
                             "input depth matrix; reference provenance depends on source"
                             if depth is not None else "not calibrated"),
     }
+    if empirical_reference:
+        metadata["empirical_reference"] = empirical_reference
+        metadata["depth_semantics"] = "original common-frame H; fixed 20% empirical reference recorded; no depth recalibration"
     (folder / "region_metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     preview_xyz, preview_depth = grid_preview(x, y, height, depth)
@@ -202,12 +232,14 @@ def export_region(job_dir: Path, axis: str, length_mm: float, center_mm: float |
         "corrosion_depth_available": depth is not None,
         "corrosion_depth_range_mm": [float(depth.min()), float(depth.max())] if depth is not None else None,
         "depth_source": depth_source,
-        "depth_semantics": ("independent reference surface; no calibrated corrosion depth"
+        "depth_semantics": (metadata["depth_semantics"] if empirical_reference else
+                            "independent reference surface; no calibrated corrosion depth"
                             if source_kind == "reference190" else
                             "full_surface_max_minus_height; not verified pristine-reference depth"
                             if source_kind == "pointcloud" else
                             "input depth matrix; reference provenance depends on source"
                             if depth is not None else "not calibrated"),
+        **({"empirical_reference": empirical_reference} if empirical_reference else {}),
         "coordinate_origin": coordinate_origin, "files": [
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.mat",
             f"{folder.relative_to(job_dir / 'outputs').as_posix()}/processed_region.csv",

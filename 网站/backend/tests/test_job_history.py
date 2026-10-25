@@ -160,6 +160,13 @@ class JobHistoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '引用'):
             self.service.delete_job(self.job_id, self.job_id)
 
+    def test_resume_clears_dead_workers_pending_scheduler_token(self):
+        self.service._launching_jobs[self.job_id] = 'old-worker-token'
+        def launch(job_id):
+            self.assertNotIn(job_id, self.service._launching_jobs)
+        with patch('backend.runner.precheck_resume', return_value={'available': True}), patch.object(self.service, 'launch', side_effect=launch):
+            self.assertEqual(self.service.resume(self.job_id)['state'], 'queued')
+
 
 class JobHistoryApiTests(unittest.TestCase):
     def test_history_actions_and_filter_do_not_remove_hidden_sources(self):

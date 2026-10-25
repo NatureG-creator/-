@@ -32,7 +32,8 @@ def verify_worker_process(job_id: str, state: dict, job_dir: Path, runtime: Path
         expected=['-m','backend.worker',job_id]
         if not any(command[index:index+3]==expected for index in range(len(command)-2)):
             raise ValueError('进程命令行与指定 worker 任务不一致。')
-        if not _same_directory(process.cwd(),root):
+        from .engine_releases import worker_root
+        if not _same_directory(process.cwd(),worker_root(job_dir,runtime,root)):
             raise ValueError('进程工作目录与网站根目录不一致。')
         if not _same_directory(process.environ().get('CORROSION_RUNTIME_DIR'),runtime):
             raise ValueError('进程 CORROSION_RUNTIME_DIR 与当前运行目录不一致。')

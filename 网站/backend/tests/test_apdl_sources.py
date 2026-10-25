@@ -52,7 +52,7 @@ class ApdlSourceTests(unittest.TestCase):
             job=Path(folder)
             spec={'faces':{},'options':normalise_options({'corrosion_mode':'flat'}),'run_mode':'solve'}
             execution={'state':'completed','exit_code':0,'elapsed_seconds':1.5}
-            def solver(output,options,progress=None):
+            def solver(output,options,progress=None,allow_recovered=False):
                 (output/'mapdl_execution.json').write_text(json.dumps(execution),encoding='utf-8')
                 return execution
             with patch('backend.apdl_solver.run_mapdl',side_effect=solver), patch(

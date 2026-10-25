@@ -7,6 +7,29 @@ from backend.apdl_service import precheck_apdl
 
 
 class ApdlPreviewTests(unittest.TestCase):
+    def test_empirical_preview_retains_full_small_grid_and_exact_minimum_in_large_grid(self):
+        for ny,nx in ((60,180),(201,205)):
+            with self.subTest(shape=(ny,nx)):
+                depth=np.full((ny,nx),.2);depth[37,89]=.7
+                geometry=dict(x=69.9+np.arange(nx)*.3,y=.3+np.arange(ny)*.3,
+                    top_depth=depth,bottom_depth=np.zeros_like(depth),remaining=6-depth,stats={},warnings=[])
+                original=depth.copy()
+                spec=dict(options=dict(platform_enabled=True,platform_reference_mode='empirical_190'),
+                    faces={},run_mode='build',registration_confirmed=False,registration_signature=None,reading_seconds=0)
+                with patch('backend.apdl_service._prepare',return_value=(spec,None,geometry)),patch(
+                        'backend.apdl_diagnostics.diagnostics_for_geometry',return_value={}):
+                    preview=precheck_apdl(None,{})['preview']
+                self.assertEqual(np.min(preview['remaining']),5.3)
+                if nx*ny<=40000:
+                    self.assertTrue(preview['full_resolution'])
+                    np.testing.assert_array_equal(preview['top_depth'],depth)
+                else:
+                    self.assertFalse(preview['full_resolution'])
+                    self.assertLessEqual(len(preview['x_mm']),81)
+                    self.assertIn(geometry['x'][89],preview['x_mm'])
+                    self.assertIn(geometry['y'][37],preview['y_mm'])
+                np.testing.assert_array_equal(depth,original)
+
     def test_preview_preserves_edges_origin_and_array_alignment_without_changing_geometry(self):
         for ny, nx in ((83, 193), (3, 4)):
             with self.subTest(shape=(ny, nx)):

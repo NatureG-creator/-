@@ -32,17 +32,25 @@ export function applyMode(config, mode) {
   if(mode==='pycharm') for(const group of ['STAGE_GA_CONFIG','SINGLE_STAGE_GA_CONFIG']) { config[group] ||= {}; if(!Number.isInteger(config[group].parallel_workers)||config[group].parallel_workers<=1) config[group].parallel_workers=10; }
   return config;
 }
+export function computeMode(state) {
+  return state.simulation.mode==='pycharm' && state.engineRelease!=='original' ? 'numba' : state.simulation.mode;
+}
+export function applyComputeMode(state, mode) {
+  applyMode(state.simulation,mode==='numba'?'pycharm':mode);
+  state.engineRelease=mode==='numba'?'numba-20261025-v1':'original';
+}
 export function createWorkspace(defaults) {
   const simulation=clone(defaults.simulation), pointcloud={};
   const pointcloudCatalog=normaliseCatalog(defaults.pointcloud_catalog || (Array.isArray(defaults.pointcloud)?defaults.pointcloud:catalogFromConfig(defaults.pointcloud || {})));
   for(const item of pointcloudCatalog) if(item.editable && !['input','output'].includes(item.group))setPath(pointcloud,item.path,clone(item.value));
   applyMode(simulation,simulation.mode || 'strict');
-  return {simulation,pointcloud,targets:clone(simulation.ACTIVE_STAGE_TARGET_DATA || []),runMode:'staged',seedMode:'fixed',targetUpload:null,targetIssues:[],targetVariable:'',targetOrientation:'auto',transferGeometry:null,cases:[],batchMode:'sequential',parallelCaseWorkers:2,sequentialEnabled:true,parallelEnabled:true,pointcloudCatalog};
+  return {simulation,engineRelease:defaults.engine_release||'original',pointcloud,targets:clone(simulation.ACTIVE_STAGE_TARGET_DATA || []),runMode:'staged',seedMode:'fixed',targetUpload:null,targetIssues:[],targetVariable:'',targetOrientation:'auto',transferGeometry:null,cases:[],batchMode:'sequential',parallelCaseWorkers:2,sequentialEnabled:true,parallelEnabled:true,pointcloudCatalog};
 }
 export function importSimulation(state, incoming) {
   if (!incoming || typeof incoming!=='object' || Array.isArray(incoming)) throw new Error('JSON配置必须为对象');
   const source=incoming.simulation || incoming.config || incoming;
   state.simulation=merge(state.simulation,source);applyMode(state.simulation,state.simulation.mode || 'strict');
+  state.engineRelease=incoming.engine_release||'original';
   state.targets=clone(incoming.targets || state.simulation.ACTIVE_STAGE_TARGET_DATA || []);
   if(incoming.run_mode && ['single','staged'].includes(incoming.run_mode))state.runMode=incoming.run_mode;
   state.seedMode=incoming.seed_mode || 'fixed';state.targetUpload=null;state.targetIssues=[];state.targetVariable='';state.transferGeometry=null;
@@ -68,7 +76,7 @@ export function simulationPayload(state, random=Math.random) {
   applyMode(state.simulation,state.simulation.mode);
   if(state.seedMode==='random')state.simulation.GA_CONFIG.seed=Math.floor(random()*4294967296);
   state.simulation.ACTIVE_STAGE_TARGET_DATA=clone(state.targets);if(state.runMode==='single')state.simulation.SINGLE_STAGE_TARGET_DATA=clone(state.targets[0]);
-  const result={kind:'simulation',config:clone(state.simulation),run_mode:state.runMode,targets:clone(state.targets)};
+  const result={kind:'simulation',config:clone(state.simulation),engine_release:state.simulation.mode==='pycharm'?state.engineRelease:'original',run_mode:state.runMode,targets:clone(state.targets)};
   if(state.targetUpload)Object.assign(result,{upload_id:state.targetUpload.id,variable:state.targetVariable||undefined,orientation:state.targetOrientation});
   return result;
 }
@@ -85,7 +93,7 @@ export function prepareBatch(state, random=Math.random) {
   const common=simulationPayload(state,random);
   const cases=clone(state.cases).map((item,index)=>{if(!item.case_name?.trim())throw new Error(`工况${index+1}名称不能为空`);if(item.upload_id&&item.target_issues?.length)throw new Error(`工况${index+1}上传目标未通过校核`);if(!item.upload_id)validateTargets(item.targets,item.simulation_mode || (['single','staged'].includes(item.mode)?item.mode:'staged'));delete item.source_name;delete item.target_issues;return item;});
   if(!Number.isInteger(state.parallelCaseWorkers)||state.parallelCaseWorkers<1)throw new Error('工况并行数必须为正整数');
-  return {config:common.config,cases,run_mode:state.batchMode,parallel_case_workers:state.parallelCaseWorkers,sequential_enabled:state.batchMode==='mixed'?state.sequentialEnabled:state.batchMode==='sequential',parallel_enabled:state.batchMode==='mixed'?state.parallelEnabled:state.batchMode==='parallel'};
+  return {config:common.config,engine_release:common.engine_release,cases,run_mode:state.batchMode,parallel_case_workers:state.parallelCaseWorkers,sequential_enabled:state.batchMode==='mixed'?state.sequentialEnabled:state.batchMode==='sequential',parallel_enabled:state.batchMode==='mixed'?state.parallelEnabled:state.batchMode==='parallel'};
 }
 export function isTerminal(status) {return ['completed','failed','stopped','interrupted','cancelled','canceled'].includes(status);}
 export function updateCaseDraft(item, draft, requireRunnable=false) {
@@ -106,7 +114,7 @@ export function updateCaseDraft(item, draft, requireRunnable=false) {
 }
 export function resetSimulation(state, defaults) {
   const fresh=createWorkspace(defaults);
-  for(const key of ['simulation','targets','runMode','seedMode','targetUpload','targetIssues','targetVariable','targetOrientation','transferGeometry'])
+  for(const key of ['simulation','engineRelease','targets','runMode','seedMode','targetUpload','targetIssues','targetVariable','targetOrientation','transferGeometry'])
     state[key]=fresh[key];
   const multi=state.simulation.MULTI_CASE_CONFIG;
   state.cases=clone(multi?.cases||[]);

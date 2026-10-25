@@ -5,8 +5,10 @@ import math
 import numpy as np
 
 
-def add_platforms(top: np.ndarray, bottom: np.ndarray, options: dict) -> dict:
+def add_platforms(top: np.ndarray, bottom: np.ndarray, options: dict, *, reference_calibrations=None) -> dict:
     o = options
+    empirical=o.get('platform_reference_mode','manual_mean')=='empirical_190'
+    reference_calibrations=reference_calibrations or {}
     if o['local_corrosion']:
         raise ValueError('两侧平台与局部贴片模式不能同时启用；平台模式直接延长来源腐蚀区。')
     if o['mesh_type'] != 'solid185_hex':
@@ -31,19 +33,28 @@ def add_platforms(top: np.ndarray, bottom: np.ndarray, options: dict) -> dict:
     calibrated, faces = {}, {}
     for name, depth in (('top', top), ('bottom', bottom)):
         measured = o[f'platform_{name}_mean_depth_mm']
-        if active[name] and measured is None:
+        if active[name] and empirical:
+            from .reference_chain import validate_reference
+            validate_reference(depth,reference_calibrations.get(name),o)
+            measured=None
+        if active[name] and measured is None and not empirical:
             raise ValueError(f'请填写{name}面的实测平均腐蚀深度（mm）；不会自动猜测试验值。')
         outward_min = -float(depth.max())
-        reference = outward_min + (measured if active[name] else 0.)
-        # Outward height h=-depth. Reference=h_min+measured; inward depth=reference-h.
+        sample_mean = float(depth.mean())
+        outward_mean = -sample_mean
+        reference = 0. if empirical else outward_mean + (measured if active[name] else 0.)
+        # Translate source samples only; adding platforms must not dilute the measured mean.
         calibrated[name] = depth + reference if active[name] else np.zeros_like(depth)
         faces[name] = dict(active=active[name], measured_mean_depth_mm=measured if active[name] else None,
+                           input_sample_mean_depth_mm=sample_mean,
                            normalized_outward_min_height_mm=outward_min,
+                           normalized_outward_mean_height_mm=outward_mean,
                            normalized_platform_reference_height_mm=reference if active[name] else 0.,
                            depth_shift_mm=reference if active[name] else 0.,
                            calibrated_min_depth_mm=float(calibrated[name].min()),
                            calibrated_max_depth_mm=float(calibrated[name].max()),
                            calibrated_sample_mean_depth_mm=float(calibrated[name].mean()),
+                           mean_calibration_error_mm=float(calibrated[name].mean()-measured) if active[name] and not empirical else None,
                            protrudes_above_platform=bool(np.any(calibrated[name] < 0)))
     source_span = (top.shape[axis] - 1) * spacing
     source_start = fixed + spacing
@@ -70,6 +81,11 @@ def add_platforms(top: np.ndarray, bottom: np.ndarray, options: dict) -> dict:
                   loaded_flat_range_mm=[origin+source_end+spacing, origin+coordinates[-1]],
                   platform_bottom_z_mm=0., platform_top_z_mm=o['thickness_mm'],
                   platform_separation_mm=o['thickness_mm'], faces=faces,
-                  formula='h=-input_depth; platform_reference=min(h)+measured_depth; calibrated_depth=platform_reference-h',
-                  note='正反面统一朝外为正，再平移至平台底面0、顶面t0；保留原始起伏与全部采样。两侧各增加一格连接段，不计入平平台长度。输入实测平均值不保证等于校准后矩阵均值。')
+                  calibration_method='sample_mean_translation',
+                  formula='h=-input_depth; platform_reference=mean(h)+measured_mean_depth; calibrated_depth=input_depth-mean(input_depth)+measured_mean_depth',
+                  note='按腐蚀区采样点算术平均值校准，不计新增平台和连接段；校准后采样平均深度在浮点精度内等于实测输入值。正反面分别平移至平台底面0、顶面t0；保留原始起伏与全部采样，不裁剪凸起。两侧各增加一格连接段，不计入平平台长度。')
+    if empirical:
+        report.update(calibration_method='empirical_reference_preserved',reference_calibrations=reference_calibrations,
+            physical_pristine_reference_verified=False,formula='d=H_common-H_flat; preserve source depth without mean translation',
+            note='轻微腐蚀区20%经验参考；不做均值二次平移。平台间距取输入原始板厚；未知参考区损失未补偿，反面平整是单面模型假设。')
     return dict(top=top_new, bottom=bottom_new, x=x, y=y, report=report)

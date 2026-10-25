@@ -1,7 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorkspace, importSimulation, setPath, getPath, applyMode, parseTyped, simulationPayload, applyTransfer, normaliseCatalog, isTerminal, validateTargets, prepareBatch, pointcloudPayload, updateCaseDraft, resetSimulation, finiteElementDefaults, finiteElementPayload } from '../state.mjs';
+import { createWorkspace, importSimulation, setPath, getPath, applyMode, computeMode, applyComputeMode, parseTyped, simulationPayload, applyTransfer, normaliseCatalog, isTerminal, validateTargets, prepareBatch, pointcloudPayload, updateCaseDraft, resetSimulation, finiteElementDefaults, finiteElementPayload } from '../state.mjs';
 const defaults = { simulation: {mode:'strict',GA_CONFIG:{seed:41,bits_per_param:20},STAGE_GA_CONFIG:{parallel_workers:3,maxgen:10},SINGLE_STAGE_GA_CONFIG:{parallel_workers:4,maxgen:12},TAICHI_CONFIG:{use_taichi:true,arch:'cpu'},GEOMETRY_CONFIG:{space_xy_um:20,grid_w:10},ACTIVE_STAGE_TARGET_DATA:[[1,2,3,4,5,6]],SINGLE_STAGE_TARGET_DATA:[1,2,3,4,5,6],GA_PARAMETER_LOWER_BOUNDS:[0,1]}, pointcloud:[{group:'preprocessing',key:'enabled',value:true,editable:true},{group:'pit',key:'range',value:[0,2],editable:true},{group:'input',key:'file',value:'',editable:false}] };
+test('Numba dropdown binds its engine without changing the scientific mode or parameters',()=>{
+  const s=createWorkspace(defaults);applyComputeMode(s,'numba');
+  const fast=simulationPayload(s);assert.equal(computeMode(s),'numba');
+  assert.equal(fast.engine_release,'numba-20261025-v1');assert.equal(fast.config.mode,'pycharm');
+  applyComputeMode(s,'pycharm');const old=simulationPayload(s);
+  assert.equal(old.engine_release,'original');assert.deepEqual(old.config,fast.config);
+  s.cases=[{case_name:'A',targets:[[1,2,3,4,5,6]],mode:'single'}];
+  applyComputeMode(s,'numba');assert.equal(prepareBatch(s).engine_release,'numba-20261025-v1');
+  applyComputeMode(s,'strict');assert.equal(simulationPayload(s).engine_release,'original');
+});
+test('engine choice survives exported payload import; legacy config loads the original engine',()=>{
+  const s=createWorkspace(defaults);applyComputeMode(s,'numba');const saved=simulationPayload(s);
+  const loaded=createWorkspace(defaults);importSimulation(loaded,saved);assert.equal(computeMode(loaded),'numba');
+  importSimulation(loaded,{config:saved.config});assert.equal(computeMode(loaded),'pycharm');
+  assert.equal(simulationPayload(loaded).engine_release,'original');
+});
+test('default engine follows the server pointer, including after reset',()=>{
+  const active={...defaults,simulation:{...defaults.simulation,mode:'pycharm'},engine_release:'numba-20261025-v1'};
+  const s=createWorkspace(active);assert.equal(computeMode(s),'numba');applyComputeMode(s,'pycharm');
+  resetSimulation(s,active);assert.equal(computeMode(s),'numba');
+  assert.equal(computeMode(createWorkspace({...active,engine_release:'original'})),'pycharm');
+});
 test('full configuration import survives submission, export and further edits',()=>{let s=createWorkspace(defaults); importSimulation(s,{...defaults.simulation,GA_CONFIG:{seed:333,bits_per_param:31},TAICHI_CONFIG:{use_taichi:false,arch:'gpu'}}); setPath(s.simulation,'STAGE_GA_CONFIG.maxgen',99);let p=simulationPayload(s);assert.equal(p.config.GA_CONFIG.bits_per_param,31);assert.equal(p.config.TAICHI_CONFIG.arch,'gpu');assert.equal(p.config.STAGE_GA_CONFIG.maxgen,99);assert.equal(p.config.GA_CONFIG.seed,333);assert.equal(defaults.simulation.GA_CONFIG.seed,41);});
 test('PyCharm mode uses NumPy process workers and never enables Taichi',()=>{let s=createWorkspace(defaults);applyMode(s.simulation,'pycharm');assert.equal(s.simulation.SINGLE_STAGE_GA_CONFIG.parallel_workers,10);assert.equal(s.simulation.STAGE_GA_CONFIG.parallel_workers,10);assert.equal(s.simulation.TAICHI_CONFIG.use_taichi,false);s.simulation.STAGE_GA_CONFIG.parallel_workers=6;applyMode(s.simulation,'pycharm');assert.equal(s.simulation.STAGE_GA_CONFIG.parallel_workers,6);});
 test('strict mode forces single workers while Taichi mode remains explicit',()=>{let s=createWorkspace(defaults);applyMode(s.simulation,'strict');assert.equal(s.simulation.SINGLE_STAGE_GA_CONFIG.parallel_workers,1);assert.equal(s.simulation.STAGE_GA_CONFIG.parallel_workers,1);assert.equal(s.simulation.TAICHI_CONFIG.use_taichi,false);applyMode(s.simulation,'fast');assert.equal(s.simulation.TAICHI_CONFIG.use_taichi,true);});

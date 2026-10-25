@@ -157,7 +157,7 @@ def create_batch(server, payload):
             targets = case.get("targets")
         simulation_mode = case.get("simulation_mode", "staged")
         validate_targets(targets, simulation_mode)
-        prepared.append(({**case, "kind": "simulation", "config": config,
+        prepared.append(({**case, **({"engine_release": payload["engine_release"]} if "engine_release" in payload else {}), "kind": "simulation", "config": config,
                           "run_mode": simulation_mode, "targets": targets}, case_mode))
     # 只有所有工况通过校验后才创建任务目录和启动线程。
     jobs = []

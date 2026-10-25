@@ -71,6 +71,8 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
             if variable not in ('Z_filled','F_filled','baseline') or variable not in values:
                 raise ValueError('MAT中没有指定的Z_filled/F_filled变量')
             raw=np.asarray(values[variable])
+            if 'reference_calibration_json' in values:
+                state_metadata['reference_calibration']=json.loads(str(np.asarray(values['reference_calibration_json']).reshape(-1)[0]))
             if variable=='baseline':
                 baseline_info=loadmat(path,variable_names=['surface_metadata'],simplify_cells=True).get('surface_metadata')
                 if not isinstance(baseline_info,dict) or baseline_info.get('schema_version')!=1:
@@ -163,6 +165,9 @@ def read_face(path: Path, source_kind: str, mapping: dict, inherited_geometry=No
                   min_depth_mm=float(depth.min()),max_depth_mm=float(depth.max()),
                   coordinate_note='局部表面坐标；双面独立数据仍需确认同一XY位置配准。')
     metadata.update(state_metadata)
+    if 'reference_calibration' in metadata:
+        from .reference_chain import validate_reference
+        validate_reference(depth,metadata['reference_calibration'],metadata)
     if 'npz_variable' in state_metadata:
         metadata.update(space_xy_um=inherited['space_xy_um'],space_z_um=inherited['space_z_um'])
     return depth,metadata
@@ -287,7 +292,11 @@ def _prepare(service,payload):
     labels=[] if mode=='flat' else ['bottom'] if mode=='single_bottom' else ['top','bottom'] if mode=='double_independent' else ['top']
     faces,records,depths={},{},{}
     for label in labels:
-        faces[label],records[label],depths[label]=_resolve_source(service,payload.get(label+'_source'),label)
+        descriptor=payload.get(label+'_source')
+        if options['platform_enabled'] and options['platform_reference_mode']=='empirical_190':
+            from .reference_chain import calibrated_descriptor
+            descriptor=calibrated_descriptor(service,descriptor,options['thickness_mm'])
+        faces[label],records[label],depths[label]=_resolve_source(service,descriptor,label)
     surface_mapping=None
     if mode=='double_independent':
         if payload.get('registration_confirmed') is not True:
@@ -313,7 +322,8 @@ def _prepare(service,payload):
     if faces:
         first=surface_mapping or next(iter(faces.values()))['metadata']
         options.update({key:first[key] for key in ('dx_mm','dy_mm','origin_x_mm','origin_y_mm')})
-    geometry=build_geometry(depths.get('top'),depths.get('bottom'),options)
+    geometry=build_geometry(depths.get('top'),depths.get('bottom'),options,
+        reference_calibrations={key:face['metadata']['reference_calibration'] for key,face in faces.items() if 'reference_calibration' in face['metadata']})
     if surface_mapping:
         from .apdl_surface_mapping import MAPPING_WARNING
         geometry['warnings'].append(MAPPING_WARNING)
@@ -370,8 +380,15 @@ def precheck_apdl(service,payload):
     for diagnostic in diagnostics.values():
         warnings.extend(diagnostic.get('warnings',[]))
     # Keep both physical edges; stride slicing can omit the final row/column.
-    rows=np.linspace(0,len(geometry['y'])-1,min(80,len(geometry['y'])),dtype=int)
-    cols=np.linspace(0,len(geometry['x'])-1,min(80,len(geometry['x'])),dtype=int)
+    ny,nx=geometry['remaining'].shape
+    empirical=spec['options'].get('platform_enabled') and spec['options'].get('platform_reference_mode')=='empirical_190'
+    # Small empirical surfaces retain every measured sample for movable sections.
+    limit=max(nx,ny) if empirical and nx*ny<=40000 else 80
+    rows=np.linspace(0,ny-1,min(limit,ny),dtype=int)
+    cols=np.linspace(0,nx-1,min(limit,nx),dtype=int)
+    if empirical:
+        i,j=np.unravel_index(np.argmin(geometry['remaining']),geometry['remaining'].shape)
+        rows=np.unique(np.append(rows,i));cols=np.unique(np.append(cols,j))
     if geometry.get('platforms'):
         p=geometry['platforms']
         anchors=[p['source_start_index']-1,p['source_start_index'],
@@ -380,7 +397,8 @@ def precheck_apdl(service,payload):
             cols=np.unique(np.concatenate((cols,anchors)))
         else:
             rows=np.unique(np.concatenate((rows,anchors)))
-    preview={'x_mm':geometry['x'][cols].tolist(),'y_mm':geometry['y'][rows].tolist()}
+    preview={'x_mm':geometry['x'][cols].tolist(),'y_mm':geometry['y'][rows].tolist(),
+             'full_resolution':len(rows)==ny and len(cols)==nx}
     for name in ('top_depth','bottom_depth','remaining'):
         array=geometry[name]
         preview[name]=array[np.ix_(rows,cols)].tolist()
@@ -463,7 +481,8 @@ def run_apdl_job(spec,job_dir,progress=None):
             if spec.get('surface_mapping'):
                 from .apdl_surface_mapping import map_surfaces
                 depths=map_surfaces(depths,{key:face['metadata'] for key,face in spec['faces'].items()},spec['surface_mapping'])
-            geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'])
+            geometry=build_geometry(depths.get('top'),depths.get('bottom'),spec['options'],
+                reference_calibrations={key:face['metadata']['reference_calibration'] for key,face in spec['faces'].items() if 'reference_calibration' in face['metadata']})
             if spec.get('surface_mapping'):
                 from .apdl_surface_mapping import MAPPING_WARNING
                 geometry['warnings'].append(MAPPING_WARNING)

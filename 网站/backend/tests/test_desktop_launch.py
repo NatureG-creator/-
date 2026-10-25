@@ -17,7 +17,7 @@ class DesktopLaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory) / "website-data"
             with patch.object(launcher, "DEFAULT_RUNTIME", runtime), \
-                 patch.object(launcher, "service_at", return_value=True) as health:
+                 patch.object(launcher, "service_for_checkout", return_value=True) as health:
                 url = launcher.launch(open_browser=False, preferred_port=8534)
             self.assertEqual(url, "http://127.0.0.1:8534/")
             self.assertTrue(runtime.is_dir())
@@ -27,15 +27,16 @@ class DesktopLaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)
             (runtime / "service.json").write_text(json.dumps({"port": 8536}))
-            with patch.object(launcher, "service_at", return_value=True) as health:
-                url = launcher.launch(open_browser=False, preferred_port=8534, runtime=runtime)
+            with patch.object(launcher, "service_for_checkout", return_value=True) as health:
+                url = launcher.launch(open_browser=False, preferred_port=8534, runtime=runtime, fixed_port=False)
             self.assertEqual(url, "http://127.0.0.1:8536/")
             health.assert_called_once_with(8536)
 
     def test_new_server_receives_selected_data_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime = Path(directory)
-            with patch.object(launcher, "service_at", side_effect=[False, True]), \
+            with patch.object(launcher, "service_for_checkout", return_value=False), \
+                 patch.object(launcher, "service_at", return_value=True), \
                  patch.object(launcher.importlib.util, "find_spec", return_value=object()), \
                  patch.object(launcher.socket, "socket"), \
                  patch.object(launcher.subprocess, "Popen") as process:

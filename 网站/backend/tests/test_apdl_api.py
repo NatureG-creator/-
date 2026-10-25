@@ -121,6 +121,9 @@ class ApdlApiTests(unittest.TestCase):
         code,preview=self.request('/api/apdl/precheck',payload)
         self.assertEqual(code,200,preview)
         p=preview['stats']['platforms']
+        self.assertEqual(p['calibration_method'],'sample_mean_translation')
+        self.assertAlmostEqual(p['faces']['top']['calibrated_sample_mean_depth_mm'],.5)
+        self.assertAlmostEqual(p['faces']['top']['mean_calibration_error_mm'],0.)
         self.assertEqual(preview['options']['layers'],11)
         self.assertAlmostEqual(preview['stats']['length_mm'],6.2)
         self.assertTrue(any(abs(x-2.5)<1e-12 for x in preview['preview']['x_mm']))
@@ -135,7 +138,10 @@ class ApdlApiTests(unittest.TestCase):
         self.assertEqual(json.loads((out/'platform_geometry.json').read_text(encoding='utf-8')),p)
         with np.load(out/'surface_inputs.npz') as values:
             self.assertAlmostEqual(values['x'][p['source_start_index']-1],2.5)
-            np.testing.assert_allclose(values['top_depth'][:,p['source_start_index']:p['source_stop_index']],[[.2,.3,.4],[.3,.5,.2]])
+            original=np.array([[.1,.2,.3],[.2,.4,.1]])
+            calibrated=values['top_depth'][:,p['source_start_index']:p['source_stop_index']]
+            np.testing.assert_allclose(calibrated,original-original.mean()+.5)
+            self.assertAlmostEqual(calibrated.mean(),.5)
 
     def test_local_corrosion_precheck_reports_plate_and_patch_coordinates(self):
         stream=io.BytesIO();np.savetxt(stream,np.array([[.1,.2],[.3,.4]]),delimiter=',');data=stream.getvalue()

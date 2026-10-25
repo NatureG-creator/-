@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css?v=20261023-fitting-flow"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>腐蚀研究工作台 · 实测与演化</title><link rel="stylesheet" href="/styles.css?v=20261025-parameter-help"></head>
 <body data-ui-shell="research-workbench">
 <a href="#workspace" class="skip-link">跳转到工作区</a>
 <aside class="sidebar">
@@ -36,6 +36,7 @@
       <div class="upload-box"><span class="upload-index">A</span><label for="reference-file">参考点云</label><p>用于建立参考面 · XYZ 坐标单位 mm</p><input id="reference-file" type="file" accept=".txt,.csv,.tsv,.xyz"><div id="reference-preview" class="preview">上传 TXT / CSV / TSV / XYZ，读取实际尺寸。</div></div>
       <div class="upload-box"><span class="upload-index">B</span><label for="detail-file">腐蚀细节点云</label><p>用于提取腐蚀深度与坑形貌 · XYZ 坐标单位 mm</p><input id="detail-file" type="file" accept=".txt,.csv,.tsv,.xyz"><div id="detail-preview" class="preview">上传后检查坐标范围、采样点数与 XY 投影。</div></div>
     </div>
+    <div id="pointcloud-3d-panel"></div>
     <div class="catalog-toolbar"><div><h3>预处理与指标参数</h3><p>参数来自 step00_corrosion_config.m；布尔值与数组按原类型提交。</p></div><button id="pointcloud-reset" class="button ghost">恢复默认</button></div>
     <div class="filter-row"><label class="search-field"><span aria-hidden="true">⌕</span><input id="pointcloud-search" type="search" placeholder="搜索参数名称、字段或说明" aria-label="搜索点云参数"></label><span id="pointcloud-param-count" class="muted"></span></div>
     <div id="pointcloud-fields" class="catalog"></div>
@@ -45,7 +46,7 @@
   </section>
   <section id="simulation-panel" class="panel" aria-labelledby="simulation-heading">
     <div class="section-heading"><div><div class="section-overline">02 / CORROSION EVOLUTION</div><h2 id="simulation-heading">CA–GA 腐蚀演化</h2><p>设定实测目标、计算模式与完整参数，先检查资源，再提交独立任务。</p></div><span class="badge" id="sim-backend">读取环境中</span></div>
-    <div class="card settings-card"><div class="grid four"><div class="field"><label for="sim-mode">计算模式</label><select id="sim-mode"><option value="pycharm">PyCharm 高速（NumPy 多进程）</option><option value="strict">严格可复现（单进程）</option><option value="fast">Taichi 高速（需依赖）</option></select></div><div class="field"><label for="sim-run-mode">阶段方式</label><select id="sim-run-mode"><option value="staged">多阶段连续演化</option><option value="single">单阶段反演</option></select></div><div class="field"><label for="seed-mode">随机种子方式</label><select id="seed-mode"><option value="fixed">固定种子</option><option value="random">每次提交自动生成</option></select></div><div class="field"><label for="sim-seed">本次随机种子</label><input id="sim-seed" type="number" min="0" max="4294967295" step="1"></div></div><p id="mode-help" class="help-line"></p></div>
+    <div class="card settings-card"><div class="grid four"><div class="field"><label for="sim-mode">计算模式</label><select id="sim-mode"><option value="numba">Numba 高速（扫描＋扩散，多进程）</option><option value="pycharm">PyCharm 高速（原版 NumPy 多进程）</option><option value="strict">严格可复现（单进程）</option><option value="fast">Taichi 高速（需依赖）</option></select></div><div class="field"><label for="sim-run-mode">阶段方式</label><select id="sim-run-mode"><option value="staged">多阶段连续演化</option><option value="single">单阶段反演</option></select></div><div class="field"><label for="seed-mode">随机种子方式</label><select id="seed-mode"><option value="fixed">固定种子</option><option value="random">每次提交自动生成</option></select></div><div class="field"><label for="sim-seed">本次随机种子</label><input id="sim-seed" type="number" min="0" max="4294967295" step="1"></div></div><p id="mode-help" class="help-line"></p></div>
     <div class="card target-card"><div class="card-heading"><div><h3>实测六指标目标</h3><p>每行代表一个阶段；所有深度与分布参数保持原科学接口的定义。</p></div><label class="button secondary file-button">导入 MAT / CSV / XLSX<input id="target-file" type="file" accept=".mat,.csv,.txt,.tsv,.xlsx" aria-label="导入六指标目标文件"></label></div>
       <div id="target-file-options" class="grid two" hidden><div class="field"><label for="target-variable">MAT 数值变量</label><select id="target-variable"></select></div><div class="field"><label for="target-orientation">矩阵方向</label><select id="target-orientation"><option value="auto">自动识别 N×6 / 6×N</option><option value="rows">每行是阶段（N×6）</option><option value="columns">每列是阶段（6×N，转置）</option></select></div></div>
       <div id="target-preview" class="preview">当前使用统一配置中的目标。可直接修改下方 JSON，或从点云结果转入。</div>
@@ -92,5 +93,5 @@
     <div id="history-message" class="message" role="status" aria-live="polite" hidden></div><div id="history-list" class="history-list"><div class="empty-state">正在读取运行记录…</div></div></section>
   <section id="library-panel" class="panel" aria-labelledby="library-heading"><div class="section-heading"><div><div class="section-overline">08 / PROJECT LIBRARY</div><h2 id="library-heading">成果库</h2><p>把任务成果复制到项目文件夹，保留原任务和来源记录；可预览、下载，或送入兼容的数据流程。</p></div><button id="library-refresh" class="button secondary">刷新</button></div><div class="card"><div class="grid two"><label>当前项目文件夹<select id="library-folder"><option value="">根目录</option></select></label><div class="actions"><button id="library-create-folder" class="button secondary">新建文件夹</button><button id="library-save-task" class="button primary">归档所选成果</button></div></div><label>来源任务<select id="library-job"><option value="">选择已结束任务</option></select></label><div id="library-task-files" class="file-list"></div><div class="grid two"><label>另存当前上传文件<input id="library-upload-select" type="file" accept=".mat,.npz,.csv,.txt,.tsv,.xlsx,.xyz"></label><button id="library-save-upload" class="button secondary">保存上传文件到当前文件夹</button></div><div id="library-message" class="message" role="status" aria-live="polite" hidden></div></div><div id="library-breadcrumb" class="help-line"></div><div id="library-files" class="history-list"></div><div id="library-preview" class="card" hidden></div></section>
   <footer><span>实测有据 · 参数可查 · 结果可下载</span><span>MATLAB / CA–GA 研究工作流</span></footer>
-  </main></div><script type="module" src="/app.js?v=20261024-measured-region-crop"></script>
+  </main></div><script type="module" src="/app.js?v=20261025-height-depth-sync"></script>
 </body></html>

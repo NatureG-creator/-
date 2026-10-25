@@ -35,15 +35,12 @@ def run_job(job_id: str, runtime: Path) -> None:
         lock_path.unlink(missing_ok=True)
     with lock_path.open("x", encoding="ascii") as lock:
         lock.write(str(os.getpid()))
-    update({"state": "running", "phase": "starting", "pid": os.getpid(),
-            "started_at": time.time(), "error": None})
     started = time.perf_counter()
     try:
         import psutil
-        update({"process_created_at": psutil.Process().create_time()})
-    except (ImportError, OSError):
-        pass
-    try:
+        update({"state": "running", "phase": "starting", "pid": os.getpid(),
+                "process_created_at": psutil.Process().create_time(),
+                "started_at": time.time(), "error": None})
         if spec["kind"] == "simulation":
             result = run_simulation(spec, job_dir, progress=update)
         elif spec["kind"] == "surface_generation":

@@ -14,11 +14,24 @@ from backend import apdl_process as controlled
 
 def wait_file(path):
     deadline = time.monotonic() + 10
-    while not path.exists() and time.monotonic() < deadline:
+    while time.monotonic() < deadline:
+        if path.exists() and path.read_text().strip():
+            return int(path.read_text())
         time.sleep(.03)
-    if not path.exists():
-        raise AssertionError(f'missing owned-process marker: {path}')
-    return int(path.read_text())
+    raise AssertionError(f'missing owned-process marker: {path}')
+
+
+def release_test_log(path):
+    # Windows may release inherited file handles after process exit is signaled.
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            path.unlink()
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(.03)
 
 
 class OwnedProcessTests(unittest.TestCase):
@@ -35,14 +48,17 @@ class OwnedProcessTests(unittest.TestCase):
                 owner = controlled.launch_owned([sys.executable, '-c', code, str(marker)], output, stream)
                 try:
                     child = wait_file(marker)
+                    child_process = psutil.Process(child)
                     self.assertEqual(owner.wait(timeout=10), 0)
                     self.assertTrue(psutil.pid_exists(child))
                     result = owner.close()
                     self.assertEqual(result['state'], 'stopped')
                     self.assertTrue(result['verified_empty'])
+                    child_process.wait(timeout=5)
                     self.assertFalse(psutil.pid_exists(child))
                 finally:
                     owner.close()
+            release_test_log(output/'launcher.log')
 
     def test_normal_completion_persists_identity_before_real_command(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -147,12 +163,16 @@ class OwnedProcessTests(unittest.TestCase):
                 owner = controlled.launch_owned([sys.executable, '-c', "import os,time;from pathlib import Path;Path('solver.pid').write_text(str(os.getpid()));time.sleep(60)"], output, stream)
                 try:
                     solver = wait_file(marker)
+                    solver_process = psutil.Process(solver)
                     with patch.object(owner.group, 'terminate', side_effect=PermissionError('denied')):
                         self.assertEqual(owner.close()['state'], 'failed')
                     self.assertTrue(owner.close()['verified_empty'])
+                    solver_process.wait(timeout=5)
                     self.assertFalse(psutil.pid_exists(solver))
                 finally:
                     owner.close()
+
+            release_test_log(output/'launcher.log')
 
     def test_stop_record_write_failure_returns_explicit_failure(self):
         with tempfile.TemporaryDirectory() as temp:

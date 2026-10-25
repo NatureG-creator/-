@@ -32,6 +32,8 @@ class JobServer(JobService, ThreadingHTTPServer):
         self.source_revision = source_revision(ROOT)
         self.initialize(runtime)
         super().__init__((host, port), Handler)
+        from .engine_releases import recover_handoff_queue
+        recover_handoff_queue(self, ROOT)
 
     def create_batch(self, payload):
         from .batch_service import create_batch
@@ -103,6 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         parts = [part for part in path.split("/") if part]
         query = urllib.parse.parse_qs(parsed.query)
         if method == "GET" and path == "/api/defaults":
+            from .engine_releases import active_release
             from .parameter_catalog import simulation_catalog
             defaults = website_default_simulation_config()
             path_catalog = None
@@ -121,6 +124,7 @@ class Handler(BaseHTTPRequestHandler):
                     if item["group"] == "PATH_CONFIG":
                         item["value"] = path_catalog[item["key"]]
             return self._json(200, {"simulation": defaults,
+                                   "engine_release": active_release(self.server.runtime),
                                    "simulation_catalog": parameters,
                                    "pointcloud": catalog(), "capabilities": capabilities(),
                                    "version": VERSION})
@@ -237,6 +241,15 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/apdl/precheck":
             from .apdl_service import precheck_apdl
             return self._json(200,precheck_apdl(self.server,self._body()))
+        if method == "GET" and path == "/api/apdl/source-jobs":
+            from .reference_chain import completed_sources
+            return self._json(200, {'jobs': completed_sources(self.server.runtime)})
+        if method == "GET" and path == "/api/pointcloud/source-jobs":
+            from .reference_chain import completed_sources
+            return self._json(200, {'jobs': [row for row in completed_sources(self.server.runtime) if row['kind']=='pointcloud']})
+        if method == "POST" and path == "/api/pointcloud/preview":
+            from .pointcloud_view import saved_preview
+            return self._json(200, saved_preview(self.server,self._body()))
         if len(parts)==5 and parts[:3]==['api','apdl','jobs'] and parts[4]=='reload-config' and method=='POST':
             from .apdl_reload import reload_apdl_config
             return self._json(200,reload_apdl_config(self.server,parts[3]))
@@ -448,7 +461,8 @@ class Handler(BaseHTTPRequestHandler):
                                            center_y_mm=body.get("center_y_mm"),
                                            specimen_length_mm=body.get("specimen_length_mm"),
                                            specimen_width_mm=body.get("specimen_width_mm"),
-                                           specimen_thickness_mm=body.get("specimen_thickness_mm"))
+                                           specimen_thickness_mm=body.get("specimen_thickness_mm"),
+                                           confirmation=body.get("confirmation"))
                     return self._json(201, result)
                 if parts[3] in {'hide', 'unhide'}:
                     return self._json(200, self.server.set_job_hidden(job_id, parts[3] == 'hide'))

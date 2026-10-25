@@ -28,7 +28,32 @@ export function previewGeometry(result){
   }
  }
  return {o,top,bottom,x,y,t,bounds,axis,dof,tdof,fixed,loaded,clamped,corners,region,
+  platforms:s.platforms||null,fullResolution:p.full_resolution===true,
   complete:x.at(-1)===bounds[0][1]&&y.at(-1)===bounds[1][1]};
+}
+
+export function previewSection(m,index){
+ const coords=m.axis?m.y:m.x,transverse=m.axis?m.x:m.y;
+ const selected=Math.max(0,Math.min(transverse.length-1,Number(index)||0));
+ const top=coords.map((_,k)=>m.t-(m.axis?m.top[k][selected]:m.top[selected][k]));
+ const bottom=coords.map((_,k)=>m.axis?m.bottom[k][selected]:m.bottom[selected][k]);
+ const remaining=top.map((v,k)=>v-bottom[k]);
+ const min=Math.min(...remaining),at=remaining.indexOf(min);
+ return {index:selected,coordinate:transverse[selected],coords,top,bottom,remaining,min,at};
+}
+
+export function previewMinimum(m){
+ let min=Infinity,i=0,j=0;
+ m.top.forEach((row,ri)=>row.forEach((v,cj)=>{const t=m.t-v-m.bottom[ri][cj];if(t<min){min=t;i=ri;j=cj;}}));
+ return {min,i,j,index:m.axis?j:i,point:[m.x[j],m.y[i],m.t-m.top[i][j]],bottom:[m.x[j],m.y[i],m.bottom[i][j]]};
+}
+
+export function referenceCaption(m){
+ const p=m.platforms;
+ if(!p)return '原始厚度为顶、底原始平面间距；剖面高度按实际深度绘制。';
+ if(p.calibration_method!=='empirical_reference_preserved')return '平台按手动实测均值校准；原始顶面 Z='+fmt(m.t)+' mm，原始底面 Z=0 mm。';
+ const chains=p.reference_calibrations||{};
+ return Object.entries(chains).map(([face,r])=>`${face==='top'?'正面':'反面'}经验参考面 H_flat=${fmt(r.reference_height_mm)} mm → 模型 Z=${face==='top'?fmt(m.t):'0'} mm`).join('；')+'。参考区未知损失未补偿；另一面平整是单面模型假设。';
 }
 
 export function previewSummary(m){
@@ -42,15 +67,25 @@ export function previewSummary(m){
 
 export function mountApdl3DPreview(container,result){
  const m=previewGeometry(result);
- container.innerHTML=`<figure class="apdl-3d-preview"><h4>三维几何与边界条件核对</h4><div class="apdl-3d-controls" role="group" aria-label="三维视角"><button type="button" class="button secondary" data-view="iso">等轴测 / 复位</button><button type="button" class="button secondary" data-view="top">XY 俯视</button><button type="button" class="button secondary" data-view="front">XZ 正视</button><button type="button" class="button secondary" data-view="side">YZ 侧视</button><button type="button" class="button secondary" data-zoom="1.2" aria-label="放大三维模型">＋</button><button type="button" class="button secondary" data-zoom="0.833333" aria-label="缩小三维模型">−</button></div><canvas tabindex="0" aria-label="可旋转的求解前试件三维图；拖动旋转，滚轮缩放，方向键旋转，Home复位"></canvas><figcaption>拖动旋转 · 滚轮或＋/−缩放 · 方向键旋转 · Home复位。真实比例，Z 未放大；绿色顶面、棕色底面、蓝色固定区、橙色加载区、紫色角点。仅为求解前采样几何，未显示变形、应力或实际有限元网格。</figcaption>${previewSummary(m)}${m.complete?'':'<p class="help-line">当前后端未返回完整边缘坐标，采样面可能未覆盖末行/末列。请更新并重启服务后重新预检；边界范围仍按完整试件显示。</p>'}</figure>`;
+ const minimum=previewMinimum(m),empirical=m.platforms?.calibration_method==='empirical_reference_preserved';
+ const topValues=m.top.flat(),depthLow=Math.min(...topValues),depthHigh=Math.max(...topValues);
+ const depthColor=v=>{const f=(v-depthLow)/(depthHigh-depthLow||1);return `hsl(${145-105*f},45%,${83-46*f}%)`;};
+ const referenceLevels=empirical?Object.keys(m.platforms.reference_calibrations||{}).map(face=>face==='top'?m.t:0):m.platforms?[0,m.t]:[];
+ container.innerHTML=`<figure class="apdl-3d-preview"><h4>三维形貌、平台与移动剖面</h4><div class="apdl-3d-controls" role="group" aria-label="三维视角"><button type="button" class="button secondary" data-view="iso">等轴测 / 复位</button><button type="button" class="button secondary" data-view="top">XY 俯视</button><button type="button" class="button secondary" data-view="front">XZ 正视</button><button type="button" class="button secondary" data-view="side">YZ 侧视</button><button type="button" class="button secondary" data-zoom="1.2" aria-label="放大三维模型">＋</button><button type="button" class="button secondary" data-zoom="0.833333" aria-label="缩小三维模型">−</button><label>竖向比例 <select data-z-scale aria-label="三维竖向比例"><option value="1">真实比例 1×</option><option value="5">观察起伏 5×</option></select></label>${m.platforms?`<label><input type="checkbox" data-reference checked> 显示${empirical?'经验':'原始'}参考面</label>`:''}</div><canvas data-model tabindex="0" aria-label="可旋转的求解前试件三维图；拖动旋转，滚轮缩放，方向键旋转，Home复位"></canvas><figcaption>拖动旋转 · 滚轮或＋/−缩放 · 方向键旋转 · Home复位。<span data-scale-label>竖向真实比例 1×</span>；正面${empirical?"经验":""}深度由浅绿到深褐（${fmt(depthLow)} ～ ${fmt(depthHigh)} mm）、橙色生成平台、棕色反面、黑色移动剖面、紫红色剩余厚度标记；蓝色固定区和橙色加载区为约束包络。仅显示求解前几何。</figcaption><p class="help-line"><strong>原始厚度 ${fmt(m.t)} mm</strong> · ${esc(referenceCaption(m))}</p><div class="apdl-moving-section"><label>沿 ${m.axis?'Y':'X'} 纵剖面的位置：${m.axis?'X':'Y'} / mm <output data-section-position></output><input type="range" data-section-position-input min="0" max="${(m.axis?m.x:m.y).length-1}" step="1" value="${minimum.index}" aria-label="移动纵向剖面"></label><div data-section-plot></div><p class="help-line" data-section-readout role="status"></p><p class="help-line">${m.fullResolution?'完整表面网格':'采样表面网格'} ${m.y.length}×${m.x.length}；剖面竖向放大显示，读数仍为实际 mm。坐标沿用预检模型原点。${m.platforms?'两端平台是生成几何，连接段与扫描区分开显示。':''}</p></div>${previewSummary(m)}${m.complete?'':'<p class="help-line">当前后端未返回完整边缘坐标，采样面可能未覆盖末行/末列。请重新预检；边界范围仍按完整试件显示。</p>'}</figure>`;
  const canvas=container.querySelector('canvas'),ctx=canvas.getContext('2d');
- let yaw=-.6,pitch=.65,zoom=1,drag=null;
+ let yaw=-.6,pitch=.65,zoom=1,vertical=1,drag=null;
+ const slider=container.querySelector('[data-section-position-input]'),reference=container.querySelector('[data-reference]');
+ // Presentation controls must not invalidate the surrounding scientific form.
+ container.querySelector('.apdl-3d-preview').addEventListener('input',e=>e.stopPropagation());
+ container.querySelector('.apdl-3d-preview').addEventListener('change',e=>e.stopPropagation());
+ let section=previewSection(m,minimum.index);
+ const inPlatform=(i,j)=>{const p=m.platforms;if(!p)return false;const k=p.tensile_direction==='Y'?i:j;return k<p.source_start_index-1||k>=p.source_stop_index;};
  const center=m.bounds.map(a=>(a[0]+a[1])/2),span=Math.max(...m.bounds.map(a=>a[1]-a[0]));
  const faces=[];
  const vertex=(i,j,upper)=>[m.x[j],m.y[i],upper?m.t-m.top[i][j]:m.bottom[i][j]];
  const add=(points,color)=>faces.push({points,color});
  for(let i=0;i<m.y.length-1;i++)for(let j=0;j<m.x.length-1;j++){
-  for(const upper of [false,true])add([vertex(i,j,upper),vertex(i,j+1,upper),vertex(i+1,j+1,upper),vertex(i+1,j,upper)],upper?'#7fa993':'#bda27e');
+  for(const upper of [false,true])add([vertex(i,j,upper),vertex(i,j+1,upper),vertex(i+1,j+1,upper),vertex(i+1,j,upper)],inPlatform(i,j)?'#e6a05d':upper?depthColor(m.top[i][j]):'#bda27e');
  }
  for(let j=0;j<m.x.length-1;j++)for(const i of [0,m.y.length-1])add([vertex(i,j,false),vertex(i,j+1,false),vertex(i,j+1,true),vertex(i,j,true)],'#c4c9bc');
  for(let i=0;i<m.y.length-1;i++)for(const j of [0,m.x.length-1])add([vertex(i,j,false),vertex(i+1,j,false),vertex(i+1,j,true),vertex(i,j,true)],'#c4c9bc');
@@ -61,13 +96,21 @@ export function mountApdl3DPreview(container,result){
   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
   // Fit the rotated bounding box while preserving the physical aspect ratio.
   const extentX=(m.bounds[0][1]-m.bounds[0][0])*Math.abs(cy)+(m.bounds[1][1]-m.bounds[1][0])*Math.abs(sy);
-  const extentY=((m.bounds[0][1]-m.bounds[0][0])*Math.abs(sy)+(m.bounds[1][1]-m.bounds[1][0])*Math.abs(cy))*Math.abs(sp)+m.t*Math.abs(cp);
+  const extentY=((m.bounds[0][1]-m.bounds[0][0])*Math.abs(sy)+(m.bounds[1][1]-m.bounds[1][0])*Math.abs(cy))*Math.abs(sp)+m.t*vertical*Math.abs(cp);
   const scale=Math.min(w*.7/Math.max(extentX,1e-9),h*.6/Math.max(extentY,1e-9))*zoom;
-  function project(p){const [x,y,z]=p.map((v,i)=>v-center[i]),a=x*cy-y*sy,b=x*sy+y*cy;return [w/2+a*scale,h/2+(b*sp-z*cp)*scale,b*cp+z*sp];}
+  function project(p){const [x,y,z]=p.map((v,i)=>(v-center[i])*(i===2?vertical:1)),a=x*cy-y*sy,b=x*sy+y*cy;return [w/2+a*scale,h/2+(b*sp-z*cp)*scale,b*cp+z*sp];}
   function line(a,b,color,width=1){ctx.beginPath();ctx.moveTo(...project(a).slice(0,2));ctx.lineTo(...project(b).slice(0,2));ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
   function label(p,text,color='#334a40',dx=5,dy=-6){const q=project(p);ctx.fillStyle=color;ctx.font='13px "Microsoft YaHei",sans-serif';ctx.fillText(text,Math.max(4,Math.min(w-ctx.measureText(text).width-4,q[0]+dx)),Math.max(14,Math.min(h-6,q[1]+dy)));}
   function polygon(points,color,stroke){const ps=points.map(project);ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}}
   faces.map(f=>({...f,depth:f.points.reduce((v,p)=>v+project(p)[2],0)/4})).sort((a,b)=>a.depth-b.depth).forEach(f=>polygon(f.points,f.color));
+  if(reference?.checked){
+   for(const z of referenceLevels){const points=[[m.x[0],m.y[0],z],[m.x.at(-1),m.y[0],z],[m.x.at(-1),m.y.at(-1),z],[m.x[0],m.y.at(-1),z]];ctx.setLineDash([6,4]);for(let k=0;k<4;k++)line(points[k],points[(k+1)%4],'#167e9e',2);ctx.setLineDash([]);label(points[2],`${empirical?'经验':'原始'}参考面 Z=${fmt(z)} mm`,'#13667e');}
+  }
+  for(let k=0;k<section.coords.length-1;k++){
+   const point=(n,z)=>m.axis?[section.coordinate,section.coords[n],z]:[section.coords[n],section.coordinate,z];
+   line(point(k,section.top[k]),point(k+1,section.top[k+1]),'#27332d',2);
+  }
+  line(minimum.bottom,minimum.point,'#a42c7c',3);label(minimum.point,`${m.fullResolution?'全域最薄':'采样最薄'} ${fmt(minimum.min)} mm`,'#95236e',8,24);
   if(m.region&&m.o.local_corrosion){const [[x0,x1],[y0,y1]]= [m.region.x_range_mm,m.region.y_range_mm],z=m.t;for(const [a,b] of [[[x0,y0,z],[x1,y0,z]],[[x1,y0,z],[x1,y1,z]],[[x1,y1,z],[x0,y1,z]],[[x0,y1,z],[x0,y0,z]]])line(a,b,'#b23a35',2);}
   for(const [range,color] of [[m.fixed,'#2468ad'],[m.loaded,'#bf602e']]){
    const box=(a)=>m.axis?[[m.bounds[0][0],a,0],[m.bounds[0][1],a,0],[m.bounds[0][1],a,m.t],[m.bounds[0][0],a,m.t]]:[[a,m.bounds[1][0],0],[a,m.bounds[1][1],0],[a,m.bounds[1][1],m.t],[a,m.bounds[1][0],m.t]];
@@ -79,22 +122,39 @@ export function mountApdl3DPreview(container,result){
   const base=[m.bounds[0][0],m.bounds[1][0],0],offset=span*.1;
   const xa=[base[0],base[1]-offset,0],xb=[m.bounds[0][1],base[1]-offset,0];line(xa,xb,'#475c50');label(xa,`X 尺寸 ${fmt(m.bounds[0][1]-base[0])} mm`,'#334a40',0,18);
   const ya=[base[0]-offset,base[1],0],yb=[base[0]-offset,m.bounds[1][1],0];line(ya,yb,'#475c50');label(yb,`Y 尺寸 ${fmt(m.bounds[1][1]-base[1])} mm`);
-  label([m.bounds[0][1],m.bounds[1][1],m.t],`初始厚度 ${fmt(m.t)} mm`);
+  line([m.x[0],m.y[0],0],[m.x[0],m.y[0],m.t],'#3d5d49',2);label([m.x[0],m.y[0],m.t],`原始厚度 ${fmt(m.t)} mm`,'#334a40',-100,-20);
   // A screen-space orientation triad remains readable even for a thin specimen.
   const triadOrigin=[75,h-90];
   const triad=p=>{const q=project(p),origin=project(base);return [triadOrigin[0]+(q[0]-origin[0])/scale*55/span,triadOrigin[1]+(q[1]-origin[1])/scale*55/span];};
   ctx.fillStyle='#435447';ctx.font='12px "Microsoft YaHei",sans-serif';ctx.fillText('全局坐标方向',16,407);
   for(const [i,name,color] of [[0,'X','#a84635'],[1,'Y','#287644'],[2,'Z','#315f9c']]){const p=[...base];p[i]+=span;const end=triad(p);ctx.beginPath();ctx.moveTo(...triadOrigin);ctx.lineTo(...end);ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=color;ctx.fillText('+'+name,end[0]+3,end[1]);}
  }
+ function drawSection(){
+  section=previewSection(m,slider.value);
+  container.querySelector('[data-section-position]').value=fmt(section.coordinate);
+  const host=container.querySelector('[data-section-plot]'),w=Math.max(280,host.clientWidth||700),h=300,left=60,right=w-20,top=32,bottom=240;
+  const low=Math.min(0,...section.bottom),high=Math.max(m.t,...section.top),range=Math.max(high-low,1e-9);
+  const x=v=>left+(v-section.coords[0])/(section.coords.at(-1)-section.coords[0]||1)*(right-left);
+  const z=v=>bottom-(v-low)/range*(bottom-top),points=values=>values.map((v,k)=>`${x(section.coords[k])},${z(v)}`).join(' ');
+  const ticks=Array.from({length:4},(_,i)=>{const v=section.coords[0]+(section.coords.at(-1)-section.coords[0])*i/3;return `<text x="${x(v)}" y="264" text-anchor="${i===0?'start':i===3?'end':'middle'}">${fmt(v)}</text>`;}).join('');
+  const yticks=Array.from({length:4},(_,i)=>{const v=low+range*i/3;return `<text x="52" y="${z(v)+4}" text-anchor="end">${fmt(v)}</text>`;}).join('');
+  const at=section.at,mx=x(section.coords[at]),zt=z(section.top[at]),zb=z(section.bottom[at]);
+  const refs=referenceLevels.map(v=>`<line x1="${left}" y1="${z(v)}" x2="${right}" y2="${z(v)}" stroke="#167e9e" stroke-dasharray="6 4"/>`).join('');
+  host.innerHTML=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="移动纵剖面：原始厚度 ${fmt(m.t)} mm，本剖面最小剩余厚度 ${fmt(section.min)} mm"><text x="8" y="18">Z / mm</text><rect x="${left}" y="${top}" width="${right-left}" height="${bottom-top}" fill="none" stroke="#bbcbbc"/><polygon points="${points(section.top)} ${section.bottom.map((v,k)=>`${x(section.coords[k])},${z(v)}`).reverse().join(' ')}" fill="#e4ecdc"/>${refs}<polyline points="${points(section.top)}" fill="none" stroke="#276e50" stroke-width="2"/><polyline points="${points(section.bottom)}" fill="none" stroke="#a27845" stroke-width="2"/><line x1="${left+8}" y1="${z(0)}" x2="${left+8}" y2="${z(m.t)}" stroke="#55734b" stroke-width="2"/><line x1="${mx}" y1="${zt}" x2="${mx}" y2="${zb}" stroke="#a42c7c" stroke-width="2"/><text x="${Math.max(left+50,Math.min(right-50,mx))}" y="${(zt+zb)/2}" text-anchor="middle" fill="#95236e">${section.min.toFixed(3)} mm</text>${ticks}${yticks}<text x="${(left+right)/2}" y="290" text-anchor="middle">${m.axis?'Y':'X'} / mm</text><text x="${right}" y="22" text-anchor="end">${m.platforms?(empirical?'经验':'原始')+'参考：Z='+referenceLevels.map(fmt).join(' / ')+' mm':'原始厚度 '+fmt(m.t)+' mm'}</text></svg>`;
+  container.querySelector('[data-section-readout]').textContent=`本剖面最小剩余厚度 ${section.min.toFixed(6)} mm；${m.axis?'Y':'X'}=${fmt(section.coords[at])} mm；该点正面深度 ${(m.t-section.top[at]).toFixed(6)} mm，反面深度 ${section.bottom[at].toFixed(6)} mm。`;
+ }
  function reset(view){zoom=1;[yaw,pitch]=({iso:[-.6,.65],top:[0,Math.PI/2],front:[0,0],side:[-Math.PI/2,0]})[view];draw();}
  container.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>reset(b.dataset.view)));
  container.querySelectorAll('[data-zoom]').forEach(b=>b.addEventListener('click',()=>{zoom=Math.min(4,Math.max(.3,zoom*Number(b.dataset.zoom)));draw();}));
+ container.querySelector('[data-z-scale]').addEventListener('change',e=>{vertical=Number(e.target.value);container.querySelector('[data-scale-label]').textContent=`竖向 ${vertical===1?'真实比例':'放大'} ${vertical}×`;draw();});
+ reference?.addEventListener('change',draw);
+ slider.addEventListener('input',()=>{drawSection();draw();});
  canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);canvas.focus();});
  canvas.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.min(Math.PI/2,Math.max(-Math.PI/2,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];draw();});
  canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);
  canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.min(4,Math.max(.3,zoom*Math.exp(-e.deltaY*.001)));draw();},{passive:false});
  canvas.addEventListener('keydown',e=>{if(e.key==='Home'){e.preventDefault();reset('iso');return;}if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.1:e.key==='ArrowRight'?.1:0;pitch=Math.min(Math.PI/2,Math.max(-Math.PI/2,pitch+(e.key==='ArrowDown'?.1:e.key==='ArrowUp'?-.1:0)));draw();});
  // One observer per mounted canvas; disconnect when a new precheck replaces it.
- const observer=new ResizeObserver(()=>{if(!container.isConnected||!canvas.isConnected){observer.disconnect();return;}draw();});observer.observe(canvas);
- draw();return ()=>observer.disconnect();
+ const observer=new ResizeObserver(()=>{if(!container.isConnected||!canvas.isConnected){observer.disconnect();return;}draw();drawSection();});observer.observe(canvas);
+ drawSection();draw();return ()=>observer.disconnect();
 }

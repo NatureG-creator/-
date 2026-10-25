@@ -35,6 +35,7 @@ DEFAULTS = {
     'local_corrosion': False, 'patch_offset_x_mm': None, 'patch_offset_y_mm': None,
     'patch_rotation_deg': 0, 'patch_flip_x': False, 'patch_flip_y': False,
     'platform_enabled': False, 'platform_fixed_mm': 2.5, 'platform_loaded_mm': 2.5,
+    'platform_reference_mode': 'manual_mean',
     'platform_top_mean_depth_mm': None, 'platform_bottom_mean_depth_mm': None,
     'thickness_layer_mode': 'element_layers', 'intermediate_node_layers': 10,
 }
@@ -50,6 +51,12 @@ def normalise_options(options: dict) -> dict:
     if not isinstance(options, dict):
         raise ValueError('APDL options 必须是对象。')
     result = {key: options.get(key, value) for key, value in DEFAULTS.items()}
+    if result['platform_reference_mode'] not in {'manual_mean','empirical_190'}:
+        raise ValueError('平台定位方式无效')
+    if result['platform_enabled'] and result['platform_reference_mode']=='empirical_190' and result['corrosion_mode'] not in {'single_top','single_bottom'}:
+        raise ValueError('经验参考链试点仅支持已逐面验证的单面模型，不能假定反面已经验证')
+    if result['platform_enabled'] and result['platform_reference_mode']=='empirical_190':
+        result['platform_top_mean_depth_mm']=result['platform_bottom_mean_depth_mm']=None
     if result['thickness_layer_mode'] not in {'element_layers', 'intermediate_nodes'}:
         raise ValueError('厚度层数方式必须为 element_layers 或 intermediate_nodes。')
     value = result['intermediate_node_layers']
@@ -183,7 +190,7 @@ def _counts(nx: int, ny: int, layers: int, mesh_type: str = 'solid185_hex') -> t
 
 
 def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None,
-                   options: dict) -> dict:
+                   options: dict, *, reference_calibrations=None) -> dict:
     o = normalise_options(options)
     mode = o['corrosion_mode']
     platform = None
@@ -218,7 +225,7 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
             raise ValueError('正反面行列数不同，不允许静默重采样。')
         if o['platform_enabled']:
             from .apdl_platform import add_platforms
-            platform = add_platforms(top, bottom, o)
+            platform = add_platforms(top, bottom, o, reference_calibrations=reference_calibrations)
             top, bottom = platform['top'], platform['bottom']
             ny, nx = top.shape
             o.update(nx=nx, ny=ny, length_mm=float(platform['x'][-1]-platform['x'][0]),
@@ -396,9 +403,12 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     if o['local_corrosion']:
         warnings.append('局部腐蚀贴片边缘按原始深度直接接入未腐蚀区域；未添加过渡带，边缘可能形成几何台阶。')
     if platform:
-        warnings.append('平台模式按最低高程+实测输入深度建立参考面；该公式不保证校准后矩阵平均深度等于输入值，请核对平台报告。')
+        if o['platform_reference_mode']=='empirical_190':
+            warnings.append('采用轻微腐蚀区20%经验参考，未知参考区损失未补偿；输入原始板厚用于模型平台间距，未宣称实测零腐蚀面或反面已验证。')
+        else:
+            warnings.append('平台模式按腐蚀区采样点算术平均值校准，新增平台和连接段不参与均值；校准后采样平均深度在浮点精度内等于实测输入值，请核对平台报告。')
         if any(face['protrudes_above_platform'] for face in platform['report']['faces'].values()):
-            warnings.append('实测输入深度小于表面起伏范围，部分腐蚀表面高于平台；已保留凸起，未裁剪。请复核高度方向、公式与试验输入。')
+            warnings.append('均值校准后部分腐蚀表面高于平台；已保留凸起，未裁剪。请复核高度方向与实测平均深度。')
     if abs(tetra_stats.get('surface_volume_change_fraction', 0)) > .01:
         warnings.append('三角形表面与双线性参考面的总体积差超过1%；请复核表面离散及网格收敛性。')
     if mode == 'flat' and (o['boundary_mode'] != 'poisson_free' or o['material_model'] != 'elastic' or o['large_deflection']):

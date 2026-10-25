@@ -294,6 +294,8 @@ class JobService:
                     "target_source": source_info,
                     "resource_estimate": estimate_resources(config, len(targets), run_mode),
                     "case_name": str(payload.get("case_name", ""))[:100]}
+            if "engine_release" in payload:
+                spec["engine_release"] = payload["engine_release"]
         elif kind == "pointcloud":
             reference, ref_path = self.get_upload(payload["reference_id"])
             detail, detail_path = self.get_upload(payload["detail_id"])
@@ -405,11 +407,16 @@ class JobService:
                     raise ValueError("有限元导出源文件冻结失败")
             _atomic_json(job_dir / "spec.json", spec)
             _atomic_json(job_dir / "task_io.json", io_settings)
+            if kind == "simulation":
+                from .engine_releases import freeze_binding
+                engine = freeze_binding(job_dir, spec, self.runtime, ROOT)
             reserved_slots = 2 if kind in {"benchmark", "diagnostics"} else 1
             status = {"id": job_id, "kind": kind, "state": "queued", "created_at": time.time(),
                       "updated_at": time.time(), "pid": None, "phase": "queued",
                       "case_name": spec.get("case_name", ""), "scheduler_slots": reserved_slots,
                       "queue_reason": "等待本机计算槽位"}
+            if kind == "simulation":
+                status["execution_engine"] = engine
             _atomic_json(job_dir / "status.json", status)
         except Exception:
             shutil.rmtree(job_dir)
@@ -569,9 +576,11 @@ class JobService:
             if matlab:
                 environment["MATLAB_BIN"] = matlab
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            from .engine_releases import launch_profile
+            engine = launch_profile(self.runtime / "jobs" / job_id, self.runtime, ROOT)
             with (self.runtime / "jobs" / job_id / "worker.log").open("a", encoding="utf-8") as log:
-                process = subprocess.Popen([sys.executable, "-u", "-m", "backend.worker", job_id],
-                    cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                process = subprocess.Popen([engine["python"], "-u", "-m", "backend.worker", job_id],
+                    cwd=engine["root"], env=environment, stdout=log, stderr=subprocess.STDOUT,
                     creationflags=flags, start_new_session=os.name != "nt")
             self.processes[job_id] = process
             return process
@@ -731,18 +740,21 @@ class JobService:
                 raise ValueError("只有严格或 PyCharm NumPy 模拟支持阶段恢复")
             if state["state"] not in {"failed", "interrupted"} or process_alive(state.get("pid")):
                 raise ValueError("任务当前不能恢复，原任务可能仍在运行")
-            from .runner import precheck_resume
+            from .engine_releases import precheck_bound_job
             if spec.get("frozen_target_path"):
                 target = self.runtime / "jobs" / job_id / spec["frozen_target_path"]
                 if sha256(target) != spec["target_source"]["sha256"]:
                     raise ValueError("冻结目标文件已改变，拒绝恢复")
-            checked = precheck_resume(spec, self.runtime / "jobs" / job_id)
+            checked = precheck_bound_job(spec, self.runtime / "jobs" / job_id, self.runtime, ROOT)
             if not checked.get("available"):
                 raise ValueError("任务尚未保存完整检查点，请使用原配置新建任务")
             state = {key: value for key, value in state.items() if key not in {
                 "files", "spec", "summary", "effective_config", "checkpoint", "progress", "timing", "history_hidden"}}
-            state.update(state="queued", error=None, pid=None, updated_at=time.time())
+            state.update(state="queued", error=None, pid=None, process_created_at=None, updated_at=time.time())
             _atomic_json(self.runtime / "jobs" / job_id / "status.json", state)
+            # The old worker is verified dead above. Its scheduling thread may
+            # still be waiting for this lock to remove the previous token.
+            self._launching_jobs.pop(job_id, None)
             self.launch(job_id)
             return state
 
