@@ -23,7 +23,7 @@ test('payload preserves damage settings and input tables',()=>{
 });
 test('result distinguishes complete fracture from isolated deletion and escapes content',()=>{
  const summary={results:{fracture:{parameter_basis:'example',fracture_confirmed:false,deleted_elements:1,note:'<script>'},warnings:[]}};
- let html=renderFractureResult(summary,{id:'abc'});assert.match(html,/尚未确认完整断裂/);assert.match(html,/示例参数/);assert.ok(!html.includes('<script>'));
+ let html=renderFractureResult(summary,{id:'abc'});assert.match(html,/src="\/api\/jobs\/abc\/view\/engineering_stress_strain.png"/);assert.match(html,/href="\/api\/jobs\/abc\/download\/force_displacement.csv"/);assert.match(html,/尚未确认完整断裂/);assert.match(html,/示例参数/);assert.ok(!html.includes('<script>'));
  summary.results.fracture.fracture_confirmed=true;
  assert.match(renderFractureResult(summary,{id:'abc'}),/已通过数值断开检查/);
 });
