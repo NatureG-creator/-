@@ -66,6 +66,11 @@ def normalise_output_options(options: dict) -> dict:
 
 def output_policy_summary(options: dict) -> dict:
     """Describe RST output independently of the final nodal CSV option."""
+    if options.get('damage_model') == 'gissmo':
+        return dict(result_save_mode='native_d3plot', field_output_times=[],
+                    curve_output='all_saved_states', nldat_output='not_applicable',
+                    field_output='native_d3plot', time_basis='physical_seconds',
+                    warnings=['LS-DYNA 输出物理时间、d3plot 和 binout；MAPDL 子步与 RST 保存设置不控制此模式。'])
     normalized = normalise_output_options(options)
     mode = normalized['result_save_mode']
     return dict(

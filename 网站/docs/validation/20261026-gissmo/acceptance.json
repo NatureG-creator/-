@@ -1,0 +1,176 @@
+{
+  "date": "2026-10-26",
+  "scope": "Example MAT_024/GISSMO, not calibrated steel; no mesh-independence claim",
+  "live_acceptance_job": "be69b47fbf6f40b5",
+  "cases": {
+    "base": {
+      "report": {
+        "model": "MAT_024 + GISSMO",
+        "parameter_basis": "example",
+        "necking_observed": true,
+        "section_localization_ratio": 0.8520140191967512,
+        "minimum_section_area_ratio": 0.7722310778805875,
+        "section_index": 20,
+        "section_time_s": 0.0006899941555486359,
+        "damage_observed": true,
+        "coupling_observed": true,
+        "max_damage_observed": 0.7730016845464696,
+        "damage_history_variable": 6,
+        "deleted_elements": 16,
+        "load_path_separated": true,
+        "fracture_confirmed": true,
+        "first_deletion_time_s": 0.0006999992492695149,
+        "peak_force_n": 918.590676658348,
+        "peak_engineering_strain": 0.11269636337588622,
+        "final_force_ratio": 0.00023992445412650672,
+        "prefracture_max_kinetic_internal_ratio": 0.0008322029749382006,
+        "damping_per_s": 10000,
+        "prefracture_max_damping_internal_ratio": 0.0015566219631565504,
+        "prefracture_max_force_imbalance_ratio": 0.003202598358236169,
+        "quasistatic_screen_passed": true,
+        "calibration_verified": false,
+        "note": "断裂检查要求单元失效、两端无存活网格连接、末步拉力低于峰值5%。截面非均匀收缩比<0.9仅为颈缩筛查。准静态还需加载时间敏感性验证；试验标定声明未在此独立验证。"
+      },
+      "native_files": {
+        "d3plot": {
+          "bytes": 86016,
+          "sha256": "bb71b46adb51d8f7cd34385a994cdcb5d7ef1b94247a2b191e2deea7b3309a6e"
+        },
+        "d3plot01": {
+          "bytes": 145690624,
+          "sha256": "ca24897d4cb5553e5f01dfa935bdc980d6ea758f9b8c1a93af2c23a844c57f0d"
+        },
+        "d3plot02": {
+          "bytes": 108953600,
+          "sha256": "6711b5bd852575ae9c85399b0a362cf5468f6b203c2ca52ae3af72c9e78bcc21"
+        },
+        "d3plot03": {
+          "bytes": 1269760,
+          "sha256": "654805dc3a1c5539ecae22ffcd084a60820c9cf15567dc2adf7a1a7cdb8077a3"
+        },
+        "binout": {
+          "bytes": 1147749,
+          "sha256": "203ab34f9c5c6e83acdfd1ead18856c44e4070ccfde1b26ba31097698576abf0"
+        },
+        "tension.k": {
+          "bytes": 71260,
+          "sha256": "f6c3f77c85fa8275c0e83968420e3d013d14b920fcf937a4b2b178643f68f291"
+        }
+      }
+    },
+    "less_damping": {
+      "report": {
+        "model": "MAT_024 + GISSMO",
+        "parameter_basis": "example",
+        "necking_observed": true,
+        "section_localization_ratio": 0.8490896563981011,
+        "minimum_section_area_ratio": 0.7696976482757422,
+        "section_index": 20,
+        "section_time_s": 0.0006899958593056918,
+        "damage_observed": true,
+        "coupling_observed": true,
+        "max_damage_observed": 0.8423624298556458,
+        "damage_history_variable": 6,
+        "deleted_elements": 16,
+        "load_path_separated": true,
+        "fracture_confirmed": true,
+        "first_deletion_time_s": 0.0006999759944459452,
+        "peak_force_n": 917.612375009628,
+        "peak_engineering_strain": 0.11269798697039388,
+        "final_force_ratio": 0.0026945575387046557,
+        "prefracture_max_kinetic_internal_ratio": 0.0008251738807541953,
+        "damping_per_s": 5000,
+        "prefracture_max_damping_internal_ratio": 0.000782636677812889,
+        "prefracture_max_force_imbalance_ratio": 0.001979342480149902,
+        "quasistatic_screen_passed": true,
+        "calibration_verified": false,
+        "note": "断裂检查要求单元失效、两端无存活网格连接、末步拉力低于峰值5%。截面非均匀收缩比<0.9仅为颈缩筛查。准静态还需加载时间敏感性验证；试验标定声明未在此独立验证。"
+      },
+      "native_files": {
+        "d3plot": {
+          "bytes": 86016,
+          "sha256": "939eb4ad5aeb0d94a25d09918224a806d32fe9b7e91def30603028bbb9971a78"
+        },
+        "d3plot01": {
+          "bytes": 145690624,
+          "sha256": "f3c686abb448979ea0690fb9aa48ea7103722e63e541fb8c2ddccc0813b6af50"
+        },
+        "d3plot02": {
+          "bytes": 108953600,
+          "sha256": "a62f4d40faf628e6b55b536789e431e3e47705049a9f6a9cfc61eaaa46a919cc"
+        },
+        "d3plot03": {
+          "bytes": 1269760,
+          "sha256": "867baef99bba8dbaec5d95d22ee838ec7855d61b3e3be49878580ef9e7005f4a"
+        },
+        "binout": {
+          "bytes": 1147749,
+          "sha256": "bbfad98283788c8482a317f12a494f19cb2309872f77d1c98daf0946c65a1870"
+        },
+        "tension.k": {
+          "bytes": 71259,
+          "sha256": "c5f78b99d5e7f803a563e9451e141c18e58c657dd687d7aada7ced2f0439ee94"
+        }
+      }
+    },
+    "slower": {
+      "report": {
+        "model": "MAT_024 + GISSMO",
+        "parameter_basis": "example",
+        "necking_observed": true,
+        "section_localization_ratio": 0.8441909037232324,
+        "minimum_section_area_ratio": 0.7657809913809187,
+        "section_index": 20,
+        "section_time_s": 0.0013799820158011706,
+        "damage_observed": true,
+        "coupling_observed": true,
+        "max_damage_observed": 0.9013474353854922,
+        "damage_history_variable": 6,
+        "deleted_elements": 16,
+        "load_path_separated": true,
+        "fracture_confirmed": true,
+        "first_deletion_time_s": 0.0013999908217916005,
+        "peak_force_n": 916.707768403978,
+        "peak_engineering_strain": 0.11269750497184024,
+        "final_force_ratio": 6.784775727913724e-05,
+        "prefracture_max_kinetic_internal_ratio": 0.0002080028470159152,
+        "damping_per_s": 5000,
+        "prefracture_max_damping_internal_ratio": 0.00039272257744885276,
+        "prefracture_max_force_imbalance_ratio": 0.0013970214316627774,
+        "quasistatic_screen_passed": true,
+        "calibration_verified": false,
+        "note": "断裂检查要求单元失效、两端无存活网格连接、末步拉力低于峰值5%。截面非均匀收缩比<0.9仅为颈缩筛查。准静态还需加载时间敏感性验证；试验标定声明未在此独立验证。"
+      },
+      "native_files": {
+        "d3plot": {
+          "bytes": 86016,
+          "sha256": "dae9346c0e28eeb1b00a566c1525d3b1c2f7b8a5684655b94edd2859820a63eb"
+        },
+        "d3plot01": {
+          "bytes": 145690624,
+          "sha256": "ea0d21cd7a906ab93b0a616e860cd3f31ecd1abec95c3b00b87b3535865103f5"
+        },
+        "d3plot02": {
+          "bytes": 108953600,
+          "sha256": "8f67fafbbf96e8317e33a7edb5e3922cbef71d9249131b24f0d387ad6231ba97"
+        },
+        "d3plot03": {
+          "bytes": 1269760,
+          "sha256": "125b88d92d5eacef449f8e322f461b595aca8067499ce6dc74130424948d0851"
+        },
+        "binout": {
+          "bytes": 1147749,
+          "sha256": "bcc90d5a29d32057ad390a8cbf2a65b778d0f380dbf207b1cf0d00eb6758d3bd"
+        },
+        "tension.k": {
+          "bytes": 71269,
+          "sha256": "fba00adad1a573536ee32c98f266b765f35e7cb351382e0f6300c2cb3c5cb77e"
+        }
+      }
+    }
+  },
+  "peak_force_relative_differences": {
+    "less_damping_vs_base": 0.0010650028065589678,
+    "slower_vs_less_damping": 0.0009858265105028297
+  }
+}

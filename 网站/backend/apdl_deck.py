@@ -184,6 +184,9 @@ def _write_preview(path: Path, geometry: dict) -> None:
 
 
 def create_tension_bundle(geometry: dict, output_dir: Path, provenance: dict) -> dict:
+    if geometry['options'].get('damage_model') == 'gissmo':
+        from .apdl_fracture import create_fracture_bundle
+        return create_fracture_bundle(geometry, output_dir, provenance)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     o = geometry['options']

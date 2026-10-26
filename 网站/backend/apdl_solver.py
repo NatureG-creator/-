@@ -53,8 +53,10 @@ def mapdl_capabilities() -> dict:
             continue
     warnings = ['仅发现本机MAPDL可执行文件；许可证及实际求解能力尚未验证。'] if found else [
         '未发现MAPDL；可配置MAPDL_BIN或ANSYS_BIN为已安装ANSYS可执行文件的完整路径。']
+    from .apdl_fracture import dyna_capabilities
     return {'available': bool(found), 'executable': found[0] if found else None,
-            'candidates': found, 'license_state': 'unchecked', 'warnings': warnings}
+            'candidates': found, 'license_state': 'unchecked', 'warnings': warnings,
+            'fracture': dyna_capabilities(found)}
 
 
 def mapdl_environment(executable: str | Path) -> dict:
@@ -113,6 +115,9 @@ def _solver_errors(output: Path) -> list[str]:
 
 
 def run_mapdl(output: Path, options: dict, progress=None, *, allow_recovered=False) -> dict:
+    if options.get('damage_model') == 'gissmo':
+        from .apdl_fracture import run_fracture
+        return run_fracture(output, options, progress)
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     old_names = [name for name in ('force_displacement.csv', 'nodal_results.csv', 'mapdl.out',
@@ -316,6 +321,9 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
         except (OSError, ValueError) as exc:
             raise ValueError('无法从 manifest.json 读取原始求解参数。') from exc
     o = normalise_options(options or {})
+    if o.get('damage_model') == 'gissmo':
+        from .apdl_fracture_results import read_fracture_results
+        return read_fracture_results(output, stats, o)
     rst = output/'corrosion.rst'
     if not rst.is_file() or rst.stat().st_size == 0:
         raise ValueError('缺少非空 corrosion.rst，不能把CSV视为已验证求解结果。')

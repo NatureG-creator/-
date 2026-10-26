@@ -12,6 +12,7 @@ import numpy as np
 
 from .apdl_diagnostics import normalise_output_options
 from .apdl_tetra import build_tetra_mesh
+from .apdl_fracture import DEFAULTS as FRACTURE_DEFAULTS, normalise_fracture
 
 
 DEFAULTS = {
@@ -38,6 +39,7 @@ DEFAULTS = {
     'platform_reference_mode': 'manual_mean',
     'platform_top_mean_depth_mm': None, 'platform_bottom_mean_depth_mm': None,
     'thickness_layer_mode': 'element_layers', 'intermediate_node_layers': 10,
+    **FRACTURE_DEFAULTS,
 }
 MODES = {'flat', 'single_top', 'single_bottom', 'double_independent', 'double_symmetric'}
 MESH_TYPES = {'solid185_hex', 'solid187_tetra', 'solid285_tetra'}
@@ -158,6 +160,7 @@ def normalise_options(options: dict) -> dict:
             raise ValueError('plastic_curve 首点塑性应变必须为 0。')
         result['plastic_curve'] = cleaned
     result.update(normalise_output_options(options))
+    result.update(normalise_fracture(result))
     return result
 
 
@@ -307,6 +310,14 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
                        else o['width_mm']*nominal_area)
     if not math.isfinite(nominal_area) or nominal_area <= 0 or not math.isfinite(original_volume) or original_volume <= 0:
         raise ValueError('名义面积或原始体积数值溢出或退化。')
+    if o['damage_model'] == 'gissmo' and o['neck_imperfection_fraction']:
+        axis_length = o['length_mm'] if tensile_direction == 'X' else o['width_mm']
+        if o['neck_width_mm'] > axis_length/2:
+            raise ValueError('初始缺陷宽度不能超过拉伸跨度的一半。')
+        coordinate = (np.arange(nx)*o['dx_mm'])[None, :] if tensile_direction == 'X' else (np.arange(ny)*o['dy_mm'])[:, None]
+        defect = o['thickness_mm']*o['neck_imperfection_fraction']*np.exp(-((coordinate-axis_length/2)/o['neck_width_mm'])**2)
+        top = top+defect/2
+        bottom = bottom+defect/2
     remaining = o['thickness_mm'] - top - bottom
     if not np.isfinite(remaining).all() or np.any(remaining <= 0):
         raise ValueError('腐蚀表面相交或穿透：剩余厚度必须处处大于 0；禁止自动裁剪修补。')
@@ -398,6 +409,13 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
          '采用全局一致的共形六分四面体，保留原始采样坐标与深度；此模式不自动加密。三角形表面与双线性面的体积差记录于统计报告。')]
     if max_aspect > 20:
         warnings.append(f'最大单元边长比为 {max_aspect:.3g}，建议检查网格收敛与厚度层数。')
+    if o['damage_model'] == 'gissmo':
+        warnings.append('LS-DYNA/GISSMO 使用 N-mm-s-tonne；塑性与损伤参数需标定，加载速度、数值阻尼和网格尺寸均需敏感性检查。')
+        if o['neck_imperfection_fraction']:
+            warnings.append(f'无腐蚀示例显式添加 {o["neck_imperfection_fraction"]:.1%} 厚度缺陷；几何体积亏损包含该缺陷，不代表实测腐蚀损失。')
+        from .apdl_fracture import estimated_result_bytes
+        estimated_gb = estimated_result_bytes(stats, o)/1e9
+        warnings.append(f'原生完整场预计约 {estimated_gb:.2f} GB，后处理需额外内存；输出保留全部实际网格，未隐式降采样。')
     if mode == 'double_symmetric':
         warnings.append('双面对称模式明确复用同一正面深度，反面不另作独立随机生成。')
     if o['local_corrosion']:

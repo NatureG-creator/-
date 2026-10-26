@@ -367,7 +367,12 @@ def prepare_apdl(service,payload):
             raise ValueError('双面来源或映射尚未完成当前配准预检；请重新预检并确认配准后再创建任务')
     if spec['run_mode']=='solve':
         from .apdl_solver import mapdl_capabilities
-        if not mapdl_capabilities().get('available'):
+        capabilities = mapdl_capabilities()
+        if spec['options'].get('damage_model') == 'gissmo':
+            capabilities = capabilities.get('fracture', {})
+        if not capabilities.get('available'):
+            if spec['options'].get('damage_model') == 'gissmo':
+                raise ValueError('LS-DYNA 或读取依赖不可用；请配置 LSDYNA_BIN 并安装 requirements-fracture.txt，或先生成输入包。')
             raise ValueError('尚未配置可用MAPDL可执行文件；请设置MAPDL_BIN，或先选择仅生成模型')
     return spec,records
 
@@ -503,7 +508,10 @@ def run_apdl_job(spec,job_dir,progress=None):
                 result['results']=read_tension_results(output,geometry['stats'],spec['options'],expected_nodes=geometry['nodes'])
                 from .apdl_plots import render_result_contours
                 try:
-                    plots=render_result_contours(output,spec['options'],progress=progress)
+                    if spec['options'].get('damage_model') == 'gissmo':
+                        plots=result['results']['contour_plots']
+                    else:
+                        plots=render_result_contours(output,spec['options'],progress=progress)
                 except Exception as exc:
                     plots=dict(state='failed',plots=[],error=f'{type(exc).__name__}: {exc}')
                 result['results']['contour_plots']=plots

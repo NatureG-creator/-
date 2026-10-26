@@ -100,6 +100,14 @@ def _scan(stamps):
 
 def explain_result(output, summary, state=None, error=None):
     """Enrich a terminal task without rewriting its historical status or files."""
+    if summary.get('solver_type') == 'ls-dyna':
+        results = summary.get('results') or {}
+        complete = summary.get('solve_state') == 'solved' and results.get('validation_state') == 'native_binary_cross_checked'
+        return dict(loading_complete=complete, outcome='completed_with_warnings' if complete else 'incomplete',
+                    title='LS-DYNA 加载完成 · 请检查损伤与断裂报告' if complete else 'LS-DYNA 未完成或尚未通过后处理',
+                    conclusion='已交叉核对原生网格、位移、反力、能量及单元存活状态；损伤与完整断开分别判定。' if complete else str(error or summary.get('error') or '尚无完整原生结果。'),
+                    original_state=state, original_error=error, failure_stage=summary.get('failure_stage'),
+                    note='LS-DYNA 显式结果不按 MAPDL 静力日志或线性加载规则判断。')
     output = Path(output)
     options = summary.get('options') or {}
     paths = [output/name for name in ('mapdl.out', 'mapdl_launcher.log', 'mesh_quality_report.txt')]

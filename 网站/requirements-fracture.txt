@@ -1,0 +1,8 @@
+# Optional binary reader subset. Install after base requirements with --no-deps
+# to avoid replacing the workstation's existing numerical stack.
+lasso-python==2.0.3
+attrs==23.2.0
+rich==13.9.4
+markdown-it-py==4.0.0
+mdurl==0.1.2
+h5py==3.16.0
