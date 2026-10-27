@@ -184,6 +184,12 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'POST' and path == '/api/apdl/sensitivity':
             from .apdl_sensitivity import create_sensitivity
             return self._json(201, create_sensitivity(self.server, self._body()))
+        if method == 'POST' and path == '/api/apdl/joint-calibration':
+            from .apdl_joint_calibration import create_joint_calibration
+            return self._json(201, create_joint_calibration(self.server, self._body()))
+        if method == 'GET' and len(parts) == 6 and parts[:3] == ['api', 'jobs', parts[2]] and parts[3] == 'joint-calibration':
+            from .apdl_joint_calibration import joint_calibration_file
+            return self._file(joint_calibration_file(self.server, parts[2], parts[4], parts[5]), download=True)
         if method == 'GET' and len(parts) == 4 and parts[:3] == ['api', 'apdl', 'sensitivity']:
             from .apdl_sensitivity import sensitivity_status
             return self._json(200, sensitivity_status(self.server, parts[3]))

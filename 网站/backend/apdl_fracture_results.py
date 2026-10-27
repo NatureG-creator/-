@@ -133,6 +133,8 @@ def read_fracture_results(output, stats, options):
     ratios = section_areas(nodes[:, 1:]+displacement[before], stats['nx'], stats['ny'], options['layers'], axis)[interior]/areas0[interior]
     local_index = int(np.argmin(ratios))
     localization = float(ratios[local_index]/np.median(ratios))
+    axial_coordinates = np.unique(nodes[:, 1 + axis])
+    necking_position = float(axial_coordinates[interior[local_index]] - axial_coordinates[0])
     separation_history = np.array([
         not load_path_exists(a['element_solid_node_indexes'], alive[step], fixed, loaded, len(nodes))
         for step in range(len(times))
@@ -166,7 +168,7 @@ def read_fracture_results(output, stats, options):
     fracture = dict(model='MAT_024 + GISSMO', parameter_basis=options['damage_parameter_basis'],
                     stage_markers=stage_markers, localization_threshold=localization_threshold,
                     necking_observed=localization < .9, section_localization_ratio=localization,
-                    minimum_section_area_ratio=float(ratios[local_index]),
+                    minimum_section_area_ratio=float(ratios[local_index]), necking_position_mm=necking_position,
                     section_index=int(interior[local_index]), section_time_s=float(times[before]),
                     damage_observed=bool(np.max(damage) > .01), coupling_observed=bool(np.max(coupled) > .5),
                     max_damage_observed=float(damage.max()), damage_history_variable=index+1,

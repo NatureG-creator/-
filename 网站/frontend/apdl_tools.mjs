@@ -54,10 +54,29 @@ export function mountFractureSensitivity(job,{get,post}){
  button.addEventListener('click',async()=>{button.disabled=true;note.textContent='正在创建 P1 敏感性任务…';try{const status=await post('/api/apdl/sensitivity',{source_job_id:job.id});render(status);poll(status.id);}catch(error){button.disabled=false;note.textContent=error.message;}});
 }
 
+export function mountJointCalibration(job,{post}){
+ const root=document.getElementById('result-content');
+ if(!root||!job?.id||root.querySelector('#joint-calibration'))return;
+ const box=document.createElement('div');box.id='joint-calibration';box.className='card wide';
+ box.innerHTML=`<h3>P2 · 试验力—位移 + DIC 联合校准</h3><p class="help-line">试验曲线进入力学误差，DIC 进入颈缩位置误差；只有 DIC 明确标记为“等效塑性应变”时，局部场 RMSE 才进入联合目标。网站不会自动修改材料曲线。</p><div class="grid two"><div><label>试验力—位移文件（CSV/TXT/TSV/XLSX/MAT）<input type="file" data-joint-trial accept=".csv,.txt,.tsv,.xlsx,.mat"></label><div data-joint-trial-columns></div></div><div><label>DIC 局部场文件（CSV/TXT/TSV/XLSX/MAT）<input type="file" data-joint-dic accept=".csv,.txt,.tsv,.xlsx,.mat"></label><div data-joint-dic-columns></div></div></div><div class="actions"><button type="button" class="button primary" data-joint-run disabled>生成联合校准报告</button></div><p class="help-line" data-joint-note>请分别上传两份文件，并确认列含义与单位。</p><div data-joint-result></div>`;
+ root.append(box);
+ const q=selector=>box.querySelector(selector), state={trial:null,dic:null};
+ const columns=table=>table.columns.map((name,index)=>`<option value="${index}">${index+1} · ${esc(name)}</option>`).join('');
+ const field=(label,body)=>`<label class="field">${label}${body}</label>`;
+ const trialControls=table=>`<div class="grid two">${field('位移列',`<select data-joint-trial-u>${columns(table)}</select>`)}${field('力列',`<select data-joint-trial-f>${columns(table)}</select>`)}${field('位移单位',`<select data-joint-trial-u-unit><option value="mm">mm</option><option value="m">m</option></select>`)}${field('力单位',`<select data-joint-trial-f-unit><option value="N">N</option><option value="kN">kN</option></select>`)}</div>`;
+ const dicControls=table=>`<div class="grid two">${field('DIC 位移列',`<select data-joint-dic-u>${columns(table)}</select>`)}${field('颈缩位置列',`<select data-joint-dic-p>${columns(table)}</select>`)}${field('局部场列（可选）',`<select data-joint-dic-f><option value="">不使用</option>${columns(table)}</select>`)}${field('DIC 位移单位',`<select data-joint-dic-u-unit><option value="mm">mm</option><option value="m">m</option></select>`)}${field('位置单位',`<select data-joint-dic-p-unit><option value="mm">mm</option><option value="m">m</option></select>`)}${field('局部场类型',`<select data-joint-dic-type><option value="none">不计入局部场目标</option><option value="equivalent_plastic_strain">等效塑性应变</option><option value="engineering_strain">工程应变（仅保存，不混算）</option></select>`)}</div>`;
+ const update=()=>{q('[data-joint-run]').disabled=!state.trial||!state.dic;};
+ const load=async(kind,file)=>{if(!file)return;try{q('[data-joint-note]').textContent=`正在读取${kind==='trial'?'试验':'DIC'}文件…`;const uploadRecord=await upload(file);const table=await post('/api/apdl/table-inspect',{upload_id:uploadRecord.id});state[kind]={upload:uploadRecord,table};q(`[data-joint-${kind}-columns]`).innerHTML=kind==='trial'?trialControls(table):dicControls(table);q('[data-joint-note]').textContent=`已读取 ${file.name}；请确认列含义、单位和局部场类型。`;update();}catch(error){state[kind]=null;q('[data-joint-note]').textContent=error.message;update();}};
+ q('[data-joint-trial]').onchange=event=>load('trial',event.target.files[0]);
+ q('[data-joint-dic]').onchange=event=>load('dic',event.target.files[0]);
+ q('[data-joint-run]').onclick=async()=>{const button=q('[data-joint-run]');button.disabled=true;q('[data-joint-note]').textContent='正在计算力—位移、颈缩位置和DIC局部场联合目标…';try{const trial={upload_id:state.trial.upload.id,selection:{displacement_column:Number(q('[data-joint-trial-u]').value),force_column:Number(q('[data-joint-trial-f]').value),displacement_unit:q('[data-joint-trial-u-unit]').value,force_unit:q('[data-joint-trial-f-unit]').value}};const fieldColumn=q('[data-joint-dic-f]').value;const dic={upload_id:state.dic.upload.id,selection:{displacement_column:Number(q('[data-joint-dic-u]').value),position_column:Number(q('[data-joint-dic-p]').value),field_column:fieldColumn===''?null:Number(fieldColumn),displacement_unit:q('[data-joint-dic-u-unit]').value,position_unit:q('[data-joint-dic-p-unit]').value,field_type:q('[data-joint-dic-type]').value}};const report=await post('/api/apdl/joint-calibration',{source_job_id:job.id,trial,dic});const prefix=`/api/jobs/${encodeURIComponent(job.id)}/download/${report.relative_directory.split('/').map(encodeURIComponent).join('/')}/`;q('[data-joint-result]').innerHTML=`<p><strong>联合目标 ${fmt(report.weighted_objective)}</strong> · 力 RMSE ${fmt(report.force.rmse_N)} N · 颈缩位置 RMSE ${fmt(report.neck_position.rmse_mm)} mm。</p><p class="help-line">状态：${esc(report.calibration_status)}。${(report.warnings||[]).map(esc).join(' ')}</p><div class="actions">${['joint_calibration_report.json','joint_calibration.csv','joint_calibration.png'].map(name=>`<a class="button secondary" href="${prefix}${name}" download>${name}</a>`).join('')}</div>`;q('[data-joint-note]').textContent='联合校准报告已保存；材料曲线和GISSMO参数未自动修改。';}catch(error){q('[data-joint-note]').textContent=error.message;button.disabled=false;}};
+}
+
 export function mountApdlResultTools(job,{get,post,openJob,onRefresh}){
  if(job.kind!=='apdl_tension'||!['completed','failed','interrupted','stopped'].includes(job.state))return;
  if((job.result?.solver_type||job.summary?.solver_type)==='ls-dyna'){
   mountFractureSensitivity(job,{get,post});
+  mountJointCalibration(job,{post});
   return;
  }
  mountApdlViewer(document.getElementById('result-content'),{get,post,preferredId:job.id});
