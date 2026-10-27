@@ -29,6 +29,17 @@ def section_areas(coordinates, nx, ny, layers, axis):
             + np.linalg.norm(np.cross(c-a, d-a), axis=-1)).sum(axis=(1, 2))/2
 
 
+def stage_marker(index, label, times, applied, curve):
+    if index is None:
+        return None
+    index = int(index)
+    return dict(label=label, index=index, time_s=float(times[index]),
+                applied_displacement_mm=float(applied[index]),
+                engineering_strain=float(curve[index, 4]),
+                force_n=float(curve[index, 2]),
+                nominal_stress_mpa=float(curve[index, 5]))
+
+
 def read_fracture_results(output, stats, options):
     from lasso.dyna import D3plot, Binout
     from .runner import _atomic_json
@@ -109,12 +120,30 @@ def read_fracture_results(output, stats, options):
     first_deleted = int(np.flatnonzero(deleted)[0]) if np.any(deleted) else None
     before = max(0, first_deleted-1) if first_deleted is not None else len(times)-1
     areas0 = section_areas(nodes[:, 1:], stats['nx'], stats['ny'], options['layers'], axis)
-    areas = section_areas(nodes[:, 1:]+displacement[before], stats['nx'], stats['ny'], options['layers'], axis)
-    interior = np.arange(len(areas))[1:-1]
-    ratios = areas[interior]/areas0[interior]
+    interior = np.arange(len(areas0))[1:-1]
+    section_localization_history = []
+    section_ratio_history = []
+    for step in range(len(times)):
+        areas = section_areas(nodes[:, 1:]+displacement[step], stats['nx'], stats['ny'], options['layers'], axis)
+        ratios_at_step = areas[interior]/areas0[interior]
+        section_ratio_history.append(float(ratios_at_step.min()))
+        section_localization_history.append(float(ratios_at_step.min()/np.median(ratios_at_step)))
+    section_localization_history = np.asarray(section_localization_history)
+    section_ratio_history = np.asarray(section_ratio_history)
+    ratios = section_areas(nodes[:, 1:]+displacement[before], stats['nx'], stats['ny'], options['layers'], axis)[interior]/areas0[interior]
     local_index = int(np.argmin(ratios))
     localization = float(ratios[local_index]/np.median(ratios))
-    separation = not load_path_exists(a['element_solid_node_indexes'], alive[-1], fixed, loaded, len(nodes))
+    separation_history = np.array([
+        not load_path_exists(a['element_solid_node_indexes'], alive[step], fixed, loaded, len(nodes))
+        for step in range(len(times))
+    ], dtype=bool)
+    separation = bool(separation_history[-1])
+    localization_threshold = 0.99
+    first_localization = int(np.flatnonzero(
+        (section_localization_history < localization_threshold) & (np.arange(len(times)) >= peak)
+    )[0]) if np.any((section_localization_history < localization_threshold) & (np.arange(len(times)) >= peak)) else None
+    first_coupling = int(np.flatnonzero(coupled.max(axis=1) >= .5)[0]) if np.any(coupled.max(axis=1) >= .5) else None
+    first_separation = int(np.flatnonzero(separation_history)[0]) if np.any(separation_history) else None
     residual = float(abs(force[-1])/force[peak])
     gt = binout.read('glstat', 'time')
     ie, ke = binout.read('glstat', 'internal_energy'), binout.read('glstat', 'kinetic_energy')
@@ -127,7 +156,15 @@ def read_fracture_results(output, stats, options):
     balance_mask = (times <= times[before]) & (force > force[peak]*.1)
     balance = float(np.max(np.abs(force[balance_mask]+fixed_force[balance_mask]))/force[peak]) if np.any(balance_mask) else None
     calibrated = options['damage_parameter_basis'] == 'calibrated'
+    stage_markers = {
+        'necking_start': stage_marker(peak, '颈缩起点（峰值工程应力）', times, applied, curve),
+        'first_localization': stage_marker(first_localization, '首次局部化（截面非均匀收缩超过1%）', times, applied, curve),
+        'first_damage_coupling': stage_marker(first_coupling, '首次损伤耦合', times, applied, curve),
+        'first_element_deletion': stage_marker(first_deleted, '首次失效单元删除', times, applied, curve),
+        'load_path_separation': stage_marker(first_separation, '承载路径断开', times, applied, curve),
+    }
     fracture = dict(model='MAT_024 + GISSMO', parameter_basis=options['damage_parameter_basis'],
+                    stage_markers=stage_markers, localization_threshold=localization_threshold,
                     necking_observed=localization < .9, section_localization_ratio=localization,
                     minimum_section_area_ratio=float(ratios[local_index]),
                     section_index=int(interior[local_index]), section_time_s=float(times[before]),
@@ -157,12 +194,13 @@ def read_fracture_results(output, stats, options):
     # Reload the exported values so existing cross-plot provenance checks are exact.
     curve = np.loadtxt(output/'force_displacement.csv', delimiter=',', ndmin=2)
     np.savetxt(output/'damage_history.csv', np.column_stack((times, damage.max(axis=1), deleted,
-               a['element_solid_effective_plastic_strain'].max(axis=(1, 2)))), delimiter=',',
-               header='time_s,max_native_damage,deleted_elements,max_effective_plastic_strain', comments='')
+               a['element_solid_effective_plastic_strain'].max(axis=(1, 2)), section_localization_history,
+               section_ratio_history)), delimiter=',',
+               header='time_s,max_native_damage,deleted_elements,max_effective_plastic_strain,section_localization_ratio,minimum_section_area_ratio', comments='')
     np.savetxt(output/'energy_history.csv', np.column_stack((gt, ie, ke, de)), delimiter=',',
                header='time_s,internal_energy_Nmm,kinetic_energy_Nmm,numerical_damping_energy_Nmm', comments='')
     _atomic_json(output/'fracture_report.json', fracture)
-    plots = render_fracture_plots(output, nodes, a, curve, damage, alive, peak, before, calibrated)
+    plots = render_fracture_plots(output, nodes, a, curve, damage, alive, peak, before, calibrated, stage_markers)
     files = ['force_displacement.csv', 'damage_history.csv', 'energy_history.csv', 'fracture_report.json',
              'd3hsp', 'lsdyna.log', 'mapdl_execution.json']+plots
     return dict(solve_state='solved', curve=curve.tolist(), point_count=len(curve), solver_type='ls-dyna',
@@ -176,7 +214,7 @@ def read_fracture_results(output, stats, options):
                 files=files)
 
 
-def render_fracture_plots(output, nodes, arrays, curve, damage, alive, peak, before, calibrated):
+def render_fracture_plots(output, nodes, arrays, curve, damage, alive, peak, before, calibrated, stage_markers=None):
     import matplotlib
     matplotlib.use('Agg')
     from matplotlib import pyplot as plt
@@ -188,7 +226,17 @@ def render_fracture_plots(output, nodes, arrays, curve, damage, alive, peak, bef
             ('engineering_stress_strain.png', curve[:, 4]*100, curve[:, 5], 'Engineering strain (%)', 'Nominal stress (MPa)')):
         fig, ax = plt.subplots(figsize=(8, 4.5), constrained_layout=True)
         ax.plot(x, y, color='#9b382d', lw=1.8)
-        ax.scatter([x[peak]], [y[peak]], color='#263c54', zorder=3)
+        ax.scatter([x[peak]], [y[peak]], color='#263c54', zorder=3, label='Necking start')
+        plot_labels = {'first_localization': 'First localization',
+                       'first_element_deletion': 'First element deletion',
+                       'load_path_separation': 'Load path separation'}
+        for key, color in (('first_localization', '#d97706'), ('first_element_deletion', '#b91c1c'), ('load_path_separation', '#111827')):
+            marker = (stage_markers or {}).get(key)
+            if marker:
+                index = marker['index']
+                ax.axvline(x[index], color=color, lw=1, ls='--', alpha=.8, label=plot_labels[key])
+                ax.scatter([x[index]], [y[index]], color=color, zorder=4)
+        ax.legend(loc='best', fontsize=7)
         ax.set(xlabel=xlabel, ylabel=ylabel, title='LS-DYNA / MAT024 + GISSMO\n'+label)
         ax.grid(alpha=.2)
         fig.savefig(output/filename, dpi=160)

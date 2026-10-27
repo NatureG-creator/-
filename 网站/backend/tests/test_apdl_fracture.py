@@ -9,7 +9,7 @@ import numpy as np
 
 from backend.apdl_geometry import build_geometry, normalise_options
 from backend.apdl_deck import create_tension_bundle
-from backend.apdl_fracture_results import load_path_exists, section_areas
+from backend.apdl_fracture_results import load_path_exists, section_areas, stage_marker
 from backend.apdl_presets import get_presets
 from backend.apdl_outcome import explain_result
 
@@ -68,6 +68,16 @@ class FractureTests(unittest.TestCase):
         np.testing.assert_allclose(section_areas(xyz, 41, 5, 4, 1), 10)
         contracted = xyz*np.array([1.2, .9, .8])
         np.testing.assert_allclose(section_areas(contracted, 41, 5, 4, 0), 2*.9*.8)
+
+    def test_stage_marker_keeps_native_curve_coordinates(self):
+        times = np.array([0.0, .5, 1.0])
+        applied = np.array([0.0, 2.0, 4.0])
+        curve = np.array([[0, 0, 0, 0, 0, 0], [0.5, 2, 10, -10, .2, 5], [1, 4, 2, -2, .4, 1]])
+        marker = stage_marker(1, '首次局部化', times, applied, curve)
+        self.assertEqual(marker['label'], '首次局部化')
+        self.assertEqual(marker['index'], 1)
+        self.assertAlmostEqual(marker['time_s'], .5)
+        self.assertAlmostEqual(marker['engineering_strain'], .2)
 
     def test_deleted_elements_do_not_imply_complete_fracture(self):
         g = build_geometry(None, None, self.options(neck_imperfection_fraction=0))
