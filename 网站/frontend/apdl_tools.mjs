@@ -38,8 +38,28 @@ export function mountMaterialTools({get,post}){
  q('#material-export').onclick=()=>{try{saveFile((filename.replace(/\.[^.]+$/,'')||'材料曲线')+'.material.json',JSON.stringify({E_MPa:Number(document.getElementById('apdl-E_MPa').value),plastic_curve:JSON.parse(curve.value),import_metadata:metadata},null,2),'application/json');}catch(error){note(error.message,true);}};
 }
 
+export function mountFractureSensitivity(job,{get,post}){
+ const root=document.getElementById('fracture-sensitivity');
+ if(!root||!job?.id)return;
+ const button=root.querySelector('[data-fracture-sensitivity]'),note=root.querySelector('[data-fracture-sensitivity-note]'),result=root.querySelector('[data-fracture-sensitivity-result]');
+ if(!button||button.dataset.bound)return;
+ button.dataset.bound='true';
+ const render=status=>{
+  const rows=status.results||[],label={queued:'排队',running:'运行中',completed:'完成',needs_attention:'需复核',failed:'失败'}[status.state]||status.state||'—';
+  const body=rows.map(row=>`<tr><td>${esc(row.mesh_label)}</td><td>${esc(row.loading_time_s)} s</td><td>${esc(row.element_count??'—')}</td><td>${fmt(row.peak_force_n)}</td><td>${fmt(row.peak_engineering_strain==null?null:row.peak_engineering_strain*100)} %</td><td>${fmt(row.separation_displacement_mm)} mm</td><td>${row.quasistatic_screen_passed?'通过':'未通过'}</td></tr>`).join('');
+  const files=status.state==='completed'?['sensitivity_summary.csv','sensitivity_report.json','sensitivity_metrics.png'].map(name=>`<a class="button secondary" href="/api/apdl/sensitivity/${encodeURIComponent(status.id)}/${name}?download=1" download>${name}</a>`).join(''):'';
+  result.innerHTML=`<p><strong>研究 ${esc(status.id)} · ${esc(label)}</strong> · 完成 ${esc(status.completed_count??rows.length)} / ${esc(status.cases?.length??'—')}</p><p class="help-line">材料：${esc(status.material_source?.name||'—')} · ${esc(status.material_source?.points??'—')} 点 · 最大塑性应变 ${fmt(status.material_source?.max_plastic_strain)}。${(status.warnings||[]).map(esc).join(' ')}</p>${body?`<div class="table-wrap"><table><thead><tr><th>网格</th><th>加载时间</th><th>单元数</th><th>峰值拉力</th><th>峰值应变</th><th>断开位移</th><th>准静态</th></tr></thead><tbody>${body}</tbody></table></div>`:''}<div class="actions">${files}</div>`;
+ };
+ const poll=async id=>{try{const status=await get(`/api/apdl/sensitivity/${encodeURIComponent(id)}`);render(status);if(['queued','running'].includes(status.state)){note.textContent='敏感性任务按工况串行运行；当前结果会逐项写入。';setTimeout(()=>poll(id),1500);}else{button.disabled=false;note.textContent=status.state==='completed'?'敏感性分析完成；请查看 CSV/JSON 和峰值对比图。':'敏感性分析结束，但存在失败工况，请下载报告和对应任务日志。';}}catch(error){button.disabled=false;note.textContent=error.message;}};
+ button.addEventListener('click',async()=>{button.disabled=true;note.textContent='正在创建 P1 敏感性任务…';try{const status=await post('/api/apdl/sensitivity',{source_job_id:job.id});render(status);poll(status.id);}catch(error){button.disabled=false;note.textContent=error.message;}});
+}
+
 export function mountApdlResultTools(job,{get,post,openJob,onRefresh}){
  if(job.kind!=='apdl_tension'||!['completed','failed','interrupted','stopped'].includes(job.state))return;
+ if((job.result?.solver_type||job.summary?.solver_type)==='ls-dyna'){
+  mountFractureSensitivity(job,{get,post});
+  return;
+ }
  mountApdlViewer(document.getElementById('result-content'),{get,post,preferredId:job.id});
  const root=document.getElementById('result-content');if(!root)return;
  const curveButton=root.querySelector('#apdl-generate-force-displacement');

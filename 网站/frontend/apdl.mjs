@@ -1,5 +1,5 @@
 // APDL / LS-DYNA 单轴拉伸工作区；LS-DYNA 使用 N-mm-s-tonne。
-import {fractureDefaults,fractureFields,validateFractureDraft,renderFractureResult} from './apdl_fracture.mjs?v=20261026-gissmo';
+import {fractureDefaults,fractureFields,validateFractureDraft,renderFractureResult} from './apdl_fracture.mjs?v=20261027-p1-sensitivity';
 import {platformFields,renderPlatformReport,validatePlatformOptions} from './apdl_platform.mjs?v=20261025-reference-chain';
 import {mountApdl3DPreview} from './apdl_preview_3d.mjs?v=20261025-moving-section-v3';
 import {renderApdlExplanation} from './apdl_explanation.mjs?v=20261022-result-explanation';

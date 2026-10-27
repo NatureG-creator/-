@@ -181,6 +181,16 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'POST' and path == '/api/apdl/stress-strain/comparisons':
             from .apdl_stress_strain import create_stress_strain_comparison
             return self._json(201, create_stress_strain_comparison(self.server, self._body()))
+        if method == 'POST' and path == '/api/apdl/sensitivity':
+            from .apdl_sensitivity import create_sensitivity
+            return self._json(201, create_sensitivity(self.server, self._body()))
+        if method == 'GET' and len(parts) == 4 and parts[:3] == ['api', 'apdl', 'sensitivity']:
+            from .apdl_sensitivity import sensitivity_status
+            return self._json(200, sensitivity_status(self.server, parts[3]))
+        if method == 'GET' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'sensitivity']:
+            from .apdl_sensitivity import sensitivity_file
+            return self._file(sensitivity_file(self.server, parts[3], parts[4]),
+                              download=query.get('download') == ['1'])
         if method == 'GET' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'stress-strain-comparisons']:
             from .apdl_stress_strain import comparison_file
             return self._file(comparison_file(self.server, parts[3], parts[4]),
