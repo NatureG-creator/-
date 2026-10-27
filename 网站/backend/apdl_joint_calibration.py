@@ -10,7 +10,6 @@ from pathlib import Path
 import numpy as np
 
 from .apdl_analysis import compare_curves
-from .apdl_commands import _source
 from .apdl_materials import numeric_pair, uploaded_table
 from .runner import _atomic_json
 from .system_info import sha256
@@ -118,7 +117,9 @@ def create_joint_calibration(service, payload):
     if not isinstance(payload, dict):
         raise ValueError('联合校准请求必须是对象')
     source_id = payload.get('source_job_id')
-    state, output = _source(service, source_id)
+    service.validate_id(source_id)
+    state = service.get_job(source_id)
+    output = service.runtime / 'jobs' / source_id / 'outputs'
     if state.get('kind') != 'apdl_tension' or state.get('state') != 'completed':
         raise ValueError('联合校准必须来自已完成的 APDL/LS-DYNA 任务')
     summary = state.get('summary') or state.get('result') or {}
