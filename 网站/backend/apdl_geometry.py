@@ -124,12 +124,20 @@ def normalise_options(options: dict) -> dict:
             result[key] = float(value)
     if not isinstance(result['material_model'], str) or result['material_model'] not in {'elastic', 'bilinear_iso', 'multilinear_iso'}:
         raise ValueError('material_model 只支持 elastic、bilinear_iso 或 multilinear_iso。')
-    if not isinstance(result['boundary_mode'], str) or result['boundary_mode'] not in {'poisson_free', 'clamped_grips', 'legacy_recommended'}:
+    if not isinstance(result['boundary_mode'], str) or result['boundary_mode'] not in {'poisson_free', 'clamped_grips', 'legacy_recommended', 'centered_symmetry', 'single_end_center'}:
         raise ValueError('boundary_mode 无效。')
     if not isinstance(result['tensile_direction'], str) or result['tensile_direction'] not in {'X', 'Y'}:
         raise ValueError('tensile_direction 只支持 X 或 Y。')
     if not isinstance(result['mesh_type'], str) or result['mesh_type'] not in MESH_TYPES:
         raise ValueError('mesh_type 只支持 solid185_hex、solid187_tetra 或 solid285_tetra。')
+    if result['boundary_mode'] == 'centered_symmetry':
+        if (result['corrosion_mode'] != 'flat' or result['mesh_type'] != 'solid185_hex' or
+                result['local_corrosion'] or result['platform_enabled'] or result['damage_model'] != 'none'):
+            raise ValueError('中心对拉仅支持无腐蚀SOLID185基准，不支持腐蚀贴片、平台或损伤断裂。')
+        if result['nx'] % 2 != 1 or result['ny'] % 2 != 1 or result['layers'] % 2 != 0:
+            raise ValueError('中心对拉要求nx、ny为奇数节点数，厚度单元层数为偶数；例如193×61、8层。不会自动改网格。')
+    if result['boundary_mode'] == 'single_end_center' and result['layers'] % 2 != 0:
+        raise ValueError('单端中心定位要求厚度方向单元层数为偶数，才能生成实际局部截面中面节点；不会自动改层数。')
     for key in ('grip_length_fixed_mm', 'grip_length_loaded_mm'):
         value = result[key]
         if isinstance(value, (bool, np.bool_)) or not isinstance(value, numbers.Real) or not math.isfinite(value) or value < 0:
@@ -325,6 +333,11 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     y = platform['y'] if platform else o['origin_y_mm'] + np.arange(ny, dtype=float)*o['dy_mm']
     if not np.isfinite(x).all() or not np.isfinite(y).all() or np.any(np.diff(x) <= 0) or np.any(np.diff(y) <= 0):
         raise ValueError('坐标数值范围导致非有限或退化间距，请调整原点和间距。')
+    if o['boundary_mode'] == 'single_end_center':
+        transverse_nodes = ny if o['tensile_direction'] == 'X' else nx
+        if transverse_nodes % 2 != 1:
+            axis = 'Y' if o['tensile_direction'] == 'X' else 'X'
+            raise ValueError(f'单端中心定位要求拉伸横向 {axis} 方向节点数为奇数，当前为 {transverse_nodes}；不会选取两个近似中心节点。')
     xx, yy = np.meshgrid(x, y)
     nodes = np.empty((count, 4), dtype=np.float64)
     nodes[:, 0] = np.arange(1, count+1)
@@ -351,6 +364,8 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
             quadratic=o['mesh_type'] == 'solid187_tetra',
             max_nodes=TETRA_MAX_NODES, max_elements=TETRA_MAX_ELEMENTS)
         element_count = len(elements)
+    anchors = (end_center_anchors(nodes, x, y, bottom, remaining, o['tensile_direction'])
+               if o['boundary_mode'] == 'single_end_center' else None)
     # Bilinear vertical columns have exact volume = area * mean corner thickness.
     cell_thickness = (remaining[:-1, :-1]+remaining[:-1, 1:]+remaining[1:, :-1]+remaining[1:, 1:])/4
     cell_volume = cell_thickness*np.diff(y)[:,None]*np.diff(x)[None,:]/o['layers']
@@ -431,7 +446,31 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         warnings.append('三角形表面与双线性参考面的总体积差超过1%；请复核表面离散及网格收敛性。')
     if mode == 'flat' and (o['boundary_mode'] != 'poisson_free' or o['material_model'] != 'elastic' or o['large_deflection']):
         warnings.append('EA/L、EAδ/L仅是小变形弹性自由泊松伸缩参考，当前约束或材料设置可能不满足其假设。')
+    if o['boundary_mode'] == 'centered_symmetry':
+        warnings.append('中心对拉：目标位移为端到端总伸长，两端各施加一半；三个中面仅约束法向位移，排除了部分非对称变形模式，仅用于无腐蚀对称基准。')
+    if anchors is not None:
+        stats['end_center_anchors']=anchors
+        warnings.append('单端中心定位：起始端仅轴向固定，A点定位横向与厚度，B点仅防转；内部三个中面不加约束。A/B按真实网格节点核验，不自动改网格；能否断裂仍取决于材料与损伤模型。')
     return dict(options=o, top_depth=top.copy(), bottom_depth=bottom.copy(),
                 remaining=remaining, x=x, y=y, nodes=nodes, elements=elements,
                 stats=stats, warnings=warnings, corrosion_region=corrosion_region,
                 platforms=platform['report'] if platform else None)
+
+
+def end_center_anchors(nodes, x, y, bottom, remaining, direction):
+    """Find A/B at the actual local section mid-thickness, never by nearest node."""
+    transverse='UY' if direction=='X' else 'UX'
+    if direction == 'X':
+        center = (len(y)-1)//2
+        locations = [(0, center), (0, len(y)-1)]
+    else:
+        center = (len(x)-1)//2
+        locations = [(0, center), (0, len(x)-1)]
+    result=[]
+    for name,(row,col),dofs in [('A',locations[0],[transverse,'UZ']),('B',locations[1],['UZ'])]:
+        point=[float(x[col]), float(y[row]), float(bottom[row,col] + remaining[row,col]/2)]
+        matches=np.flatnonzero(np.all(np.isclose(nodes[:,1:],point,rtol=0,atol=1e-8),axis=1))
+        if len(matches)!=1:
+            raise ValueError(f'单端中心定位需要唯一的{name}点节点{point} mm；当前网格缺失或重复。请显式调整网格/端部几何，不会选最近节点或自动改网格。')
+        result.append(dict(name=name,node_id=int(nodes[matches[0],0]),point=nodes[matches[0],1:].tolist(),dofs=dofs))
+    return result

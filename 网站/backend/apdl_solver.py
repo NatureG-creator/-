@@ -288,7 +288,7 @@ def _result_reference_nodes(output: Path, expected_nodes, count: int, warnings: 
 
 
 def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement: float,
-                          tensile_direction: str = 'X') -> None:
+                          tensile_direction: str = 'X', boundary_mode: str = 'poisson_free', anchors=None) -> None:
     ordered = nodal[np.argsort(nodal[:, 0])]
     if not np.array_equal(ordered[:, 0], expected[:, 0]):
         raise ValueError('节点结果编号与实际输入网格不一致。')
@@ -304,10 +304,29 @@ def _check_nodal_geometry(nodal: np.ndarray, expected: np.ndarray, displacement:
     fixed = axis == axis.min()
     loaded = axis == axis.max()
     dof = 'UX' if tensile_direction == 'X' else 'UY'
-    if not np.allclose(ordered[fixed, displacement_index], 0., rtol=0., atol=1e-10):
+    fixed_value = -displacement/2 if boundary_mode == 'centered_symmetry' else 0.
+    loaded_value = displacement/2 if boundary_mode == 'centered_symmetry' else displacement
+    if not np.allclose(ordered[fixed, displacement_index], fixed_value, rtol=5.1e-5, atol=1e-10):
+        if boundary_mode == 'centered_symmetry':
+            raise ValueError(f'中心对拉起始端{dof}位移应为端到端伸长的负一半。')
         raise ValueError(f'固定端节点{dof}位移与零位移边界不一致。')
-    if not np.allclose(ordered[loaded, displacement_index], displacement, rtol=5.1e-5, atol=1e-10):
+    if not np.allclose(ordered[loaded, displacement_index], loaded_value, rtol=5.1e-5, atol=1e-10):
         raise ValueError(f'加载端节点{dof}位移与末步曲线及目标加载位移不一致，超出E13.5五有效位导出精度容差。')
+    if boundary_mode == 'single_end_center':
+        if not anchors or len(anchors)!=2:raise ValueError('单端中心定位缺少已核验A/B节点记录。')
+        for anchor in anchors:
+            index=np.flatnonzero(expected[:,0]==anchor['node_id'])
+            if len(index)!=1:raise ValueError('单端中心定位A/B节点编号与输入网格不一致。')
+            for dof in anchor['dofs']:
+                column={'UX':4,'UY':5,'UZ':6}[dof]
+                if not np.isclose(ordered[index[0],column],0.,rtol=0.,atol=1e-8*max(1.,abs(displacement))):
+                    raise ValueError(f'单端中心定位{anchor["name"]}点{dof}不为零。')
+    if boundary_mode == 'centered_symmetry':
+        for coord in range(3):
+            axis = expected[:,coord+1]
+            mask = np.isclose(axis,(axis.min()+axis.max())/2,rtol=0.,atol=1e-10)
+            if not mask.any() or not np.allclose(ordered[mask,coord+4],0.,rtol=0.,atol=1e-8*max(1.,abs(displacement))):
+                raise ValueError('中心对拉中面法向位移不为零或中面缺少节点。')
 
 
 def read_tension_results(output: Path, stats: dict, options: dict | None = None, *, expected_nodes=None) -> dict:
@@ -372,7 +391,7 @@ def read_tension_results(output: Path, stats: dict, options: dict | None = None,
             raise ValueError('节点结果的编号、唯一性或节点数量与输入网格不一致。')
         if reference_nodes is not None:
             _check_nodal_geometry(nodal, reference_nodes, float(displacement[-1]),
-                                  o['tensile_direction'])
+                                  o['tensile_direction'], o['boundary_mode'], stats.get('end_center_anchors'))
             nodal_coordinates = nodal_displacements = True
         if np.any(nodal[:, 7:] < -1e-8):
             raise ValueError('等效应力或等效塑性应变不应为负。')

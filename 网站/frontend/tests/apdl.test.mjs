@@ -19,6 +19,15 @@ test('规则预设下拉说明不把旧 MATLAB 文件当作执行入口',()=>{
  assert.ok(html.includes('只影响下方 MATLAB 转换按钮'));
 });
 
+test('单端中心定位预检要求偶数厚度层和无腐蚀横向奇数节点',()=>{
+ const layers=apdlDefaults();layers.options.boundary_mode='single_end_center';
+ assert.throws(()=>buildApdlPayload(layers,'build'),/厚度方向.*偶数/);
+ layers.options.layers=4;layers.options.ny=4;
+ assert.throws(()=>buildApdlPayload(layers,'build'),/横向节点数.*奇数/);
+ layers.options.ny=5;
+ assert.doesNotThrow(()=>buildApdlPayload(layers,'build'));
+});
+
 test('MATLAB转换明确区分毫米矩阵与元胞层数，间距独立于Z厚度',()=>{
  const source={origin:'upload',upload_id:'raw',mapping:{dx_mm:'.25',dy_mm:'.3'},mat_info:{variable:'baseline'}};
  const ordinary=apdl.matlabConversionPayload(source,'top');

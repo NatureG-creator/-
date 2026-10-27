@@ -33,6 +33,21 @@ def _boundaries(geometry: dict) -> str:
     transverse_coords = geometry['y'] if direction == 'X' else geometry['x']
     axial_spacing = o['dx_mm'] if direction == 'X' else o['dy_mm']
 
+    if o['boundary_mode'] == 'centered_symmetry':
+        half = o['target_displacement_mm']/2
+        tolerance = min(float(np.min(np.diff(geometry['x']))), float(np.min(np.diff(geometry['y']))), o['thickness_mm']/o['layers'])*.01
+        lines = [f'! {direction} centered tension; target is relative end-to-end extension in mm.',
+                 'CSYS,0', 'SELTOL,'+_number(tolerance),
+                 f'NSEL,S,LOC,{axis},{_number(axial_coords[0])}', 'CM,GRIP_FIXED,NODE',
+                 f'D,ALL,{axial_dof},{_number(-half)}',
+                 f'NSEL,S,LOC,{axis},{_number(axial_coords[-1])}', 'CM,GRIP_LOADED,NODE',
+                 f'D,ALL,{axial_dof},{_number(half)}']
+        for coord, dof, center in (('X','UX',(geometry['x'][0]+geometry['x'][-1])/2),
+                                   ('Y','UY',(geometry['y'][0]+geometry['y'][-1])/2),
+                                   ('Z','UZ',o['thickness_mm']/2)):
+            lines += ['ALLSEL,ALL', f'NSEL,S,LOC,{coord},{_number(center)}', f'D,ALL,{dof},0']
+        return '\n'.join(lines+['ALLSEL,ALL','SELTOL'])
+
     def corner(transverse_index, axial_index, top=False):
         row, col = ((transverse_index, axial_index) if direction == 'X'
                     else (axial_index, transverse_index))
@@ -68,6 +83,10 @@ def _boundaries(geometry: dict) -> str:
     lines += grip_loaded_sel+['CM,GRIP_LOADED,NODE', f'D,ALL,{axial_dof},{delta}']
     if o['boundary_mode'] == 'clamped_grips':
         lines += [f'D,ALL,{transverse_dof},0', 'D,ALL,UZ,0']
+    elif o['boundary_mode'] == 'single_end_center':
+        lines += ['ALLSEL,ALL','! Single-end loading with end-center positioning; no internal midplane constraints.']
+        for anchor in geometry['stats']['end_center_anchors']:
+            lines += [f'D,{anchor["node_id"]},{dof},0' for dof in anchor['dofs']]
     elif o['boundary_mode'] == 'legacy_recommended':
         corner_a, corner_b = corner(-1, 0), corner(-1, 0, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',
@@ -118,6 +137,12 @@ def _post(geometry: dict) -> str:
         "(E19.11,5(',',E19.11))",
         '*ENDDO', '*CFCLOS', 'ALLSEL,ALL',
     ]
+    if o['boundary_mode'] == 'centered_symmetry':
+        # Preserve the CSV contract: delta = mean(Uloaded) - mean(Ufixed).
+        lines.insert(lines.index('ff=0')+1, 'ufsum=0')
+        index = lines.index('ff=ff+rr')+1
+        lines[index:index] = [f'*GET,uf,NODE,nid,U,{direction}', 'ufsum=ufsum+uf']
+        lines.insert(lines.index('engstrain=uax/'+_number(axial_length)), 'uax=uax-ufsum/ncnt')
     if o['material_model'] == 'multilinear_iso':
         lines += material_coverage_commands()
     if o['export_full_field']:

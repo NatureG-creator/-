@@ -152,6 +152,10 @@ def create_fracture_bundle(geometry, output, provenance):
     if o['boundary_mode'] == 'clamped_grips':
         for index in loaded:
             masks[int(nodes[index, 0])] = [int(d != axis) for d in range(3)]
+    elif o['boundary_mode'] == 'single_end_center':
+        for anchor in geometry['stats']['end_center_anchors']:
+            for dof in anchor['dofs']:
+                masks[anchor['node_id']][{'UX':0,'UY':1,'UZ':2}[dof]]=1
     else:
         # End-plane corners constrain rigid translations/rotation, leaving the gauge free.
         transverse = 1-axis

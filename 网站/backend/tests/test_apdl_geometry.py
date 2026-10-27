@@ -164,6 +164,30 @@ class APDLGeometryTests(unittest.TestCase):
             self.assertGreater(np.linalg.det(jac), 0)
         self.assertGreater(g['stats']['min_cell_volume_mm3'], 0)
 
+    def test_single_end_center_uses_actual_local_mid_thickness(self):
+        g = build_geometry(np.full((5, 5), .2), None, {
+            'corrosion_mode': 'single_top', 'boundary_mode': 'single_end_center',
+            'dx_mm': 1, 'dy_mm': 1, 'layers': 2, 'tensile_direction': 'X'})
+        anchors = g['stats']['end_center_anchors']
+        self.assertEqual([a['name'] for a in anchors], ['A', 'B'])
+        np.testing.assert_allclose([a['point'][2] for a in anchors], [2.9, 2.9])
+        self.assertEqual(anchors[0]['dofs'], ['UY', 'UZ'])
+        self.assertEqual(anchors[1]['dofs'], ['UZ'])
+        self.assertTrue(np.array_equal(g['top_depth'], np.full((5, 5), .2)))
+
+        y = build_geometry(np.full((5, 5), .2), None, {
+            'corrosion_mode': 'single_top', 'boundary_mode': 'single_end_center',
+            'dx_mm': 1, 'dy_mm': 1, 'layers': 2, 'tensile_direction': 'Y'})
+        self.assertEqual([a['point'][:2] for a in y['stats']['end_center_anchors']], [[2., 0.], [4., 0.]])
+
+    def test_single_end_center_rejects_missing_center_grid_lines(self):
+        with self.assertRaisesRegex(ValueError, '横向.*奇数'):
+            build_geometry(np.zeros((4, 5)), None, {
+                'corrosion_mode': 'single_top', 'boundary_mode': 'single_end_center',
+                'dx_mm': 1, 'dy_mm': 1, 'layers': 2})
+        with self.assertRaisesRegex(ValueError, '厚度.*偶数'):
+            normalise_options({'boundary_mode': 'single_end_center', 'layers': 3})
+
     def test_mode_semantics_do_not_infer_double_independent(self):
         top = np.array([[.2, .3], [.4, .5]])
         g = build_geometry(top, None, {'corrosion_mode': 'double_symmetric'})
