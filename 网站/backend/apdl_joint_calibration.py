@@ -137,6 +137,9 @@ def create_joint_calibration(service, payload):
     if not sim_path.is_file():
         raise ValueError('缺少真实 force_displacement.csv')
     simulation = np.loadtxt(sim_path, delimiter=',', ndmin=2)[:, [1, 2]]
+    # Explicit loading ends with repeated hold-displacement rows; collapse only
+    # exact duplicates so the comparison remains on the original loading branch.
+    simulation = simulation[np.r_[True, np.diff(simulation[:, 0]) > 1e-12]]
     force = compare_curves(simulation, trial, **trial_units)
     dic, dic_source, dic_path, dic_selection = _read_dic(service, dic_payload)
     dic_field_type = dic_selection.get('field_type', 'none')
