@@ -28,6 +28,18 @@ test('单端中心定位预检要求偶数厚度层和无腐蚀横向奇数节�
  assert.doesNotThrow(()=>buildApdlPayload(layers,'build'));
 });
 
+test('参考中心定位允许腐蚀模式的偶数横向节点并保留X向拉伸',()=>{
+ const draft=apdlDefaults();
+ draft.options.boundary_mode='single_end_reference_center';
+ draft.options.tensile_direction='X';
+ draft.options.corrosion_mode='single_top';
+ draft.options.layers=8;
+ draft.top={source_kind:'measured',source_job_id:'source',mapping:{}};
+ const payload=buildApdlPayload(draft,'build');
+ assert.equal(payload.options.boundary_mode,'single_end_reference_center');
+ assert.equal(payload.options.tensile_direction,'X');
+});
+
 test('MATLAB转换明确区分毫米矩阵与元胞层数，间距独立于Z厚度',()=>{
  const source={origin:'upload',upload_id:'raw',mapping:{dx_mm:'.25',dy_mm:'.3'},mat_info:{variable:'baseline'}};
  const ordinary=apdl.matlabConversionPayload(source,'top');

@@ -87,6 +87,17 @@ def _boundaries(geometry: dict) -> str:
         lines += ['ALLSEL,ALL','! Single-end loading with end-center positioning; no internal midplane constraints.']
         for anchor in geometry['stats']['end_center_anchors']:
             lines += [f'D,{anchor["node_id"]},{dof},0' for dof in anchor['dofs']]
+    elif o['boundary_mode'] == 'single_end_reference_center':
+        ref=geometry['stats']['end_center_reference']
+        p,q=ref['pair']
+        rot=ref['rotation_node']
+        lines += [f'N,{ref["node_id"]},'+','.join(_number(v) for v in ref['point']),
+                  '! Reference node is non-physical; CE transfers the fixed-end center pair average.']
+        lines += [f'D,{ref["node_id"]},{dof},0' for dof in ('UX','UY','UZ')]
+        td=ref['transverse_dof']
+        lines += [f'CE,1,0,{p["node_id"]},{td},1,{ref["node_id"]},{td},-0.5,{q["node_id"]},{td},-0.5',
+                  f'CE,2,0,{p["node_id"]},UZ,1,{ref["node_id"]},UZ,-0.5,{q["node_id"]},UZ,-0.5',
+                  f'CE,3,0,{rot["node_id"]},UZ,1,{p["node_id"]},UZ,-1']
     elif o['boundary_mode'] == 'legacy_recommended':
         corner_a, corner_b = corner(-1, 0), corner(-1, 0, top=True)
         lines += ['ALLSEL,ALL', '! Original recommended grips, mapped to bottom-first layers.',
@@ -147,6 +158,8 @@ def _post(geometry: dict) -> str:
         lines += material_coverage_commands()
     if o['export_full_field']:
         lines += ['SET,LAST']
+        if o['boundary_mode'] == 'single_end_reference_center':
+            lines += [f'NSEL,S,NODE,,1,{geometry["stats"]["node_count"]}']
         if o['material_model'] != 'elastic':
             # Switching S/EPPL at every node repeatedly recomputes nodal averaging.
             lines += [

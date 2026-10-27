@@ -31,7 +31,7 @@ def normalise_fracture(options):
         return DEFAULTS.copy()
     if options['material_model'] != 'multilinear_iso' or not options['large_deflection']:
         raise ValueError('GISSMO 拉断需要 MISO 真实塑性曲线并启用大变形。')
-    if options['mesh_type'] != 'solid185_hex' or options['boundary_mode'] == 'legacy_recommended':
+    if options['mesh_type'] != 'solid185_hex' or options['boundary_mode'] in {'legacy_recommended', 'single_end_reference_center'}:
         raise ValueError('GISSMO 当前支持八节点六面体及自由泊松/两端夹持边界。')
     if any(b[1] < a[1] for a, b in zip(options['plastic_curve'], options['plastic_curve'][1:])):
         raise ValueError('损伤模式的塑性硬化曲线不能含下降段；软化由 GISSMO 描述。')

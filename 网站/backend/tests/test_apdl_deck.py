@@ -94,6 +94,19 @@ class APDLDeckTests(unittest.TestCase):
         self.assertIn('ac_nf,NE,9', checks)
         self.assertIn('ac_nl,NE,9', checks)
 
+    def test_reference_center_boundary_uses_nonphysical_node_and_constraint_equations(self):
+        from backend.apdl_deck import _boundaries
+        g = build_geometry(np.full((4, 5), .2), None, {
+            'corrosion_mode': 'single_top', 'boundary_mode': 'single_end_reference_center',
+            'dx_mm': 1, 'dy_mm': 1, 'layers': 2, 'tensile_direction': 'X'})
+        text = _boundaries(g)
+        ref = g['stats']['end_center_reference']
+        self.assertIn(f'N,{ref["node_id"]},', text)
+        self.assertIn(f'CE,1,0,{ref["pair"][0]["node_id"]},UY,1', text)
+        self.assertIn(f'CE,2,0,{ref["pair"][0]["node_id"]},UZ,1', text)
+        self.assertIn(f'CE,3,0,{ref["rotation_node"]["node_id"]},UZ,1', text)
+        self.assertIn(f'D,{ref["node_id"]},UX,0', text)
+
     def test_y_tension_sloped_fixed_end_uses_xz_rotation_constraint(self):
         from backend.apdl_deck import _boundaries
         g = build_geometry(None, np.array([[0, .5], [0, .5]]), {

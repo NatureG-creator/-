@@ -64,8 +64,15 @@ def diagnostic_macros(geometry: dict) -> dict[str, str]:
     boundary = [
         '! Actual grip components; restore selections and the default selection tolerance.',
         'ALLSEL,ALL', 'CSYS,0', 'ac_stage=2', 'ac_pass=1',
-        '*GET,ac_nn,NODE,0,COUNT', '*GET,ac_ne,ELEM,0,COUNT',
+        '*GET,ac_ne,ELEM,0,COUNT',
         'SELTOL,'+_number(tolerance),
+    ]
+    if o.get('boundary_mode') == 'single_end_reference_center':
+        boundary += [f'NSEL,U,NODE,,{geometry["stats"]["end_center_reference"]["node_id"]}',
+                     '*GET,ac_nn,NODE,0,COUNT']
+    else:
+        boundary += ['*GET,ac_nn,NODE,0,COUNT']
+    boundary += [
         'NSEL,NONE', 'CMSEL,S,GRIP_FIXED', '*GET,ac_nf,NODE,0,COUNT',
         f'NSEL,U,LOC,{axis},'+_number(axial_coords[0]), '*GET,ac_fbad,NODE,0,COUNT',
         'NSEL,NONE', 'CMSEL,S,GRIP_LOADED', '*GET,ac_nl,NODE,0,COUNT',

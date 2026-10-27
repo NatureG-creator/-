@@ -124,7 +124,7 @@ def normalise_options(options: dict) -> dict:
             result[key] = float(value)
     if not isinstance(result['material_model'], str) or result['material_model'] not in {'elastic', 'bilinear_iso', 'multilinear_iso'}:
         raise ValueError('material_model 只支持 elastic、bilinear_iso 或 multilinear_iso。')
-    if not isinstance(result['boundary_mode'], str) or result['boundary_mode'] not in {'poisson_free', 'clamped_grips', 'legacy_recommended', 'centered_symmetry', 'single_end_center'}:
+    if not isinstance(result['boundary_mode'], str) or result['boundary_mode'] not in {'poisson_free', 'clamped_grips', 'legacy_recommended', 'centered_symmetry', 'single_end_center', 'single_end_reference_center'}:
         raise ValueError('boundary_mode 无效。')
     if not isinstance(result['tensile_direction'], str) or result['tensile_direction'] not in {'X', 'Y'}:
         raise ValueError('tensile_direction 只支持 X 或 Y。')
@@ -136,7 +136,7 @@ def normalise_options(options: dict) -> dict:
             raise ValueError('中心对拉仅支持无腐蚀SOLID185基准，不支持腐蚀贴片、平台或损伤断裂。')
         if result['nx'] % 2 != 1 or result['ny'] % 2 != 1 or result['layers'] % 2 != 0:
             raise ValueError('中心对拉要求nx、ny为奇数节点数，厚度单元层数为偶数；例如193×61、8层。不会自动改网格。')
-    if result['boundary_mode'] == 'single_end_center' and result['layers'] % 2 != 0:
+    if result['boundary_mode'] in {'single_end_center', 'single_end_reference_center'} and result['layers'] % 2 != 0:
         raise ValueError('单端中心定位要求厚度方向单元层数为偶数，才能生成实际局部截面中面节点；不会自动改层数。')
     for key in ('grip_length_fixed_mm', 'grip_length_loaded_mm'):
         value = result[key]
@@ -366,6 +366,8 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
         element_count = len(elements)
     anchors = (end_center_anchors(nodes, x, y, bottom, remaining, o['tensile_direction'])
                if o['boundary_mode'] == 'single_end_center' else None)
+    reference_center = (end_center_reference(nodes, x, y, bottom, remaining, o['tensile_direction'])
+                        if o['boundary_mode'] == 'single_end_reference_center' else None)
     # Bilinear vertical columns have exact volume = area * mean corner thickness.
     cell_thickness = (remaining[:-1, :-1]+remaining[:-1, 1:]+remaining[1:, :-1]+remaining[1:, 1:])/4
     cell_volume = cell_thickness*np.diff(y)[:,None]*np.diff(x)[None,:]/o['layers']
@@ -451,6 +453,9 @@ def build_geometry(top_depth: np.ndarray | None, bottom_depth: np.ndarray | None
     if anchors is not None:
         stats['end_center_anchors']=anchors
         warnings.append('单端中心定位：起始端仅轴向固定，A点定位横向与厚度，B点仅防转；内部三个中面不加约束。A/B按真实网格节点核验，不自动改网格；能否断裂仍取决于材料与损伤模型。')
+    if reference_center is not None:
+        stats['end_center_reference']=reference_center
+        warnings.append('单端参考中心定位：固定端外侧生成非实体参考节点；约束方程将中心相邻两行/列的平均横向与厚度位移传给参考节点，并用两节点UZ差值防止绕拉伸轴转动。原始XYZ不变；仅用于APDL输入预检。')
     return dict(options=o, top_depth=top.copy(), bottom_depth=bottom.copy(),
                 remaining=remaining, x=x, y=y, nodes=nodes, elements=elements,
                 stats=stats, warnings=warnings, corrosion_region=corrosion_region,
@@ -474,3 +479,28 @@ def end_center_anchors(nodes, x, y, bottom, remaining, direction):
             raise ValueError(f'单端中心定位需要唯一的{name}点节点{point} mm；当前网格缺失或重复。请显式调整网格/端部几何，不会选最近节点或自动改网格。')
         result.append(dict(name=name,node_id=int(nodes[matches[0],0]),point=nodes[matches[0],1:].tolist(),dofs=dofs))
     return result
+
+
+def end_center_reference(nodes, x, y, bottom, remaining, direction):
+    """Describe a non-physical reference node and two central fixed-end nodes."""
+    transverse = 'UY' if direction == 'X' else 'UX'
+    if direction == 'X':
+        pair = [(len(y)//2-1, 0), (len(y)//2, 0)]
+        rotation = (len(y)-1, 0)
+        point = [float(x[0] - (x[1]-x[0])), float((y[0]+y[-1])/2),
+                 float(np.mean(bottom[:,0] + remaining[:,0]/2))]
+    else:
+        pair = [(0, len(x)//2-1), (0, len(x)//2)]
+        rotation = (0, len(x)-1)
+        point = [float((x[0]+x[-1])/2), float(y[0] - (y[1]-y[0])),
+                 float(np.mean(bottom[0,:] + remaining[0,:]/2))]
+    pair_nodes=[]
+    for row, col in pair + [rotation]:
+        target=[float(x[col]), float(y[row]), float(bottom[row,col] + remaining[row,col]/2)]
+        matches=np.flatnonzero(np.all(np.isclose(nodes[:,1:],target,rtol=0,atol=1e-8),axis=1))
+        if len(matches)!=1:
+            raise ValueError(f'单端参考中心定位需要唯一的中心节点{target} mm；当前网格缺失或重复。')
+        pair_nodes.append(dict(node_id=int(nodes[matches[0],0]), point=nodes[matches[0],1:].tolist()))
+    return dict(node_id=int(nodes[:,0].max()+1), point=point, pair=pair_nodes[:2],
+                rotation_node=pair_nodes[2],
+                transverse_dof=transverse, axial_dof='UX' if direction == 'X' else 'UY')

@@ -188,6 +188,16 @@ class APDLGeometryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '厚度.*偶数'):
             normalise_options({'boundary_mode': 'single_end_center', 'layers': 3})
 
+    def test_reference_center_supports_even_transverse_grid(self):
+        g = build_geometry(np.full((80, 5), .2), None, {
+            'corrosion_mode': 'single_top', 'boundary_mode': 'single_end_reference_center',
+            'dx_mm': 1, 'dy_mm': 1, 'layers': 2, 'tensile_direction': 'X'})
+        ref = g['stats']['end_center_reference']
+        self.assertEqual(len(ref['pair']), 2)
+        self.assertEqual(ref['transverse_dof'], 'UY')
+        self.assertEqual(ref['pair'][0]['point'][:2], [0., 39.])
+        self.assertEqual(ref['pair'][1]['point'][:2], [0., 40.])
+
     def test_mode_semantics_do_not_infer_double_independent(self):
         top = np.array([[.2, .3], [.4, .5]])
         g = build_geometry(top, None, {'corrosion_mode': 'double_symmetric'})
