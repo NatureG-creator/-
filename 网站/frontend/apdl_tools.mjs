@@ -74,13 +74,24 @@ export function mountJointCalibration(job,{post}){
 
 export function mountApdlResultTools(job,{get,post,openJob,onRefresh}){
  if(job.kind!=='apdl_tension'||!['completed','failed','interrupted','stopped'].includes(job.state))return;
+ const mountMechanicalExport=()=>{
+  const root=document.getElementById('result-content');
+  if(!root||root.querySelector('#mechanical-export'))return;
+  const box=document.createElement('div');box.id='mechanical-export';box.className='card wide';
+  box.innerHTML='<h3>Ansys Mechanical 模型导出</h3><p class="help-line">导出当前冻结网格供 Mechanical 使用：MAPDL INP/CDB 包含节点、六面体网格、MISO 材料及端部载荷命令；STEP 仅包含几何，不包含网格、材料、边界、损伤或结果。</p><button type="button" class="button secondary" data-mechanical-export>生成 Mechanical 模型包</button><p class="help-line" data-mechanical-export-note role="status"></p><div class="actions" data-mechanical-export-files></div>';
+  root.append(box);
+  const button=box.querySelector('[data-mechanical-export]'),note=box.querySelector('[data-mechanical-export-note]'),files=box.querySelector('[data-mechanical-export-files]');
+  button.onclick=async()=>{button.disabled=true;note.textContent='正在生成 INP、CDB 和 STEP…';try{const result=await post(`/api/apdl/jobs/${encodeURIComponent(job.id)}/mechanical-export`,{});files.innerHTML=result.files.map(name=>`<a class="button secondary" href="/api/jobs/${encodeURIComponent(job.id)}/download/${name.split('/').map(encodeURIComponent).join('/')}" download>${esc(name.split('/').pop())}</a>`).join('');note.textContent=`已生成 ${result.node_count} 节点、${result.element_count} 单元；CDB 状态：${esc(result.cdb_status)}。${esc(result.note)}`;}catch(error){note.textContent=error.message;}finally{button.disabled=false;}};
+ };
  if((job.result?.solver_type||job.summary?.solver_type)==='ls-dyna'){
+  mountMechanicalExport();
   mountFractureSensitivity(job,{get,post});
   mountJointCalibration(job,{post});
   return;
  }
  mountApdlViewer(document.getElementById('result-content'),{get,post,preferredId:job.id});
  const root=document.getElementById('result-content');if(!root)return;
+ mountMechanicalExport();
  const curveButton=root.querySelector('#apdl-generate-force-displacement');
  if(curveButton)curveButton.addEventListener('click',async()=>{curveButton.disabled=true;const note=root.querySelector('#apdl-curve-plot-message');note.textContent='正在依据已保存的求解曲线生成 PNG…';try{const updated=await post(`/api/apdl/jobs/${encodeURIComponent(job.id)}/force-displacement-plot`,{});await openJob(job.id,updated);}catch(error){note.textContent=error.message;curveButton.disabled=false;}});
  const stressStrainButton=root.querySelector('#apdl-generate-stress-strain');

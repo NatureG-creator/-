@@ -235,6 +235,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == 'POST' and path == '/api/apdl/comparisons':
             from .apdl_analysis import save_comparison
             return self._json(201, save_comparison(self.server, self._body()))
+        if method == 'POST' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'jobs'] and parts[4] == 'mechanical-export':
+            from .apdl_mechanical_export import export_mechanical_model
+            return self._json(201, export_mechanical_model(self.server, parts[3]))
         if method == 'GET' and len(parts) == 5 and parts[:3] == ['api', 'apdl', 'jobs']:
             if parts[4] == 'commands':
                 from .apdl_commands import command_snapshot
@@ -266,9 +269,24 @@ class Handler(BaseHTTPRequestHandler):
         if method == "POST" and path == "/api/pointcloud/preview":
             from .pointcloud_view import saved_preview
             return self._json(200, saved_preview(self.server,self._body()))
+        if method == 'GET' and len(parts)==4 and parts[:2]==['api','pointcloud'] and parts[3]=='baseline.mat':
+            from .pointcloud_view import baseline_mat
+            body=baseline_mat(self.server,parts[2],query.get('view',['detail_processed'])[0])
+            self.send_response(200)
+            self.send_header('Content-Type','application/octet-stream')
+            self.send_header('Content-Disposition','attachment; filename="baseline.mat"')
+            self.send_header('Content-Length',str(len(body)))
+            self.send_header('Cache-Control','no-store')
+            self.send_header('X-Content-Type-Options','nosniff')
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if len(parts)==5 and parts[:3]==['api','apdl','jobs'] and parts[4]=='reload-config' and method=='POST':
             from .apdl_reload import reload_apdl_config
             return self._json(200,reload_apdl_config(self.server,parts[3]))
+        if len(parts)==5 and parts[:3]==['api','apdl','jobs'] and parts[4]=='mechanical-export' and method=='POST':
+            from .apdl_mechanical_export import export_mechanical
+            return self._json(201, export_mechanical(self.server, parts[3]))
         if method == "POST" and path == "/api/apdl/jobs":
             body=self._body()
             body['kind']='apdl_tension'
@@ -459,6 +477,9 @@ class Handler(BaseHTTPRequestHandler):
             folder = self.server.runtime / "jobs" / job_id
             if len(parts) == 3 and method == "GET":
                 return self._json(200, self.server.get_job(job_id))
+            if len(parts) == 4 and parts[3] == "live-metrics" and method == "GET":
+                from .live_metrics import live_metrics
+                return self._json(200, live_metrics(self.server, job_id))
             if len(parts) == 4 and method == "POST":
                 if parts[3] == "pointcloud-region":
                     from .pointcloud_regions import export_region
@@ -516,6 +537,27 @@ class Handler(BaseHTTPRequestHandler):
             destination = (FRONTEND / relative).resolve()
             if not destination.is_relative_to(FRONTEND.resolve()):
                 raise FileNotFoundError("页面路径无效")
+            if relative in {'state.mjs', 'index.html'}:
+                # Keep the frozen frontend file intact; new selections follow the active release.
+                from .engine_releases import active_release
+                release = active_release(self.server.runtime)
+                if release == 'original': release = 'numba-20261025-weighted-v2'
+                text = destination.read_text(encoding='utf-8')
+                if relative == 'state.mjs':
+                    text = text.replace("'numba-20261025-weighted-v2'", json.dumps(release))
+                else:
+                    from html import escape
+                    label = json_record(self.server.runtime/'engine_releases'/release/'manifest.json', {}).get('label')
+                    if label: text = text.replace('Numba 高速（扫描＋扩散，选优修复）', escape(label))
+                body = text.encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', ('text/javascript' if relative == 'state.mjs' else 'text/html')+'; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.end_headers()
+                self.wfile.write(body)
+                return
             return self._file(destination)
         raise FileNotFoundError("接口不存在")
 
